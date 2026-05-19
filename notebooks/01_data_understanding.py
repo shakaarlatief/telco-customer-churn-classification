@@ -614,7 +614,7 @@ for ax, column in zip(axes, categorical_feature_columns_inspect):
         categorical_churn_summary["feature"] == column,
         ["level", "count", "churn_percentage"],
     ].copy()
-    
+
     plot_table["level"] = plot_table["level"].astype(str)
 
     plot_table = plot_table.sort_values(
@@ -646,3 +646,39 @@ fig.savefig(categorical_churn_rate_path, dpi=300, bbox_inches="tight")
 plt.show()
 
 categorical_churn_rate_path
+
+# %%
+# ---------------------------------------------------------------------------
+# Save corrected interim dataset
+# ---------------------------------------------------------------------------
+#
+# The interim dataset contains the confirmed correction from the raw data audit:
+# - TotalCharges is converted from string to numeric.
+# - Blank TotalCharges values for tenure-zero customers are set to 0.0.
+#
+# This file is saved locally for the next workflow stages. It is not committed
+# to Git because data/interim/ is ignored.
+
+INTERIM_DATA_DIR = PROJECT_ROOT / "data" / "interim"
+INTERIM_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+INTERIM_DATA_PATH = INTERIM_DATA_DIR / "telco_churn_interim.csv"
+
+df_inspect.to_csv(INTERIM_DATA_PATH, index=False)
+
+pd.DataFrame(
+    {
+        "item": [
+            "interim_data_path",
+            "number_of_rows",
+            "number_of_columns",
+            "total_missing_values",
+        ],
+        "value": [
+            str(INTERIM_DATA_PATH),
+            df_inspect.shape[0],
+            df_inspect.shape[1],
+            int(df_inspect.isna().sum().sum()),
+        ],
+    }
+)
