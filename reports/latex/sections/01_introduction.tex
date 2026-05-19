@@ -1,0 +1,44 @@
+\section{Project framing}
+
+\subsection{Prediction task}
+
+The dataset is used for a supervised binary classification problem. Each observation represents a customer. The target variable is \texttt{Churn}, which indicates whether the customer churned.
+
+The positive class is defined as:
+\[
+\texttt{Churn = Yes}.
+\]
+
+For modelling, the target is encoded as:
+\[
+\texttt{Churn\_binary} =
+\begin{cases}
+1, & \text{if Churn = Yes},\\
+0, & \text{if Churn = No}.
+\end{cases}
+\]
+
+This convention is useful because the positive class corresponds to the event of practical interest: a customer leaving the company.
+
+\subsection{Production-style interpretation}
+
+A realistic production interpretation is the following. At a given decision point, the company has customer information such as tenure, contract type, services, billing method, and charges. The objective is to estimate the probability that the customer churns, so that the company can decide whether a retention action is needed.
+
+This framing matters because preprocessing choices should simulate the intended use case. For example, missing values, unusual values, and feature availability should be handled in a way that could also be applied to future production data. This follows the general machine learning principle that data should not be taken at face value and that preprocessing decisions should be made with the real-world use case in mind \cite{ml-preprocessing}.
+
+\subsection{Scope of the current report}
+
+This report covers the work completed before model training:
+
+\begin{enumerate}[leftmargin=*]
+    \item Raw data audit.
+    \item Confirmed correction of \texttt{TotalCharges}.
+    \item Feature-type classification.
+    \item Numeric and categorical feature summaries.
+    \item Distribution visualizations.
+    \item Simple association inspection.
+    \item Creation of a clean modelling table.
+    \item Stratified train-test split.
+\end{enumerate}
+
+Model-specific preprocessing such as one-hot encoding, scaling, PCA, feature selection, class imbalance methods, and model-specific pipelines is intentionally postponed. Those choices depend on the model family and should not be forced into a single global transformation at this stage.

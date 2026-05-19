@@ -1,0 +1,105 @@
+\section{Clean modelling base dataset}
+
+\subsection{Interim dataset}
+
+The corrected inspection dataset was saved as an interim dataset. The interim dataset has 7043 rows and 22 columns. The extra column is \texttt{Churn\_binary}. There are no missing values.
+
+\begin{table}[H]
+\centering
+\caption{Interim dataset overview}
+\begin{tabular}{lr}
+\toprule
+Item & Value \\
+\midrule
+Number of rows & 7043 \\
+Number of columns & 22 \\
+Duplicate rows & 0 \\
+Total missing values & 0 \\
+Columns with missing values & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Modelling feature set}
+
+The modelling dataset excludes \texttt{customerID}, the original string target \texttt{Churn}, and keeps \texttt{Churn\_binary} as the modelling target. The resulting modelling table contains 7043 rows and 20 columns: 19 feature columns and one binary target column.
+
+\begin{table}[H]
+\centering
+\caption{Clean feature groups for modelling}
+\begin{tabular}{lrp{9cm}}
+\toprule
+Feature group & Count & Features \\
+\midrule
+Numeric features & 3 & tenure, MonthlyCharges, TotalCharges \\
+Binary categorical features & 6 & SeniorCitizen, gender, Partner, Dependents, PhoneService, PaperlessBilling \\
+Nominal categorical features & 10 & MultipleLines, InternetService, OnlineSecurity, OnlineBackup, DeviceProtection, TechSupport, StreamingTV, StreamingMovies, Contract, PaymentMethod \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The feature-group validation confirmed that all 19 modelling features are assigned to exactly one feature group. No feature is missing from the groups, no grouped feature lies outside the modelling feature set, and no duplicate grouped features exist.
+
+\subsection{Duplicate rows after removing the identifier}
+
+The full clean data contains no duplicate rows. After dropping the unique identifier, there are 22 duplicate feature-target combinations. This is not treated as a data-quality problem because multiple customers can genuinely share the same observed characteristics and churn label.
+
+\begin{table}[H]
+\centering
+\caption{Duplicate check after excluding identifier}
+\begin{tabular}{lr}
+\toprule
+Item & Count \\
+\midrule
+Duplicates in full clean data & 0 \\
+Duplicates after dropping \texttt{customerID} & 22 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Train-test split}
+
+\subsection{Split strategy}
+
+The clean modelling dataset is split into a training set and a held-out test set. The test set is reserved for final evaluation. Model selection and hyperparameter tuning should be performed using only the training set, through cross-validation or an internal validation split. This follows the standard experimental principle that test data should not be reused during model selection, because repeated use can lead to overfitting to the test set and inflated performance estimates \cite{ml-evaluation}.
+
+The split uses:
+\[
+\texttt{test\_size} = 0.20,
+\qquad
+\texttt{random\_state} = 42.
+\]
+
+The split is stratified by \texttt{Churn\_binary}, so the train and test sets preserve the original churn proportion.
+
+\begin{table}[H]
+\centering
+\caption{Train-test split overview}
+\begin{tabular}{lrr}
+\toprule
+Split & Rows & Percentage \\
+\midrule
+Train & 5634 & 79.99 \\
+Test & 1409 & 20.01 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Target distribution by split}
+
+The stratified split preserved the target distribution closely.
+
+\begin{table}[H]
+\centering
+\caption{Target distribution by split}
+\begin{tabular}{llrr}
+\toprule
+Split & \texttt{Churn\_binary} & Count & Percentage \\
+\midrule
+Train & 0 & 4139 & 73.46 \\
+Train & 1 & 1495 & 26.54 \\
+Test & 0 & 1035 & 73.46 \\
+Test & 1 & 374 & 26.54 \\
+\bottomrule
+\end{tabular}
+\end{table}

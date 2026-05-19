@@ -1,0 +1,73 @@
+
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[a4paper,margin=2.4cm]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{amsmath,amssymb}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{microtype}
+\usepackage{pdflscape}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!60!black,
+    citecolor=blue!60!black,
+    urlcolor=blue!60!black
+}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.75em}
+\renewcommand{\arraystretch}{1.15}
+
+\title{\textbf{Telco Customer Churn Classification}}\\
+\author{Shakaar Latief}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This report presents a machine learning project on customer churn prediction using the Telco Customer Churn dataset. The task is formulated as a binary classification problem, where the objective is to predict whether a customer will churn based on customer, contract, service, and billing characteristics.
+
+The report follows a structured modelling workflow. It begins with data understanding, data-quality inspection, feature exploration, cleaning decisions, and train-test split construction. Later sections build on this foundation by introducing classification models, comparing their predictive performance, and interpreting the results. The aim is to produce a clear, reproducible, and professionally documented machine learning analysis.
+\end{abstract}
+
+\newpage
+\tableofcontents
+\newpage
+
+\input{sections/01_introduction}
+\input{sections/02_data_understanding}
+\input{sections/03_cleaning_and_splitting}
+\input{sections/14_roadmap_extensions}
+
+\newpage
+\begin{thebibliography}{9}
+
+\bibitem{ml-preprocessing}
+Vrije Universiteit Amsterdam Machine Learning course notes.
+\textit{Data pre-processing, Part 1: Missing values and outliers}.
+Used for the principles of inspecting data visually, not taking data at face value, thinking about the production setting, and distinguishing natural from unnatural outliers.
+
+\bibitem{ml-evaluation}
+Vrije Universiteit Amsterdam Machine Learning course notes.
+\textit{Model Evaluation, Part 1: Experiments}.
+Used for the principle that the test set should be held out and not reused during model or hyperparameter selection.
+
+\bibitem{ml-introduction}
+Vrije Universiteit Amsterdam Machine Learning course notes.
+\textit{Introduction, Part 1: What is Machine Learning?}.
+Used for the general framing of supervised learning, classification, offline learning, and the machine learning workflow.
+
+\end{thebibliography}
+
+\end{document}
