@@ -1,0 +1,52 @@
+# Python virtual environment
+.venv/
+venv/
+env/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment variables and local secrets
+.env
+.env.*
+
+# Data files
+data/raw/
+data/interim/
+data/processed/
+
+# Model artifacts and generated outputs
+results/model_artifacts/
+results/predictions/
+
+# Large or binary model files
+*.pkl
+*.joblib
+*.h5
+*.keras
+*.pt
+*.pth
+*.onnx
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+
+# LaTeX auxiliary files
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.run.xml
+*.synctex.gz
+*.toc

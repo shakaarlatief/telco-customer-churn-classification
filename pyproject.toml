@@ -1,0 +1,21 @@
+[project]
+name = "telco-customer-churn-classification"
+version = "0.1.0"
+description = "Applied binary classification project for predicting customer churn using the Telco Customer Churn dataset."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Shakaar Latief" }
+]
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
