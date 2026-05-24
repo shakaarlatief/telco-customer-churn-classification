@@ -1,0 +1,264 @@
+\section{Raw data audit and deterministic correction}
+
+\subsection{Purpose of the raw audit}
+
+This section documents the first workflow stage of the Telco Customer Churn classification project. The purpose is to inspect the raw dataset before constructing the modelling table and before creating the held-out train-test split.
+
+The raw audit is deliberately limited. It does not estimate predictive patterns, compare feature distributions by churn status, create churn-rate plots, select features, tune preprocessing, or fit models. Instead, it answers the following questions:
+
+\begin{itemize}[leftmargin=*]
+    \item Does the raw file load correctly?
+    \item What are the raw columns and data types?
+    \item Are there duplicate rows?
+    \item Are there standard missing values?
+    \item Are there disguised missing values, such as blank strings?
+    \item Does the target column exist and contain valid labels?
+    \item Is there an identifier column that should be excluded from modelling?
+    \item Are there deterministic raw-data representation problems that must be corrected before splitting?
+\end{itemize}
+
+This separation is important for leakage control. The full raw file may be inspected for schema and data-quality problems, because a valid modelling dataset cannot be created without those checks. However, feature-target exploratory analysis and any data-dependent modelling choices are postponed until after the train-test split and will use the training set only.
+
+\subsection{Raw dataset overview}
+
+The raw dataset contains 7043 observations and 21 columns. No exact duplicate rows were found. Pandas did not detect any standard missing values.
+
+\begin{table}[H]
+\centering
+\caption{Raw dataset overview}
+\label{tab:raw-overview}
+\begin{tabular}{lr}
+\toprule
+Item & Value \\
+\midrule
+Number of rows & 7043 \\
+Number of columns & 21 \\
+Duplicate rows & 0 \\
+Total standard missing values & 0 \\
+Columns with standard missing values & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The absence of standard missing values is not enough to conclude that no information is missing. String columns may contain blank strings or placeholder values that are not detected by ordinary missing-value checks.
+
+\subsection{Missing-data decision framework}
+
+Before choosing a cleaning strategy, it is useful to distinguish two different missing-data problems:
+
+\begin{enumerate}[leftmargin=*]
+    \item Missing feature values: at least one input variable $X$ is missing.
+    \item Missing target labels: the output variable $Y$ is missing.
+\end{enumerate}
+
+These two cases should not be handled in the same way. For missing feature values, the central production question is whether missing inputs may occur when the model is used in the future. If missing feature values may occur in production, the final model pipeline must be able to handle them. In that setting, missing values should remain present in validation and test data so that evaluation simulates production. Any imputation rule or preprocessing rule must be fitted on the training data only and then applied unchanged to validation, test, and production data.
+
+If production data is expected to be clean but the training data contains missing feature values, the goal is different: the experiment should simulate clean production. In that case, possible training-data strategies include removing incomplete training rows, imputing training values, removing a feature, or using model-based imputation. The choice should be made using training and validation logic, not the held-out test set.
+
+For missing target labels, the rules are different. Missing labels in the training set may require training only on labelled observations, label imputation, or semi-supervised learning. Missing labels in the test set should not simply be imputed and treated as known. If test labels are missing, performance should be reported with uncertainty, for example through best-case and worst-case bounds.
+
+In this dataset, the raw audit found no missing target labels and no standard missing feature values. It did find a disguised missing or representation issue in \texttt{TotalCharges}, which is discussed below.
+
+\subsection{Disguised missing values}
+
+The string-column audit checks for blank strings after trimming whitespace. This is necessary because blank strings such as \texttt{""} or \texttt{" "} are not automatically treated as missing values by pandas.
+
+\begin{table}[H]
+\centering
+\caption{Blank-string audit for selected string-like columns}
+\label{tab:blank-string-audit}
+\begin{tabular}{lrrr}
+\toprule
+Column & Blank string count & Blank string percentage & Unique values \\
+\midrule
+TotalCharges & 11 & 0.16 & 6531 \\
+customerID & 0 & 0.00 & 7043 \\
+PaymentMethod & 0 & 0.00 & 4 \\
+MultipleLines & 0 & 0.00 & 3 \\
+InternetService & 0 & 0.00 & 3 \\
+OnlineSecurity & 0 & 0.00 & 3 \\
+OnlineBackup & 0 & 0.00 & 3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Only \texttt{TotalCharges} contains blank strings. This is important because \texttt{TotalCharges} is conceptually numeric, but the blank strings cause the raw column to be read as string-like.
+
+\subsection{Target-label validation}
+
+The target variable is \texttt{Churn}. The observed target labels are \texttt{No} and \texttt{Yes}. There are no missing target labels and no unexpected target labels.
+
+\begin{table}[H]
+\centering
+\caption{Target distribution in the raw dataset}
+\label{tab:target-distribution}
+\begin{tabular}{lrr}
+\toprule
+Target level & Count & Percentage \\
+\midrule
+No & 5174 & 73.46 \\
+Yes & 1869 & 26.54 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The positive class is defined as \texttt{Churn = Yes}. The target distribution is moderately imbalanced, with approximately 26.54\% churn. This check justifies using a stratified train-test split in the next workflow stage. It is not used for model selection.
+
+\begin{table}[H]
+\centering
+\caption{Target-label validity check}
+\label{tab:target-validity}
+\begin{tabular}{lr}
+\toprule
+Item & Value \\
+\midrule
+Expected negative label present & True \\
+Expected positive label present & True \\
+Missing target values & 0 \\
+Unexpected target labels & None \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Identifier check}
+
+The column \texttt{customerID} has 7043 unique values for 7043 rows. It is therefore a unique identifier candidate. The identifier is useful for traceability, but it should not be used as a modelling feature because it does not describe a generalizable customer characteristic.
+
+\begin{table}[H]
+\centering
+\caption{Identifier check}
+\label{tab:identifier-check}
+\begin{tabular}{lrrr}
+\toprule
+Column & Unique values & Number of rows & Unique value ratio \\
+\midrule
+customerID & 7043 & 7043 & 1.00 \\
+TotalCharges & 6531 & 7043 & 0.93 \\
+MonthlyCharges & 1585 & 7043 & 0.23 \\
+tenure & 73 & 7043 & 0.01 \\
+PaymentMethod & 4 & 7043 & 0.00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Investigation of \texttt{TotalCharges}}
+
+The blank-string audit showed 11 blank strings in \texttt{TotalCharges}. These rows were checked against \texttt{tenure}. The result is exact: the 11 blank \texttt{TotalCharges} rows are exactly the 11 rows where \texttt{tenure = 0}.
+
+\begin{table}[H]
+\centering
+\caption{Relationship between blank \texttt{TotalCharges} and zero tenure}
+\label{tab:totalcharges-tenure}
+\begin{tabular}{lr}
+\toprule
+Condition & Count \\
+\midrule
+Blank \texttt{TotalCharges} & 11 \\
+\texttt{tenure == 0} & 11 \\
+Blank \texttt{TotalCharges} and \texttt{tenure == 0} & 11 \\
+Blank \texttt{TotalCharges} and \texttt{tenure != 0} & 0 \\
+Non-blank \texttt{TotalCharges} and \texttt{tenure == 0} & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Converting \texttt{TotalCharges} to numeric creates exactly 11 missing values, which are the same 11 blank-string records.
+
+\begin{table}[H]
+\centering
+\caption{\texttt{TotalCharges} numeric conversion check}
+\label{tab:totalcharges-conversion}
+\begin{tabular}{lr}
+\toprule
+Item & Count \\
+\midrule
+Standard missing before conversion & 0 \\
+Missing after numeric conversion & 11 \\
+New missing created by numeric conversion & 11 \\
+Blank string count & 11 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The affected rows are all zero-tenure customers. Most of these records have a two-year contract and none of them churned in the raw data. The churn outcome is not used to justify the correction. The correction is justified by the meaning of \texttt{TotalCharges}: a zero-tenure customer has not accumulated charges yet.
+
+\subsection{Deterministic interim correction}
+
+The following correction is applied to an interim copy of the raw dataset:
+
+\begin{enumerate}[leftmargin=*]
+    \item Convert \texttt{TotalCharges} from string-like values to numeric values.
+    \item For rows where \texttt{tenure = 0} and \texttt{TotalCharges} is blank after conversion, set \texttt{TotalCharges = 0.0}.
+\end{enumerate}
+
+This is not mean imputation, median imputation, model-based imputation, or a target-informed correction. It is a deterministic representation correction based on the definition of accumulated charges. The original raw dataframe is kept unchanged, and the corrected copy is saved as the interim dataset for the next workflow stage.
+
+After the correction, \texttt{TotalCharges} is numeric, contains no missing values, and ranges from 0.0 to 8684.8.
+
+\begin{table}[H]
+\centering
+\caption{Post-correction check}
+\label{tab:post-correction}
+\begin{tabular}{lr}
+\toprule
+Item & Value \\
+\midrule
+Remaining total missing values & 0 \\
+Remaining missing \texttt{TotalCharges} & 0 \\
+\texttt{TotalCharges} dtype & float64 \\
+Minimum \texttt{TotalCharges} & 0.00 \\
+Maximum \texttt{TotalCharges} & 8684.80 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Basic numeric domain-validity checks}
+
+Unusual values are not automatically errors. A high but possible value may be a natural observation that belongs to the production distribution. However, values that violate basic domain constraints are different: they may indicate coding errors, measurement errors, or corrupted records.
+
+The three numeric variables in this dataset should be non-negative:
+
+\begin{itemize}[leftmargin=*]
+    \item \texttt{tenure} is the number of months a customer has stayed with the company;
+    \item \texttt{MonthlyCharges} is the customer's monthly charge amount;
+    \item \texttt{TotalCharges} is the accumulated charge amount.
+\end{itemize}
+
+A value of zero can be valid. For example, zero tenure occurs for newly registered customers, and the corresponding accumulated total charge can be zero. Therefore, this audit checks only for negative values. This is not statistical outlier detection. Statistical outlier analysis is postponed until training-set exploratory analysis.
+
+\begin{table}[H]
+\centering
+\caption{Numeric domain-validity check after interim correction}
+\label{tab:numeric-domain-validity}
+\begin{tabular}{lrrrr}
+\toprule
+Feature & Minimum & Maximum & Negative count & Negative percentage \\
+\midrule
+tenure & 0.00 & 72.00 & 0 & 0.00 \\
+MonthlyCharges & 18.25 & 118.75 & 0 & 0.00 \\
+TotalCharges & 0.00 & 8684.80 & 0 & 0.00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+No negative values were found in the numeric variables. Therefore, no additional corrupted numeric values are corrected in this raw-audit stage.
+
+\subsection{Output of this workflow stage}
+
+The raw audit produces an interim dataset with 7043 rows, 21 columns, and no missing values. The raw target column \texttt{Churn} remains unchanged. The next workflow stage will create the binary target \texttt{Churn\_binary}, exclude \texttt{customerID} from the modelling feature set, and create the held-out stratified train-test split.
+
+\begin{table}[H]
+\centering
+\caption{Interim dataset save check}
+\label{tab:interim-save-check}
+\begin{tabular}{lr}
+\toprule
+Item & Value \\
+\midrule
+Number of rows & 7043 \\
+Number of columns & 21 \\
+Total missing values & 0 \\
+Interim file & \texttt{data/interim/telco\_churn\_interim.csv} \\
+\bottomrule
+\end{tabular}
+\end{table}

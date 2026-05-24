@@ -1,26 +1,44 @@
-# %%
-# 02 Cleaning and Splitting
+# %% [markdown]
+# # 02 Cleaning and Splitting
 #
-# Purpose:
-# This script takes the corrected interim dataset from the data-understanding
-# workflow and creates the clean base dataset for supervised classification.
+# ## Purpose
 #
-# This step performs only global cleaning and splitting decisions that are valid
-# before model-specific preprocessing.
+# This notebook takes the corrected interim dataset from `01_raw_data_audit`
+# and creates the clean base dataset for supervised binary classification.
 #
-# It does not perform:
-# - one-hot encoding
-# - scaling
-# - PCA
-# - feature selection
-# - class imbalance resampling
+# The goal of this stage is deliberately narrow:
 #
-# Those steps belong inside model-specific pipelines later.
+# - load the corrected interim dataset;
+# - create the binary modelling target;
+# - define the modelling feature set;
+# - exclude identifiers and non-modelling target columns;
+# - define semantic feature groups;
+# - validate that all modelling features are assigned to exactly one group;
+# - create a stratified train-test split;
+# - save the training and test datasets.
+#
+# This file does **not** perform exploratory feature-target analysis, one-hot
+# encoding, scaling, imputation, PCA, feature selection, class-imbalance
+# resampling, model training, or threshold tuning.
+
+# %% [markdown]
+# ## Why the split happens before EDA and modelling
+#
+# The held-out test set is meant to approximate future unseen data. Therefore,
+# it should not influence feature engineering, preprocessing choices, model
+# selection, hyperparameter tuning, or threshold selection.
+#
+# After this notebook creates `train.csv` and `test.csv`, all target-based EDA
+# and all modelling decisions should use only the training set. The test set is
+# kept aside until final evaluation.
+#
+# The only steps performed before splitting are deterministic data-quality and
+# dataset-construction steps. These are necessary to build a valid modelling
+# table and do not use feature-target patterns or model performance.
 
 # %%
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from sklearn.model_selection import train_test_split
@@ -31,12 +49,63 @@ pd.set_option("display.max_rows", 120)
 pd.set_option("display.width", 140)
 pd.set_option("display.float_format", "{:,.4f}".format)
 
+# %% [markdown]
+# ## Configuration
+#
+# The project root is detected by searching upward from the current working
+# directory. This makes the notebook executable from either the repository root
+# or the `notebooks/` folder.
+
 # %%
-PROJECT_ROOT = Path.cwd().parent
+def find_project_root(start: Path | None = None) -> Path:
+    """Return the project root by searching upward for project marker files.
+
+    Parameters
+    ----------
+    start:
+        Optional starting directory. If omitted, the current working directory is
+        used.
+
+    Returns
+    -------
+    Path
+        Repository root directory.
+
+    Raises
+    ------
+    FileNotFoundError
+        If no plausible project root can be found.
+    """
+    current = (start or Path.cwd()).resolve()
+
+    for candidate in [current, *current.parents]:
+        has_repo_markers = (
+            (candidate / "pyproject.toml").exists()
+            or (candidate / "README.md").exists()
+        )
+        has_project_dirs = (
+            (candidate / "data").exists()
+            and (candidate / "notebooks").exists()
+            and (candidate / "reports").exists()
+        )
+
+        if has_repo_markers and has_project_dirs:
+            return candidate
+
+    raise FileNotFoundError(
+        "Could not find the project root. Run this notebook from inside the "
+        "repository, or add project marker files such as pyproject.toml."
+    )
+
+# %%
+PROJECT_ROOT = find_project_root()
 
 INTERIM_DATA_PATH = PROJECT_ROOT / "data" / "interim" / "telco_churn_interim.csv"
 PROCESSED_DATA_DIR = PROJECT_ROOT / "data" / "processed"
 PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+TRAIN_DATA_PATH = PROCESSED_DATA_DIR / "train.csv"
+TEST_DATA_PATH = PROCESSED_DATA_DIR / "test.csv"
 
 TARGET_COLUMN = "Churn"
 BINARY_TARGET_COLUMN = "Churn_binary"
@@ -48,6 +117,7 @@ IDENTIFIER_COLUMN = "customerID"
 RANDOM_STATE = 42
 TEST_SIZE = 0.20
 
+# %%
 path_check = pd.DataFrame(
     {
         "item": [
@@ -56,6 +126,8 @@ path_check = pd.DataFrame(
             "interim_data_path",
             "interim_data_path_exists",
             "processed_data_dir",
+            "train_data_path",
+            "test_data_path",
         ],
         "value": [
             str(Path.cwd()),
@@ -63,15 +135,30 @@ path_check = pd.DataFrame(
             str(INTERIM_DATA_PATH),
             INTERIM_DATA_PATH.exists(),
             str(PROCESSED_DATA_DIR),
+            str(TRAIN_DATA_PATH),
+            str(TEST_DATA_PATH),
         ],
     }
 )
 
 path_check
 
+# %% [markdown]
+# ## Load interim dataset
+#
+# The interim dataset is produced by `01_raw_data_audit`. It preserves the raw
+# columns but corrects the representation of `TotalCharges`.
+
 # %%
+if not INTERIM_DATA_PATH.exists():
+    raise FileNotFoundError(
+        f"Interim dataset not found at: {INTERIM_DATA_PATH}\n"
+        "Run 01_raw_data_audit.py or 01_raw_data_audit.ipynb first."
+    )
+
 df_interim = pd.read_csv(INTERIM_DATA_PATH)
 
+# %%
 df_interim.head()
 
 # %%
@@ -110,12 +197,24 @@ interim_schema = pd.DataFrame(
 
 interim_schema
 
-# %%
-# Create the binary target used by the supervised classification models.
+# %% [markdown]
+# ## Create binary target
 #
-# Convention:
-# - Churn = Yes is the positive class and is encoded as 1.
-# - Churn = No is the negative class and is encoded as 0.
+# The supervised learning target is `Churn_binary`.
+#
+# The positive class is churn:
+#
+# \[
+# \texttt{Churn = Yes} \rightarrow \texttt{Churn\_binary = 1}.
+# \]
+#
+# The negative class is non-churn:
+#
+# \[
+# \texttt{Churn = No} \rightarrow \texttt{Churn\_binary = 0}.
+# \]
+
+# %%
 df_clean = df_interim.copy()
 
 target_mapping = {
@@ -135,13 +234,41 @@ target_encoding_check = (
 target_encoding_check
 
 # %%
-target_missing_after_encoding = df_clean[BINARY_TARGET_COLUMN].isna().sum()
+target_missing_after_encoding = int(df_clean[BINARY_TARGET_COLUMN].isna().sum())
 
-target_missing_after_encoding
+target_encoding_summary = pd.DataFrame(
+    {
+        "item": [
+            "missing_values_after_binary_encoding",
+            "observed_binary_target_values",
+        ],
+        "value": [
+            target_missing_after_encoding,
+            sorted(df_clean[BINARY_TARGET_COLUMN].dropna().unique().tolist()),
+        ],
+    }
+)
+
+target_encoding_summary
 
 # %%
-# customerID is kept in df_clean for traceability, but it is excluded from the
-# modelling feature columns.
+if target_missing_after_encoding != 0:
+    raise ValueError(
+        "The binary target contains missing values after encoding. Check the "
+        "raw target labels before splitting."
+    )
+
+# %% [markdown]
+# ## Define modelling feature set
+#
+# `customerID` is excluded because it is a unique identifier. The original
+# string target `Churn` is excluded because the model target is the numeric
+# binary column `Churn_binary`.
+#
+# The resulting modelling table contains 19 feature columns and one target
+# column.
+
+# %%
 modelling_excluded_columns = [
     IDENTIFIER_COLUMN,
     TARGET_COLUMN,
@@ -157,12 +284,54 @@ feature_columns = [
 feature_columns
 
 # %%
-# Define semantic feature groups.
+df_model = df_clean[feature_columns + [BINARY_TARGET_COLUMN]].copy()
+
+# A separate traceability table is kept in memory. It is not used for modelling.
+id_trace = df_clean[[IDENTIFIER_COLUMN]].copy()
+
+model_table_overview = pd.DataFrame(
+    {
+        "item": [
+            "model_table_rows",
+            "model_table_columns",
+            "number_of_feature_columns",
+            "target_column",
+            "identifier_excluded_from_features",
+            "original_string_target_excluded_from_features",
+        ],
+        "value": [
+            df_model.shape[0],
+            df_model.shape[1],
+            len(feature_columns),
+            BINARY_TARGET_COLUMN,
+            IDENTIFIER_COLUMN not in feature_columns,
+            TARGET_COLUMN not in feature_columns,
+        ],
+    }
+)
+
+model_table_overview
+
+# %%
+df_model.head()
+
+# %% [markdown]
+# ## Define semantic feature groups
 #
 # These groups describe the clean base dataset. They do not yet determine the
-# final preprocessing for every model. Later model-specific pipelines can decide
-# whether to one-hot encode, scale, pass through, or otherwise transform these
-# features.
+# final preprocessing for every model.
+#
+# Later model-specific pipelines can decide whether to one-hot encode, scale,
+# pass through, or otherwise transform these features. For example:
+#
+# - linear models, kNN, SVMs, and neural networks usually require scaling after
+#   encoding;
+# - tree-based models need categorical encoding in scikit-learn but do not
+#   require scaling;
+# - Naive Bayes variants may require different representations depending on the
+#   assumed feature distribution.
+
+# %%
 numeric_features = [
     "tenure",
     "MonthlyCharges",
@@ -207,7 +376,6 @@ feature_group_table = pd.DataFrame(
 feature_group_table
 
 # %%
-# Validate that the feature groups cover all modelling features exactly once.
 all_grouped_features = (
     numeric_features
     + binary_categorical_features
@@ -242,31 +410,27 @@ feature_group_validation = pd.DataFrame(
 feature_group_validation
 
 # %%
-# Check whether duplicate rows appear after excluding the unique identifier.
-#
-# Exact duplicate rows in the full raw/interim data were absent. However, once
-# customerID is removed, duplicate feature-target combinations may exist. This is
-# not automatically a data-quality problem: multiple customers can genuinely
-# share the same observed characteristics and churn label.
-duplicates_without_id = df_clean.drop(columns=[IDENTIFIER_COLUMN]).duplicated().sum()
+if len(feature_columns) != len(all_grouped_features):
+    raise ValueError("Feature group validation failed: feature counts do not match.")
 
-pd.DataFrame(
-    {
-        "item": [
-            "duplicates_full_clean_data",
-            "duplicates_after_dropping_customer_id",
-        ],
-        "count": [
-            int(df_clean.duplicated().sum()),
-            int(duplicates_without_id),
-        ],
-    }
-)
+if set(feature_columns) != set(all_grouped_features):
+    raise ValueError("Feature group validation failed: grouped features do not match.")
+
+if len(all_grouped_features) != len(set(all_grouped_features)):
+    raise ValueError("Feature group validation failed: duplicate grouped features found.")
+
+# %% [markdown]
+# ## Final checks before splitting
+#
+# The final modelling table is checked for missing values and duplicate rows.
+#
+# Duplicate feature-target combinations after removing `customerID` are not
+# automatically a data-quality problem. Multiple customers can genuinely share
+# the same observed characteristics and churn label.
 
 # %%
-# Final missing-value check for the clean base dataset.
-missing_summary_clean = (
-    df_clean[feature_columns + [BINARY_TARGET_COLUMN]]
+missing_summary_model = (
+    df_model
     .isna()
     .sum()
     .rename("missing_count")
@@ -274,21 +438,43 @@ missing_summary_clean = (
     .rename(columns={"index": "column"})
 )
 
-missing_summary_clean["missing_percentage"] = (
-    100 * missing_summary_clean["missing_count"] / len(df_clean)
+missing_summary_model["missing_percentage"] = (
+    100 * missing_summary_model["missing_count"] / len(df_model)
 )
 
-missing_summary_clean = missing_summary_clean.sort_values(
+missing_summary_model = missing_summary_model.sort_values(
     "missing_count",
     ascending=False,
 ).reset_index(drop=True)
 
-missing_summary_clean
+missing_summary_model
 
 # %%
-# Target distribution before splitting.
+duplicate_summary = pd.DataFrame(
+    {
+        "item": [
+            "duplicates_full_interim_data",
+            "duplicates_model_table_feature_target_rows",
+        ],
+        "count": [
+            int(df_interim.duplicated().sum()),
+            int(df_model.duplicated().sum()),
+        ],
+    }
+)
+
+duplicate_summary
+
+# %% [markdown]
+# ## Target distribution before splitting
+#
+# The target distribution is checked to justify stratified splitting. Since the
+# positive class is a minority class, stratification helps preserve the churn
+# proportion in both train and test sets.
+
+# %%
 target_distribution_clean = (
-    df_clean[BINARY_TARGET_COLUMN]
+    df_model[BINARY_TARGET_COLUMN]
     .value_counts(dropna=False)
     .rename_axis(BINARY_TARGET_COLUMN)
     .reset_index(name="count")
@@ -302,26 +488,20 @@ target_distribution_clean["percentage"] = (
 
 target_distribution_clean
 
-# %%
-# Create the modelling dataframe.
+# %% [markdown]
+# ## Stratified train-test split
 #
-# customerID is excluded from the model features, but kept in a separate
-# traceability dataframe if needed for later inspection.
-df_model = df_clean[feature_columns + [BINARY_TARGET_COLUMN]].copy()
-
-id_trace = df_clean[[IDENTIFIER_COLUMN]].copy()
-
-df_model.head()
-
-# %%
-df_model.shape
-
-# %%
-# Stratified train/test split.
+# The test set is held out for final evaluation. After this point, target-based
+# EDA, feature engineering, preprocessing choices, model selection, and
+# hyperparameter tuning should use only the training set.
 #
-# The test set is held out for final evaluation. During modelling, model
-# selection and hyperparameter tuning should use only the training data, for
-# example with a validation split or cross-validation inside the training set.
+# The split uses:
+#
+# - `test_size = 0.20`;
+# - `random_state = 42`;
+# - stratification by `Churn_binary`.
+
+# %%
 train_df, test_df = train_test_split(
     df_model,
     test_size=TEST_SIZE,
@@ -381,13 +561,15 @@ split_target_distribution = target_distribution_by_split(
 
 split_target_distribution
 
-# %%
-# Save processed train/test files locally.
+# %% [markdown]
+# ## Save processed train and test datasets
 #
-# These files are not committed to Git because data/processed/ is ignored.
-TRAIN_DATA_PATH = PROCESSED_DATA_DIR / "train.csv"
-TEST_DATA_PATH = PROCESSED_DATA_DIR / "test.csv"
+# The processed train and test files are saved locally. They should usually not
+# be committed to Git if the project keeps data files out of version control.
+#
+# The next workflow step should load only `train.csv` for training-set EDA.
 
+# %%
 train_df.to_csv(TRAIN_DATA_PATH, index=False)
 test_df.to_csv(TEST_DATA_PATH, index=False)
 
@@ -400,6 +582,8 @@ save_check = pd.DataFrame(
             "test_data_path_exists",
             "train_rows",
             "test_rows",
+            "train_missing_values",
+            "test_missing_values",
         ],
         "value": [
             str(TRAIN_DATA_PATH),
@@ -408,6 +592,8 @@ save_check = pd.DataFrame(
             TEST_DATA_PATH.exists(),
             len(train_df),
             len(test_df),
+            int(train_df.isna().sum().sum()),
+            int(test_df.isna().sum().sum()),
         ],
     }
 )

@@ -1,0 +1,195 @@
+\section{Clean modelling dataset and train-test split}
+
+\subsection{Purpose of this stage}
+
+The raw-data audit produced an interim dataset in which the representation problem in \texttt{TotalCharges} was corrected. The next step is to create the supervised modelling table and the held-out train-test split.
+
+This stage is deliberately narrow. It creates the binary target, defines the feature set, validates semantic feature groups, and creates a stratified split. It does not perform exploratory feature-target analysis, one-hot encoding, scaling, feature engineering, resampling, feature selection, or model fitting. Those steps are postponed until after the split and should use the training set only.
+
+\subsection{Interim dataset}
+
+The interim dataset is loaded from:
+
+\[
+\texttt{data/interim/telco\_churn\_interim.csv}.
+\]
+
+It has the same raw columns as the original dataset, except that \texttt{TotalCharges} has been converted to a numeric representation and the zero-tenure blank values have been set to \texttt{0.0}. No remaining missing values are present at this stage.
+
+\begin{table}[H]
+\centering
+\caption{Interim dataset overview}
+\begin{tabular}{lr}
+\toprule
+Item & Value \\
+\midrule
+Number of rows & 7043 \\
+Number of columns & 21 \\
+Duplicate rows & 0 \\
+Total missing values & 0 \\
+Columns with missing values & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Binary target encoding}
+
+The supervised learning target is \texttt{Churn\_binary}. The positive class is churn, because this is the event of practical interest.
+
+\[
+\texttt{Churn\_binary} =
+\begin{cases}
+1, & \text{if } \texttt{Churn = Yes},\\
+0, & \text{if } \texttt{Churn = No}.
+\end{cases}
+\]
+
+The encoding produces no missing values and preserves the two-class structure of the original target.
+
+\begin{table}[H]
+\centering
+\caption{Target encoding}
+\begin{tabular}{lr}
+\toprule
+Original target level & Encoded value \\
+\midrule
+No & 0 \\
+Yes & 1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Modelling feature set}
+
+The modelling feature set excludes \texttt{customerID}, the original string target \texttt{Churn}, and the binary target \texttt{Churn\_binary}. The identifier is excluded because it is row-specific and does not represent a generalizable customer characteristic. The original target is excluded because the model uses the encoded binary target.
+
+The resulting modelling table contains 7043 observations, 19 feature columns, and one target column.
+
+\begin{table}[H]
+\centering
+\caption{Clean modelling table overview}
+\begin{tabular}{lr}
+\toprule
+Item & Value \\
+\midrule
+Rows & 7043 \\
+Feature columns & 19 \\
+Target columns & 1 \\
+Identifier included as feature & No \\
+Original string target included as feature & No \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Semantic feature groups}
+
+The 19 modelling features are divided into semantic groups. These groups describe the clean base dataset; they do not yet define the final preprocessing for every model. Model-specific preprocessing is handled later inside training-only pipelines.
+
+\begin{table}[H]
+\centering
+\caption{Feature groups for modelling}
+\begin{tabular}{lrp{9.5cm}}
+\toprule
+Feature group & Count & Features \\
+\midrule
+Numeric features & 3 & \texttt{tenure}, \texttt{MonthlyCharges}, \texttt{TotalCharges} \\
+Binary categorical features & 6 & \texttt{SeniorCitizen}, \texttt{gender}, \texttt{Partner}, \texttt{Dependents}, \texttt{PhoneService}, \texttt{PaperlessBilling} \\
+Nominal categorical features & 10 & \texttt{MultipleLines}, \texttt{InternetService}, \texttt{OnlineSecurity}, \texttt{OnlineBackup}, \texttt{DeviceProtection}, \texttt{TechSupport}, \texttt{StreamingTV}, \texttt{StreamingMovies}, \texttt{Contract}, \texttt{PaymentMethod} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The feature-group validation confirms that every modelling feature belongs to exactly one group: no feature is missing from the groups, no grouped feature lies outside the modelling feature set, and no feature is assigned more than once.
+
+\subsection{Final checks before splitting}
+
+The final modelling table contains no missing values. Exact duplicate rows in the full interim data are absent. After excluding the identifier, duplicate feature-target combinations may exist, but this is not automatically a data-quality issue because multiple customers can genuinely share the same observed characteristics and churn label.
+
+\begin{table}[H]
+\centering
+\caption{Final checks before splitting}
+\begin{tabular}{lr}
+\toprule
+Item & Value \\
+\midrule
+Missing values in modelling table & 0 \\
+Duplicate full interim rows & 0 \\
+Duplicate feature-target rows after excluding identifier & 22 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Target distribution before splitting}
+
+The target distribution is moderately imbalanced. The positive class, churn, represents approximately 26.5\% of observations. This motivates a stratified train-test split. This target-only summary is used for split design rather than feature selection or model interpretation. No feature-target relationships are inspected before the train-test split.
+
+\begin{table}[H]
+\centering
+\caption{Target distribution before splitting}
+\begin{tabular}{lrr}
+\toprule
+\texttt{Churn\_binary} & Count & Percentage \\
+\midrule
+0 & 5174 & 73.46 \\
+1 & 1869 & 26.54 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Train-test split strategy}
+
+The clean modelling table is split into a training set and a held-out test set. The test set is reserved for final evaluation and should not be used for feature-target EDA, preprocessing design, model selection, hyperparameter tuning, or threshold tuning.
+
+The split uses:
+
+\[
+\texttt{test\_size} = 0.20,
+\qquad
+\texttt{random\_state} = 42.
+\]
+
+The split is stratified by \texttt{Churn\_binary}, so the train and test sets preserve the original churn proportion.
+
+\begin{table}[H]
+\centering
+\caption{Train-test split overview}
+\begin{tabular}{lrr}
+\toprule
+Split & Rows & Percentage \\
+\midrule
+Train & 5634 & 79.99 \\
+Test & 1409 & 20.01 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Target distribution by split}
+
+The stratified split preserves the target distribution closely.
+
+\begin{table}[H]
+\centering
+\caption{Target distribution by split}
+\begin{tabular}{llrr}
+\toprule
+Split & \texttt{Churn\_binary} & Count & Percentage \\
+\midrule
+Train & 0 & 4139 & 73.46 \\
+Train & 1 & 1495 & 26.54 \\
+Test & 0 & 1035 & 73.46 \\
+Test & 1 & 374 & 26.54 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Saved outputs}
+
+The training and test datasets are saved locally as:
+
+\[
+\texttt{data/processed/train.csv},
+\qquad
+\texttt{data/processed/test.csv}.
+\]
+
+These files form the boundary for the rest of the project. The next workflow stage should load only \texttt{train.csv} for exploratory analysis and modelling decisions. The held-out test file should remain unused until final model evaluation.

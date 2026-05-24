@@ -50,3 +50,6 @@ Thumbs.db
 *.run.xml
 *.synctex.gz
 *.toc
+
+# Extra files to ignore
+SAVED/
