@@ -1,0 +1,3 @@
+model,tp,fn,fp,tn
+Selected kNN k=101 uniform Manhattan,854,641,530,3609
+kNN k=5 uniform Euclidean,796,699,623,3516
