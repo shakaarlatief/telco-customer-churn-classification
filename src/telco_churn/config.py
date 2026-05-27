@@ -83,3 +83,42 @@ SIMPLE_BASELINE_COMPARISON_PATH: Path = (
 SIMPLE_BASELINE_CONFUSION_MATRIX_PATH: Path = (
     TABLES_DIR / "simple_baseline_confusion_matrices.csv"
 )
+
+LINEAR_MODEL_COMPARISON_PATH: Path = (
+    TABLES_DIR / "linear_model_comparison.csv"
+)
+LINEAR_MODEL_CONFUSION_MATRIX_PATH: Path = (
+    TABLES_DIR / "linear_model_confusion_matrices.csv"
+)
+LOGISTIC_L2_REGULARIZATION_RESULTS_PATH: Path = (
+    TABLES_DIR / "logistic_l2_regularization_results.csv"
+)
+LOGISTIC_L1_REGULARIZATION_RESULTS_PATH: Path = (
+    TABLES_DIR / "logistic_l1_regularization_results.csv"
+)
+LOGISTIC_TOP_COEFFICIENTS_PATH: Path = (
+    TABLES_DIR / "logistic_top_coefficients.csv"
+)
+LOGISTIC_THRESHOLD_RESULTS_PATH: Path = (
+    TABLES_DIR / "logistic_threshold_results.csv"
+)
+
+LOGISTIC_L2_REGULARIZATION_FIGURE_PATH: Path = (
+    FIGURES_DIR / "logistic_l2_regularization_metrics.png"
+)
+LOGISTIC_L1_REGULARIZATION_FIGURE_PATH: Path = (
+    FIGURES_DIR / "logistic_l1_regularization_metrics.png"
+)
+LOGISTIC_TOP_COEFFICIENTS_FIGURE_PATH: Path = (
+    FIGURES_DIR / "logistic_top_coefficients.png"
+)
+LOGISTIC_THRESHOLD_FIGURE_PATH: Path = (
+    FIGURES_DIR / "logistic_threshold_tradeoff.png"
+)
+
+LOGISTIC_ROC_CURVE_FIGURE_PATH: Path = (
+    FIGURES_DIR / "logistic_roc_curve.png"
+)
+LOGISTIC_PRECISION_RECALL_CURVE_FIGURE_PATH: Path = (
+    FIGURES_DIR / "logistic_precision_recall_curve.png"
+)

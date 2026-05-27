@@ -1,0 +1,5 @@
+model,tp,fn,fp,tn
+Logistic L1 C=1,812,683,430,3709
+Logistic L2 C=1,813,682,434,3705
+Logistic L2 balanced C=1,1198,297,1120,3019
+RidgeClassifier alpha=1,779,716,403,3736
