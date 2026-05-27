@@ -1,0 +1,6 @@
+model,tp,fn,fp,tn
+EDA-inspired rule,1356,139,2072,2067
+Dummy: stratified random,415,1080,1095,3044
+Dummy: uniform random,758,737,2051,2088
+Dummy: majority class,0,1495,0,4139
+Dummy: prior probability,0,1495,0,4139
