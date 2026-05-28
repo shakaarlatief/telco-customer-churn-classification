@@ -1,0 +1,4 @@
+model,tp,fn,fp,tn
+GaussianNB full transformed,1267,228,1475,2664
+BernoulliNB categorical only alpha=1,1217,278,1294,2845
+GaussianNB numeric only,821,674,653,3486
