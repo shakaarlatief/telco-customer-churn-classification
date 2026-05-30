@@ -16,9 +16,9 @@ In supervised learning, we usually imagine that observations are sampled from an
 
 For binary churn classification, one observation consists of features and a label:
 
-\[
+$$
 (X, Y) \sim p(x, y),
-\]
+$$
 
 where:
 
@@ -30,11 +30,11 @@ where:
 
 The dataset is not the population itself. The dataset is a finite sample from the population:
 
-\[
+$$
 \mathcal{D}
 =
 \{(x_i, y_i)\}_{i=1}^{n}.
-\]
+$$
 
 This distinction is the foundation of statistical model evaluation.
 
@@ -46,40 +46,40 @@ The model is not intended to perform well only on the observed rows. The goal is
 
 Suppose a trained classifier is denoted by \(h\). For a customer feature vector \(x\), the classifier predicts:
 
-\[
+$$
 \hat{y}=h(x).
-\]
+$$
 
 The **true accuracy** of \(h\) is:
 
-\[
+$$
 A(h)
 =
 P(h(X)=Y).
-\]
+$$
 
 Equivalently,
 
-\[
+$$
 A(h)
 =
 \mathbb{E}_{(X,Y)\sim p}
 \left[
 \mathbf{1}\{h(X)=Y\}
 \right].
-\]
+$$
 
 This is the probability that the classifier is correct on a newly sampled customer from the population.
 
 However, \(A(h)\) cannot be computed directly because \(p(x,y)\) is unknown. We therefore estimate it using a finite sample:
 
-\[
+$$
 \widehat{A}(h)
 =
 \frac{1}{n}
 \sum_{i=1}^{n}
 \mathbf{1}\{h(x_i)=y_i\}.
-\]
+$$
 
 This is the **sample accuracy**.
 
@@ -87,11 +87,11 @@ The true metric is unobservable. The sample metric is observable.
 
 This applies to all performance measures:
 
-\[
+$$
 \text{true metric}
 \quad \neq \quad
 \text{sample estimate}.
-\]
+$$
 
 For example:
 
@@ -137,76 +137,76 @@ Accuracy is the easiest metric to analyze because each prediction is either corr
 
 For a fixed classifier \(h\), define:
 
-\[
+$$
 Z_i
 =
 \mathbf{1}\{h(x_i)=y_i\}.
-\]
+$$
 
 Then:
 
-\[
+$$
 Z_i
 =
 \begin{cases}
 1, & \text{if the classifier is correct on observation } i,\\
 0, & \text{otherwise.}
 \end{cases}
-\]
+$$
 
 If the observations are independent draws from the population, then \(Z_i\) can be viewed as a Bernoulli random variable with success probability equal to the true accuracy:
 
-\[
+$$
 Z_i \sim \mathrm{Bernoulli}(A(h)).
-\]
+$$
 
 The sample accuracy is the average:
 
-\[
+$$
 \widehat{A}(h)
 =
 \frac{1}{n}
 \sum_{i=1}^{n} Z_i.
-\]
+$$
 
 For a Bernoulli average, the variance is:
 
-\[
+$$
 \operatorname{Var}(\widehat{A})
 =
 \frac{A(1-A)}{n}.
-\]
+$$
 
 The standard error is:
 
-\[
+$$
 \operatorname{SE}(\widehat{A})
 =
 \sqrt{
 \frac{A(1-A)}{n}
 }.
-\]
+$$
 
 Since the true \(A\) is unknown, it is common to plug in the estimate \(\widehat{A}\):
 
-\[
+$$
 \widehat{\operatorname{SE}}(\widehat{A})
 =
 \sqrt{
 \frac{\widehat{A}(1-\widehat{A})}{n}
 }.
-\]
+$$
 
 A rough normal-approximation 95 percent confidence interval is:
 
-\[
+$$
 \widehat{A}
 \pm
 1.96
 \sqrt{
 \frac{\widehat{A}(1-\widehat{A})}{n}
 }.
-\]
+$$
 
 This formula is not perfect in every situation, especially for small samples or accuracies very close to 0 or 1, but it gives the central intuition:
 
@@ -232,30 +232,30 @@ For a binary classifier, the confusion matrix contains:
 
 From these counts:
 
-\[
+$$
 \mathrm{Recall}
 =
 \frac{TP}{TP+FN},
-\]
+$$
 
-\[
+$$
 \mathrm{Precision}
 =
 \frac{TP}{TP+FP},
-\]
+$$
 
-\[
+$$
 \mathrm{Specificity}
 =
 \frac{TN}{TN+FP},
-\]
+$$
 
-\[
+$$
 F_1
 =
 \frac{2 \cdot \mathrm{Precision}\cdot \mathrm{Recall}}
 {\mathrm{Precision}+\mathrm{Recall}}.
-\]
+$$
 
 These metrics are ratios of random quantities. Their uncertainty is therefore more complicated than the uncertainty of accuracy.
 
@@ -382,13 +382,13 @@ In \(K\)-fold cross-validation, the training data is split into \(K\) folds. For
 
 The cross-validation estimate is often written as:
 
-\[
+$$
 \widehat{M}_{CV}
 =
 \frac{1}{K}
 \sum_{k=1}^{K}
 \widehat{M}^{(k)},
-\]
+$$
 
 where \(\widehat{M}^{(k)}\) is the validation metric on fold \(k\).
 
@@ -410,13 +410,13 @@ There are two common ways to summarize cross-validated predictions.
 
 Compute the metric separately on each validation fold, then average:
 
-\[
+$$
 \widehat{M}_{CV}
 =
 \frac{1}{K}
 \sum_{k=1}^{K}
 \widehat{M}^{(k)}.
-\]
+$$
 
 This is the usual formal cross-validation performance summary.
 
@@ -531,14 +531,14 @@ Many classifiers output scores or probabilities. A threshold converts those scor
 
 For example:
 
-\[
+$$
 \hat{y}
 =
 \begin{cases}
 1, & \hat{p}(Y=1 \mid x) \geq \tau,\\
 0, & \hat{p}(Y=1 \mid x) < \tau.
 \end{cases}
-\]
+$$
 
 Changing \(\tau\) changes:
 

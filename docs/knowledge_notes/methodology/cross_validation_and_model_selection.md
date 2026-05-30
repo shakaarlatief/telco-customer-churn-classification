@@ -71,7 +71,7 @@ k-fold cross-validation reduces dependence on a single validation split.
 
 The data is split into \(K\) folds:
 
-\[
+$$
 \mathcal{D}
 =
 \mathcal{D}_1
@@ -81,7 +81,7 @@ The data is split into \(K\) folds:
 \cdots
 \cup
 \mathcal{D}_K.
-\]
+$$
 
 For each fold \(k\):
 
@@ -97,13 +97,13 @@ The model is trained on the training folds and evaluated on the validation fold.
 
 If \(\widehat{M}^{(k)}\) is the metric on fold \(k\), the cross-validation estimate is:
 
-\[
+$$
 \widehat{M}_{CV}
 =
 \frac{1}{K}
 \sum_{k=1}^{K}
 \widehat{M}^{(k)}.
-\]
+$$
 
 Common values are:
 

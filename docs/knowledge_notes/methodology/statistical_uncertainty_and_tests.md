@@ -127,38 +127,38 @@ This is why small differences between tuned families should be interpreted cauti
 
 A point estimate is one number computed from a sample:
 
-\[
+$$
 \widehat{M}.
-\]
+$$
 
 The unknown target is the true population metric:
 
-\[
+$$
 M.
-\]
+$$
 
 A standard error estimates the typical sampling variability of \(\widehat{M}\):
 
-\[
+$$
 \operatorname{SE}(\widehat{M}).
-\]
+$$
 
 A confidence interval gives a range of plausible values for the true metric. A rough normal-approximation interval has the form:
 
-\[
+$$
 \widehat{M}
 \pm
 z_{1-\alpha/2}
 \operatorname{SE}(\widehat{M}).
-\]
+$$
 
 For a 95 percent interval:
 
-\[
+$$
 z_{0.975}
 \approx
 1.96.
-\]
+$$
 
 Interpretation:
 
@@ -174,44 +174,44 @@ Accuracy is relatively simple because each test observation is either correct or
 
 For a fixed trained classifier \(h\), define:
 
-\[
+$$
 Z_i
 =
 \mathbf{1}\{h(x_i)=y_i\}.
-\]
+$$
 
 Then:
 
-\[
+$$
 \widehat{A}
 =
 \frac{1}{n}
 \sum_{i=1}^{n}
 Z_i.
-\]
+$$
 
 If test observations are independent and identically distributed and the model is fixed, \(Z_i\) can be treated as Bernoulli with success probability \(A\), the true accuracy.
 
 A simple approximate standard error is:
 
-\[
+$$
 \widehat{\operatorname{SE}}(\widehat{A})
 =
 \sqrt{
 \frac{\widehat{A}(1-\widehat{A})}{n}
 }.
-\]
+$$
 
 A rough 95 percent interval is:
 
-\[
+$$
 \widehat{A}
 \pm
 1.96
 \sqrt{
 \frac{\widehat{A}(1-\widehat{A})}{n}
 }.
-\]
+$$
 
 This illustrates why larger test sets give narrower confidence intervals.
 
@@ -226,45 +226,45 @@ test set size = 100
 
 then:
 
-\[
+$$
 \widehat{\operatorname{SE}}
 =
 \sqrt{\frac{0.8(0.2)}{100}}
 =
 0.04.
-\]
+$$
 
 A rough 95 percent interval is:
 
-\[
+$$
 0.80 \pm 1.96(0.04)
 =
 0.80 \pm 0.0784.
-\]
+$$
 
 So the interval is roughly:
 
-\[
+$$
 [0.722,\;0.878].
-\]
+$$
 
 That is wide. A model with observed accuracy \(0.80\) on only 100 cases is not estimated very precisely.
 
 If the test set size were 10000 instead:
 
-\[
+$$
 \widehat{\operatorname{SE}}
 =
 \sqrt{\frac{0.8(0.2)}{10000}}
 =
 0.004.
-\]
+$$
 
 The interval becomes approximately:
 
-\[
+$$
 0.80 \pm 0.00784.
-\]
+$$
 
 The same point estimate is much more precise with a larger evaluation set.
 
@@ -274,29 +274,29 @@ The same point estimate is much more precise with a larger evaluation set.
 
 Recall is accuracy restricted to the positive class:
 
-\[
+$$
 \mathrm{Recall}
 =
 \frac{TP}{TP+FN}.
-\]
+$$
 
 If the set of actual positives is treated as the relevant evaluation sample, then recall can be viewed as a binomial proportion over positive cases:
 
-\[
+$$
 \widehat{\mathrm{Recall}}
 =
 \frac{TP}{n_+},
-\]
+$$
 
 where:
 
-\[
+$$
 n_+ = TP+FN.
-\]
+$$
 
 A rough standard error is:
 
-\[
+$$
 \sqrt{
 \frac{
 \widehat{\mathrm{Recall}}(1-\widehat{\mathrm{Recall}})
@@ -304,19 +304,19 @@ A rough standard error is:
 n_+
 }
 }.
-\]
+$$
 
 Specificity is analogous over actual negatives:
 
-\[
+$$
 \mathrm{Specificity}
 =
 \frac{TN}{TN+FP}.
-\]
+$$
 
 A rough standard error is:
 
-\[
+$$
 \sqrt{
 \frac{
 \widehat{\mathrm{Specificity}}(1-\widehat{\mathrm{Specificity}})
@@ -324,13 +324,13 @@ A rough standard error is:
 n_-
 }
 },
-\]
+$$
 
 where:
 
-\[
+$$
 n_- = TN+FP.
-\]
+$$
 
 These intervals are useful because recall and specificity are conditional accuracies on class-specific subsets.
 
@@ -342,17 +342,17 @@ In imbalanced classification, the positive class can be small. Therefore, recall
 
 Precision is:
 
-\[
+$$
 \mathrm{Precision}
 =
 \frac{TP}{TP+FP}.
-\]
+$$
 
 It is conditional on predicted positives, not actual positives. The denominator \(TP+FP\) is random because it depends on the classifier's predictions.
 
 F1 is:
 
-\[
+$$
 F_1
 =
 \frac{
@@ -360,7 +360,7 @@ F_1
 }{
 \mathrm{Precision}+\mathrm{Recall}
 }.
-\]
+$$
 
 It is a nonlinear function of two random ratios.
 
@@ -386,12 +386,12 @@ The procedure is:
 
 If \(B\) bootstrap samples are drawn, we obtain:
 
-\[
+$$
 \widehat{M}^{*(1)},
 \widehat{M}^{*(2)},
 \ldots,
 \widehat{M}^{*(B)}.
-\]
+$$
 
 This empirical distribution approximates the sampling distribution of the metric estimate.
 
@@ -429,12 +429,12 @@ upper bound:
 
 For a 95 percent interval:
 
-\[
+$$
 [
 q_{0.025},
 q_{0.975}
 ].
-\]
+$$
 
 where \(q_{0.025}\) and \(q_{0.975}\) are bootstrap quantiles.
 
@@ -493,13 +493,13 @@ For each bootstrap resample of validation or cross-validation prediction rows:
 
 This produces a bootstrap distribution of differences:
 
-\[
+$$
 \Delta^{*(b)}
 =
 \widehat{M}^{*(b)}_A
 -
 \widehat{M}^{*(b)}_B.
-\]
+$$
 
 A confidence interval for \(\Delta\) is obtained from the bootstrap quantiles.
 
@@ -663,7 +663,7 @@ If the original score is far above the permuted-label scores, this suggests the 
 
 The empirical p-value can be computed as:
 
-\[
+$$
 p
 =
 \frac{
@@ -671,7 +671,7 @@ p
 }{
 1 + B
 },
-\]
+$$
 
 where \(B\) is the number of permutations.
 
@@ -738,15 +738,15 @@ If the two models have the same error rate, we expect these disagreement counts 
 
 McNemar's test focuses on:
 
-\[
+$$
 n_{10}
 \quad\text{versus}\quad
 n_{01}.
-\]
+$$
 
 A common large-sample test statistic with continuity correction is:
 
-\[
+$$
 \chi^2
 =
 \frac{
@@ -754,7 +754,7 @@ A common large-sample test statistic with continuity correction is:
 }{
 n_{10}+n_{01}
 }.
-\]
+$$
 
 This is compared to a chi-square distribution with one degree of freedom.
 
@@ -791,11 +791,11 @@ For this project, McNemar's test can be a useful supplementary final test for ha
 
 ROC-AUC has a special statistical structure. It can be interpreted as the probability that a randomly selected positive observation receives a higher score than a randomly selected negative observation:
 
-\[
+$$
 \mathrm{AUC}
 =
 P(s(X^+) > s(X^-)).
-\]
+$$
 
 Because of this, specialized methods exist for estimating the variance of ROC-AUC and comparing correlated ROC-AUCs from two models evaluated on the same data.
 
@@ -929,13 +929,13 @@ When two models are evaluated using the same cross-validation folds, their fold 
 
 For fold \(k\):
 
-\[
+$$
 d_k
 =
 M_A^{(k)}
 -
 M_B^{(k)}.
-\]
+$$
 
 Then one can summarize:
 
