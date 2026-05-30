@@ -16,105 +16,42 @@ What is the immediate next step?
 
 This file is intentionally shorter and more operational than the knowledge notes and the report.
 
-## Latest known GitHub state
+## Latest known GitHub state at time of this update
 
-Latest confirmed GitHub commit:
+Latest confirmed GitHub commit at the time this file was last updated:
 
 ```text
-b85658e4bcfddfe7f2255f9f4f42324209a09227
-Revise naive Bayes section with hybrid model
+4d6a61991110dde65b8720197d3c18a2be982f3b
+Enforce single final test model evaluation policy
 ```
 
-At that commit, the project includes completed sections through:
+This commit includes the documentation cleanup, the statistical evaluation methodology knowledge notes, the report methodology rewrite, and the strict single-final-test-model policy.
+
+When starting from this file in a later chat, first check GitHub for newer commits. Treat this commit as the latest confirmed checkpoint only as of the time this status file was written.
+
+At this commit, the project includes completed and committed sections through:
 
 ```text
 01_raw_data_audit
 02_cleaning_and_splitting
 03_training_set_eda
+04_statistical_evaluation_methodology
 04_preprocessing_and_simple_baselines
 05_linear_classification_and_logistic_regression
 06_k_nearest_neighbours
 07_naive_bayes
 ```
 
-The latest committed repository does not yet necessarily include the documentation cleanup and report methodology rewrite prepared after this commit. Check local files before committing.
-
-## Current uncommitted/prepared changes from the current chat
-
-The current chat prepared several files that should be added or used to replace existing files.
-
-### New methodology knowledge notes
-
-Place these in:
+The four methodology knowledge notes are committed:
 
 ```text
-docs/knowledge_notes/methodology/
+docs/knowledge_notes/methodology/evaluation_foundations.md
+docs/knowledge_notes/methodology/cross_validation_and_model_selection.md
+docs/knowledge_notes/methodology/statistical_uncertainty_and_tests.md
+docs/knowledge_notes/methodology/final_model_comparison_plan.md
 ```
 
-Files prepared:
-
-```text
-evaluation_foundations.md
-cross_validation_and_model_selection.md
-statistical_uncertainty_and_tests.md
-final_model_comparison_plan.md
-```
-
-Purpose:
-
-```text
-- explain true metric versus sample metric
-- explain sampling uncertainty
-- explain train/validation/test discipline
-- explain leakage
-- explain CV, repeated CV, nested CV
-- explain hyperparameter tuning and selection optimism
-- explain statistical uncertainty and tests
-- define the final model comparison plan
-```
-
-### Report methodology rewrite
-
-Files prepared:
-
-```text
-reports/latex/main.tex
-reports/latex/sections/04_statistical_evaluation_methodology.tex
-reports/latex/sections/05_linear_classification_and_logistic_regression.tex
-reports/latex/sections/06_k_nearest_neighbours.tex
-reports/latex/sections/07_naive_bayes.tex
-```
-
-Purpose:
-
-```text
-- add a new statistical evaluation methodology section before the model sections
-- update the abstract to state that section-level CV results are development-stage estimates
-- revise sections 05, 06, and 07 so close differences and tuned model choices are interpreted cautiously
-- clarify that final test evaluation is deferred
-- clarify that threshold curves are diagnostic, not final threshold choices
-```
-
-### Documentation cleanup prepared now
-
-This cleanup adds or replaces:
-
-```text
-docs/knowledge_notes/00_documentation_workflow.md
-docs/knowledge_notes/01_model_inventory_and_roadmap.md
-docs/knowledge_notes/current_project_status_and_next_actions.md
-docs/knowledge_notes/current_notebook_documentation_audit.md
-docs/knowledge_notes/context_history/telco_churn_chat_handoff_context_3.md
-```
-
-Purpose:
-
-```text
-- remove stale "next task" content from the wrong files
-- make file roles explicit
-- create a single tactical next-actions file
-- create a standalone handoff for a new chat
-```
+There are no known prepared methodology/report cleanup files left to add from the previous chat. The next modelling step is section 08: decision trees.
 
 ## Important methodological decision made before continuing
 
@@ -173,8 +110,7 @@ thresholds, and calibration introduction
 Status:
 
 ```text
-complete and committed at latest GitHub state
-report rewrite prepared afterward
+complete and committed at latest confirmed GitHub state
 ```
 
 Main development results:
@@ -206,8 +142,7 @@ The exact C value should not be overinterpreted because several values are close
 Status:
 
 ```text
-complete and committed at latest GitHub state
-report rewrite prepared afterward
+complete and committed at latest confirmed GitHub state
 ```
 
 Main development result:
@@ -234,8 +169,7 @@ kNN improves strongly over default k=5 but remains below logistic regression in 
 Status:
 
 ```text
-complete and committed at latest GitHub state
-report rewrite prepared afterward
+complete and committed at latest confirmed GitHub state
 ```
 
 Important change already committed:
@@ -288,22 +222,22 @@ Notebook-local helper functions can remain notebook-local when they are section-
 
 ## Immediate next actions before continuing modelling
 
-1. Add the four methodology knowledge notes to `docs/knowledge_notes/methodology/`.
-2. Add the report methodology rewrite files.
-3. Add the documentation cleanup files.
-4. Compile `reports/latex/main.tex`.
-5. Inspect the compiled PDF.
-6. Fix any formatting, table, or wording issues.
-7. Commit the cleanup and methodology rewrite.
-8. Start section 08: decision trees.
+1. Start section 08: decision trees.
+2. Create or update the decision-tree knowledge note.
+3. Build notebook 08 using training-set cross-validation only.
+4. Evaluate a stump, default tree, tuned tree, and possibly cost-complexity-pruned tree.
+5. Save tables and figures.
+6. Write the report section with development-stage wording.
+7. Compile the report.
+8. Commit after the section is checked.
 
-Suggested commit message after checks:
+Suggested future commit message after section 08 is complete:
 
 ```text
-Add statistical evaluation methodology and documentation handoff
+Add decision tree modelling section
 ```
 
-## Next modelling stage after cleanup
+## Next modelling stage
 
 Next section:
 

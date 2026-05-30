@@ -16,6 +16,17 @@ For new-chat continuation, use the newest file in:
 docs/knowledge_notes/context_history/
 ```
 
+## Audit status at time of this update
+
+Latest confirmed GitHub commit at the time this audit file was last updated:
+
+```text
+4d6a61991110dde65b8720197d3c18a2be982f3b
+Enforce single final test model evaluation policy
+```
+
+When reading this file in a later chat, first check GitHub for newer commits. Treat this commit as the latest confirmed checkpoint only as of the time this audit file was written.
+
 ## Audit decision
 
 The project structure is good, but the documentation roles needed cleanup.
@@ -306,6 +317,6 @@ final performance
 
 ## Audit conclusion
 
-The project can continue after the documentation cleanup and report methodology rewrite are added, compiled, checked, and committed.
+The documentation cleanup, report methodology rewrite, and strict single-final-test-model policy are committed as of the checkpoint listed above.
 
 The next modelling section should be decision trees.

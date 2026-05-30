@@ -8,14 +8,16 @@ The project is not only about finding the best churn model. It is also a reusabl
 
 The polished report should read as a standalone technical report. Knowledge notes may preserve deeper theory and modelling plans, but report prose should not depend on lecture references.
 
-## Current project state
+## Current project state at time of this update
 
-Latest confirmed GitHub commit:
+Latest confirmed GitHub commit at the time this roadmap was last updated:
 
 ```text
-b85658e4bcfddfe7f2255f9f4f42324209a09227
-Revise naive Bayes section with hybrid model
+4d6a61991110dde65b8720197d3c18a2be982f3b
+Enforce single final test model evaluation policy
 ```
+
+When starting from this roadmap in a later chat, first check GitHub for newer commits. Treat this commit as the latest confirmed checkpoint only as of the time this roadmap was written.
 
 Completed and committed modelling/report stages through that commit:
 
@@ -23,21 +25,14 @@ Completed and committed modelling/report stages through that commit:
 01_raw_data_audit
 02_cleaning_and_splitting
 03_training_set_eda
+04_statistical_evaluation_methodology
 04_preprocessing_and_simple_baselines
 05_linear_classification_and_logistic_regression
 06_k_nearest_neighbours
 07_naive_bayes
 ```
 
-Prepared after that commit and intended to be added before continuing:
-
-```text
-statistical evaluation methodology knowledge notes
-report methodology rewrite
-documentation cleanup and handoff update
-```
-
-The next modelling stage after cleanup is:
+The next modelling stage is:
 
 ```text
 08_decision_trees
@@ -311,7 +306,7 @@ logistic regression remains strongest so far by PR-AUC and ROC-AUC
 
 ## Methodology knowledge module
 
-The project now has or should add these methodology notes:
+The project has these committed methodology notes:
 
 ```text
 docs/knowledge_notes/methodology/evaluation_foundations.md
@@ -488,7 +483,7 @@ ablation studies
 interpretability
 ```
 
-The final test set should be used once after all choices are fixed.
+The final test set should be used once after all choices are fixed, and only for exactly one frozen final model.
 
 ## Methods saved for later projects
 
@@ -507,15 +502,16 @@ They can be mentioned as future-project topics but should not distract from the 
 
 ## Immediate next stage
 
-Before starting decision trees:
+Start decision trees:
 
 ```text
-1. Add documentation cleanup files.
-2. Add methodology knowledge notes.
-3. Add report methodology rewrite.
-4. Compile and check the PDF.
-5. Commit the documentation/methodology update.
-6. Start decision tree knowledge note and section 08.
+1. Create or update the decision-tree knowledge note.
+2. Build notebook 08 using training-set cross-validation only.
+3. Evaluate stump/default/tuned/pruned tree variants.
+4. Save tables and figures.
+5. Write the decision-tree report section.
+6. Compile and check the report.
+7. Commit the decision-tree section after review.
 ```
 
 

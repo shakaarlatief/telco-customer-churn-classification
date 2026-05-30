@@ -50,18 +50,27 @@ Do not write report sections as if they are lecture notes. The source slides and
 
 When updating code or files, be careful not to overwrite good current content. If the exact current file is not available, ask the user for it or provide exact replacement files/snippets.
 
-## Latest confirmed GitHub state
+## Latest confirmed GitHub state at time of this handoff update
 
-Latest confirmed commit:
+Latest confirmed commit at the time this handoff was last updated:
 
 ```text
-b85658e4bcfddfe7f2255f9f4f42324209a09227
-Revise naive Bayes section with hybrid model
+4d6a61991110dde65b8720197d3c18a2be982f3b
+Enforce single final test model evaluation policy
 ```
 
-This commit includes the hybrid Naive Bayes revision.
+This commit includes:
 
-Important: after this commit, the current chat prepared additional methodology/report/documentation cleanup files. These may not yet be committed. Verify local files before assuming GitHub contains them.
+```text
+documentation cleanup
+four methodology knowledge notes
+statistical evaluation methodology report section
+revised report wording for sections 05, 06, and 07
+strict single-final-test-model policy
+compiled report PDF update, if locally generated and committed
+```
+
+When starting a later chat from this handoff, first check GitHub for newer commits. Treat this commit as the latest confirmed checkpoint only as of the time this handoff was written.
 
 ## Dataset state
 
@@ -235,7 +244,7 @@ reports/latex:
 
 ## Completed sections
 
-Completed and committed through latest GitHub state:
+Completed and committed through the latest confirmed checkpoint at the time this handoff was written:
 
 ```text
 01_raw_data_audit
@@ -430,7 +439,7 @@ conditional independence remains a limitation
 logistic regression remains strongest so far by PR-AUC and ROC-AUC
 ```
 
-## Major methodology decision made in this chat
+## Major methodology decision made before this handoff update
 
 Before continuing to decision trees, the project paused to improve statistical evaluation methodology.
 
@@ -443,7 +452,7 @@ the report should explain true metric versus sample estimate, uncertainty,
 CV, repeated CV, nested CV, tests, and final test evaluation discipline
 ```
 
-New methodology knowledge notes prepared:
+Methodology knowledge notes committed:
 
 ```text
 docs/knowledge_notes/methodology/evaluation_foundations.md
@@ -461,13 +470,13 @@ hyperparameter tuning creates selection optimism
 repeated CV improves stability
 nested CV evaluates tuning procedures
 final test set is used once after all choices are fixed
-bootstrap CIs and paired bootstrap differences should be used later
+bootstrap CIs should be used for the single final model's test metrics, and paired bootstrap differences should be used only before final model selection
 threshold selection and calibration are model-selection decisions
 ```
 
-## Report methodology rewrite prepared
+## Report methodology rewrite committed
 
-Prepared files:
+Committed files:
 
 ```text
 reports/latex/main.tex
@@ -487,11 +496,11 @@ clarify that close differences are development evidence
 clarify that final test performance is deferred
 ```
 
-Important: These report files were prepared in the chat and may still need to be copied into the repository, compiled, checked, and committed.
+These report files are committed as of the latest confirmed checkpoint listed above.
 
-## Documentation cleanup prepared
+## Documentation cleanup committed
 
-Prepared files:
+Committed files:
 
 ```text
 docs/knowledge_notes/00_documentation_workflow.md
@@ -583,29 +592,14 @@ microtype
 
 ## Immediate next actions
 
-Before continuing modelling:
+Before continuing modelling in the new chat:
 
 ```text
-1. Add the four methodology knowledge notes.
-2. Add the report methodology rewrite files.
-3. Add the documentation cleanup files.
-4. Compile reports/latex/main.tex.
-5. Check the PDF.
-6. Fix any formatting or wording issues.
-7. Commit the methodology/documentation update.
+1. Check GitHub for commits newer than the checkpoint listed above.
+2. Confirm the working tree is clean locally.
+3. Start section 08: decision trees.
 ```
 
-Suggested commit message:
-
-```text
-Add statistical evaluation methodology and documentation handoff
-```
-
-After that, continue with:
-
-```text
-08_decision_trees
-```
 
 ## Next modelling stage: decision trees
 
