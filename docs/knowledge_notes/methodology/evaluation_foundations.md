@@ -265,7 +265,7 @@ This motivates more general uncertainty methods later, especially:
 
 ```text
 bootstrap confidence intervals
-paired bootstrap differences
+paired bootstrap differences on validation or cross-validation predictions before final model selection
 permutation tests
 McNemar's test for paired hard predictions
 DeLong-style tests for ROC-AUC
@@ -668,10 +668,10 @@ That stage can include:
 repeated cross-validation for more stable tuning
 nested cross-validation for comparing tuned model-family procedures
 bootstrap confidence intervals for final metrics
-paired bootstrap comparisons between top models
+paired bootstrap comparisons between candidate models before final selection
 calibration analysis
 threshold selection using validation data only
-final untouched test-set evaluation
+final untouched test-set evaluation for the single frozen final model
 ablation studies
 ```
 

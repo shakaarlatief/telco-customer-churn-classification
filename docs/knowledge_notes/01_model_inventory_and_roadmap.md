@@ -334,8 +334,8 @@ nested CV
 hyperparameter tuning
 selection optimism
 fair tuning effort
-bootstrap confidence intervals
-paired model comparisons
+bootstrap confidence intervals for the single frozen final model
+paired model comparisons before final selection
 statistical tests
 final model comparison plan
 ```
@@ -482,8 +482,7 @@ possibly nested CV for tuned model-family procedures
 metric sensitivity
 threshold selection
 calibration analysis if probabilities matter
-bootstrap confidence intervals
-paired bootstrap differences against runner-up models
+bootstrap confidence intervals for the single frozen final model
 final test-set evaluation
 ablation studies
 interpretability
@@ -518,3 +517,12 @@ Before starting decision trees:
 5. Commit the documentation/methodology update.
 6. Start decision tree knowledge note and section 08.
 ```
+
+
+## Strict final test-set policy clarification
+
+The final test set should be used for exactly one frozen final model.
+
+Do not use the test set to compare multiple candidate models, additional candidate models, alternative thresholds, alternative calibration methods, or alternative preprocessing decisions. All model-family comparison, repeated CV, nested CV, statistical tests, paired bootstrap differences, McNemar-style comparisons, DeLong-style comparisons, threshold selection, calibration selection, and ablation decisions should happen before final test evaluation using training-only validation evidence.
+
+After one final model is selected and frozen, evaluate that model once on the untouched test set. Bootstrap confidence intervals may be reported for that single final model's test metrics.

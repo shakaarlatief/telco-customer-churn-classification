@@ -680,6 +680,15 @@ After all model-family sections:
 6. Fit final model on full training data.
 7. Evaluate once on untouched test data.
 8. Report bootstrap confidence intervals.
-9. Use paired bootstrap differences against runner-up models.
+9. Use paired bootstrap differences before final model selection, using validation or cross-validation outputs.
 10. Add ablation and interpretability analysis if useful.
 ```
+
+
+## Strict final test-set policy clarification
+
+The final test set should be used for exactly one frozen final model.
+
+Do not use the test set to compare multiple candidate models, additional candidate models, alternative thresholds, alternative calibration methods, or alternative preprocessing decisions. All model-family comparison, repeated CV, nested CV, statistical tests, paired bootstrap differences, McNemar-style comparisons, DeLong-style comparisons, threshold selection, calibration selection, and ablation decisions should happen before final test evaluation using training-only validation evidence.
+
+After one final model is selected and frozen, evaluate that model once on the untouched test set. Bootstrap confidence intervals may be reported for that single final model's test metrics.

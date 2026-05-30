@@ -1,0 +1,1298 @@
+ .../01_model_inventory_and_roadmap.md              |  16 +-
+ .../telco_churn_chat_handoff_context_3.md          |  11 +-
+ .../current_project_status_and_next_actions.md     |   9 +
+ .../cross_validation_and_model_selection.md        |   9 +-
+ .../methodology/evaluation_foundations.md          |   6 +-
+ .../methodology/final_model_comparison_plan.md     | 310 ++++++++++++---------
+ .../statistical_uncertainty_and_tests.md           |  74 +++--
+ reports/latex/main.pdf                             | Bin 7380594 -> 7381644 bytes
+ .../04_statistical_evaluation_methodology.tex      |  15 +-
+ 9 files changed, 255 insertions(+), 195 deletions(-)
+
+FULL DIFF
+=========
+diff --git a/docs/knowledge_notes/01_model_inventory_and_roadmap.md b/docs/knowledge_notes/01_model_inventory_and_roadmap.md
+index 02c5149..eb124f1 100644
+--- a/docs/knowledge_notes/01_model_inventory_and_roadmap.md
++++ b/docs/knowledge_notes/01_model_inventory_and_roadmap.md
+@@ -334,8 +334,8 @@ nested CV
+ hyperparameter tuning
+ selection optimism
+ fair tuning effort
+-bootstrap confidence intervals
+-paired model comparisons
++bootstrap confidence intervals for the single frozen final model
++paired model comparisons before final selection
+ statistical tests
+ final model comparison plan
+ ```
+@@ -482,8 +482,7 @@ possibly nested CV for tuned model-family procedures
+ metric sensitivity
+ threshold selection
+ calibration analysis if probabilities matter
+-bootstrap confidence intervals
+-paired bootstrap differences against runner-up models
++bootstrap confidence intervals for the single frozen final model
+ final test-set evaluation
+ ablation studies
+ interpretability
+@@ -518,3 +517,12 @@ Before starting decision trees:
+ 5. Commit the documentation/methodology update.
+ 6. Start decision tree knowledge note and section 08.
+ ```
++
++
++## Strict final test-set policy clarification
++
++The final test set should be used for exactly one frozen final model.
++
++Do not use the test set to compare multiple candidate models, additional candidate models, alternative thresholds, alternative calibration methods, or alternative preprocessing decisions. All model-family comparison, repeated CV, nested CV, statistical tests, paired bootstrap differences, McNemar-style comparisons, DeLong-style comparisons, threshold selection, calibration selection, and ablation decisions should happen before final test evaluation using training-only validation evidence.
++
++After one final model is selected and frozen, evaluate that model once on the untouched test set. Bootstrap confidence intervals may be reported for that single final model's test metrics.
+diff --git a/docs/knowledge_notes/context_history/telco_churn_chat_handoff_context_3.md b/docs/knowledge_notes/context_history/telco_churn_chat_handoff_context_3.md
+index 6cbc739..a9b8485 100644
+--- a/docs/knowledge_notes/context_history/telco_churn_chat_handoff_context_3.md
++++ b/docs/knowledge_notes/context_history/telco_churn_chat_handoff_context_3.md
+@@ -680,6 +680,15 @@ After all model-family sections:
+ 6. Fit final model on full training data.
+ 7. Evaluate once on untouched test data.
+ 8. Report bootstrap confidence intervals.
+-9. Use paired bootstrap differences against runner-up models.
++9. Use paired bootstrap differences before final model selection, using validation or cross-validation outputs.
+ 10. Add ablation and interpretability analysis if useful.
+ ```
++
++
++## Strict final test-set policy clarification
++
++The final test set should be used for exactly one frozen final model.
++
++Do not use the test set to compare multiple candidate models, additional candidate models, alternative thresholds, alternative calibration methods, or alternative preprocessing decisions. All model-family comparison, repeated CV, nested CV, statistical tests, paired bootstrap differences, McNemar-style comparisons, DeLong-style comparisons, threshold selection, calibration selection, and ablation decisions should happen before final test evaluation using training-only validation evidence.
++
++After one final model is selected and frozen, evaluate that model once on the untouched test set. Bootstrap confidence intervals may be reported for that single final model's test metrics.
+diff --git a/docs/knowledge_notes/current_project_status_and_next_actions.md b/docs/knowledge_notes/current_project_status_and_next_actions.md
+index 6ac1e5f..6ab5f44 100644
+--- a/docs/knowledge_notes/current_project_status_and_next_actions.md
++++ b/docs/knowledge_notes/current_project_status_and_next_actions.md
+@@ -345,3 +345,12 @@ report sections
+ ```
+ 
+ Use this file and the newest context handoff instead.
++
++
++## Strict final test-set policy clarification
++
++The final test set should be used for exactly one frozen final model.
++
++Do not use the test set to compare multiple candidate models, additional candidate models, alternative thresholds, alternative calibration methods, or alternative preprocessing decisions. All model-family comparison, repeated CV, nested CV, statistical tests, paired bootstrap differences, McNemar-style comparisons, DeLong-style comparisons, threshold selection, calibration selection, and ablation decisions should happen before final test evaluation using training-only validation evidence.
++
++After one final model is selected and frozen, evaluate that model once on the untouched test set. Bootstrap confidence intervals may be reported for that single final model's test metrics.
+diff --git a/docs/knowledge_notes/methodology/cross_validation_and_model_selection.md b/docs/knowledge_notes/methodology/cross_validation_and_model_selection.md
+index 9e9d585..6c8f589 100644
+--- a/docs/knowledge_notes/methodology/cross_validation_and_model_selection.md
++++ b/docs/knowledge_notes/methodology/cross_validation_and_model_selection.md
+@@ -945,10 +945,9 @@ Use the untouched test set once.
+ Report:
+ 
+ ```text
+-point estimates
+-confidence intervals
+-paired comparisons against runner-up models
+-calibration diagnostics if probabilities matter
++point estimates for the single frozen final model
++confidence intervals for the single frozen final model
++calibration diagnostics for the single frozen final model if probabilities matter
+ ```
+ 
+ ---
+@@ -967,7 +966,7 @@ The main lessons are:
+ 7. Fair model comparison requires comparable tuning effort and transparent search spaces.
+ 8. Small differences between tuned configurations should be interpreted cautiously.
+ 9. Simplicity and robustness matter when performance differences are small.
+-10. Final performance must be evaluated once on the untouched test set.
++10. Final performance must be evaluated once on the untouched test set for exactly one frozen final model.
+ ```
+ 
+ For the current project, the individual model sections should continue to use ordinary stratified CV for clear learning and development. The more advanced repeated-CV, nested-CV, statistical-testing, and final test-set uncertainty methods should be introduced later in a dedicated comparison and final evaluation stage.
+diff --git a/docs/knowledge_notes/methodology/evaluation_foundations.md b/docs/knowledge_notes/methodology/evaluation_foundations.md
+index 8f8ed78..7d8443c 100644
+--- a/docs/knowledge_notes/methodology/evaluation_foundations.md
++++ b/docs/knowledge_notes/methodology/evaluation_foundations.md
+@@ -265,7 +265,7 @@ This motivates more general uncertainty methods later, especially:
+ 
+ ```text
+ bootstrap confidence intervals
+-paired bootstrap differences
++paired bootstrap differences on validation or cross-validation predictions before final model selection
+ permutation tests
+ McNemar's test for paired hard predictions
+ DeLong-style tests for ROC-AUC
+@@ -668,10 +668,10 @@ That stage can include:
+ repeated cross-validation for more stable tuning
+ nested cross-validation for comparing tuned model-family procedures
+ bootstrap confidence intervals for final metrics
+-paired bootstrap comparisons between top models
++paired bootstrap comparisons between candidate models before final selection
+ calibration analysis
+ threshold selection using validation data only
+-final untouched test-set evaluation
++final untouched test-set evaluation for the single frozen final model
+ ablation studies
+ ```
+ 
+diff --git a/docs/knowledge_notes/methodology/final_model_comparison_plan.md b/docs/knowledge_notes/methodology/final_model_comparison_plan.md
+index bcc8abb..bf9480f 100644
+--- a/docs/knowledge_notes/methodology/final_model_comparison_plan.md
++++ b/docs/knowledge_notes/methodology/final_model_comparison_plan.md
+@@ -1,8 +1,8 @@
+-# Final model comparison plan for the Telco churn project
++# Final model selection and single-test-set evaluation plan for the Telco churn project
+ 
+ This note defines the project-specific evaluation plan after the individual model-family sections are complete.
+ 
+-The previous methodology notes explain the theory:
++The previous methodology notes explain the underlying theory:
+ 
+ ```text
+ evaluation_foundations.md
+@@ -12,9 +12,13 @@ statistical_uncertainty_and_tests.md
+ 
+ This note answers a practical question:
+ 
+-> After we have explained, implemented, tuned, and interpreted all model families, how should the project compare them and choose a final model without overstating the evidence?
++> After we have explained, implemented, tuned, and interpreted all relevant model families, how should the project compare candidates, choose one final model, and evaluate it without overstating the evidence?
+ 
+-The project should not treat every section-level cross-validation table as a final ranking. The section-level tables are development-stage evidence. The final comparison should be a separate stage with stricter language, more careful uncertainty analysis, and a clean final test-set evaluation.
++The central rule is:
++
++> The held-out test set is used for exactly one frozen final model. It is not used to compare candidate models, additional candidate models, hyperparameter settings, thresholds, calibration choices, feature sets, or modelling strategies.
++
++All candidate comparison, statistical testing, repeated cross-validation, nested cross-validation, paired bootstrap comparison, threshold selection, calibration selection, and ablation decisions should happen before the final test set is touched.
+ 
+ ---
+ 
+@@ -51,7 +55,7 @@ multilayer perceptrons
+ possibly calibration and resampling variants
+ ```
+ 
+-In these sections, ordinary stratified cross-validation is appropriate because the goal is not final statistical proof. The goal is to learn, compare broad behaviour, and build candidate models.
++In these sections, ordinary stratified cross-validation is appropriate because the goal is not final statistical proof. The goal is to learn, compare broad behaviour, understand model assumptions, and build candidate models.
+ 
+ ---
+ 
+@@ -126,20 +130,23 @@ This keeps the interpretation honest while still allowing clear project progress
+ After all relevant model families have been studied, the project should add a dedicated stage:
+ 
+ ```text
+-Model comparison, uncertainty, and final selection
++Candidate comparison, uncertainty, and final selection
+ ```
+ 
+-This stage should not introduce a new model family. It should compare the strongest candidate models from the earlier sections.
++This stage should not introduce a new model family. It should compare the strongest candidate models from the earlier sections using training-only evidence.
+ 
+ The purpose is to answer:
+ 
+ ```text
+-Which candidate models remain competitive under a more rigorous comparison?
+-Which model should be selected as the final model?
++Which candidate models remain competitive under a more rigorous training-only comparison?
++Which model should be selected as the single final model?
+ Which threshold should be selected for the final decision rule?
+-How uncertain are the final claims?
++Should probability calibration be used?
++How uncertain are the candidate comparisons?
+ ```
+ 
++This stage must not use the held-out test set.
++
+ ---
+ 
+ ## 5. Candidate shortlist construction
+@@ -173,6 +180,8 @@ models with different complexity levels
+ 
+ The shortlist should not include dozens of nearly identical hyperparameter settings unless the goal is explicitly to study hyperparameter stability.
+ 
++The shortlist should be created using only training-set development evidence.
++
+ ---
+ 
+ ## 6. Candidate selection criteria
+@@ -259,11 +268,13 @@ models being considered for final selection
+ 
+ Repeated CV should not necessarily be used for every early educational experiment because it increases computation and report complexity.
+ 
++Repeated CV improves stability, but it does not eliminate selection optimism. If many configurations are tried and the best repeated-CV score is selected, the selected score is still the winner among several estimates.
++
+ ---
+ 
+ ## 8. Nested CV for comparing tuned procedures
+ 
+-Nested cross-validation can be used to compare tuned model-family procedures.
++Nested cross-validation can be used to compare tuned model-family procedures before the final model is selected.
+ 
+ The evaluated object is not a single fixed fitted model. It is a procedure:
+ 
+@@ -287,7 +298,7 @@ This gives outer-fold scores for each tuned family.
+ 
+ Nested CV can answer:
+ 
+-> If each model family is allowed to tune itself fairly using only training data, which model-family procedure generalizes best?
++> If each model family is allowed to tune itself fairly using only training data, which model-family procedure generalizes best within the development data?
+ 
+ Nested CV is most useful when the project wants a more statistically careful model-family comparison before touching the test set.
+ 
+@@ -303,34 +314,63 @@ A balanced plan is:
+ Use ordinary CV in individual model-family sections.
+ Use repeated CV for stable final tuning of serious candidates.
+ Use nested CV if the top model families are close or if final model-family comparison needs stronger support.
+-Always keep the untouched test set for final evaluation.
++Always keep the untouched test set for one final frozen model only.
+ ```
+ 
+ Nested CV should be considered especially if:
+ 
+ ```text
+ several tuned families have very similar PR-AUC or ROC-AUC
+-the final selected model is much more complex than the runner-up
+-the report wants to claim one tuned family is clearly preferable
++the final selected model is much more complex than a simpler alternative
++the report wants stronger evidence about tuned-family comparison
+ the tuning search spaces are large and selection optimism may matter
+ ```
+ 
+ Nested CV may be skipped if:
+ 
+ ```text
+-one model is clearly superior across many metrics
++one model is clearly stronger across metrics using training-only evidence
+ the computational cost is too high
+-the final comparison will rely mainly on held-out test uncertainty
+-the project scope would become too large
++the final comparison would become too complex for the project narrative
++the project prioritizes a readable model-family learning workflow
+ ```
+ 
+-If skipped, the report should explicitly say that the final test set provides the primary final performance estimate, while the development-stage CV rankings are used for selection.
++If nested CV is skipped, the report should say so explicitly and explain the alternative:
++
++```text
++The project uses training-set cross-validation for model development and
++a final held-out test set for the single frozen final model. Nested CV is
++discussed as a stricter procedure-level evaluation method but is not used
++because the training-only comparison was sufficient for final selection and
++the project prioritizes a readable model-family learning workflow.
++```
+ 
+ ---
+ 
+-## 10. Fair tuning effort in the final comparison
++## 10. Statistical tests and paired comparisons before final selection
+ 
+-The final comparison must avoid giving one model family much more tuning attention than others.
++Statistical comparison tools should be used before the final test set.
++
++Possible tools:
++
++```text
++paired bootstrap differences on validation or cross-validation predictions
++paired fold comparisons from repeated CV
++nested-CV outer-fold comparisons
++McNemar-style tests on validation hard predictions
++DeLong-style tests for validation ROC-AUC
++permutation tests for predictive signal
++```
++
++These methods can help choose the one final model.
++
++They should not be used after running several models on the held-out test set, because that would make the test set part of model selection.
++
++---
++
++## 11. Fair tuning effort in the final comparison
++
++The final comparison stage must avoid giving one model family much more tuning attention than others.
+ 
+ For example, this would be unfair:
+ 
+@@ -339,7 +379,7 @@ logistic regression:
+     default C only
+ 
+ boosting:
+-    500 Optuna trials
++    500 Optuna trials over many parameters
+ ```
+ 
+ A fairer strategy:
+@@ -356,18 +396,19 @@ Search effort does not need to be identical in a literal sense. Some models have
+ 
+ ---
+ 
+-## 11. Suggested final candidate search strategy
++## 12. Suggested final candidate search strategy
+ 
+ A practical final search strategy could be:
+ 
+ ```text
+ 1. Use previous sections to identify reasonable hyperparameter ranges.
+ 2. For each serious candidate family, define a compact but fair search space.
+-3. Use repeated stratified CV for tuning.
++3. Use repeated stratified CV for tuning, if computation allows.
+ 4. Use PR-AUC as the primary tuning metric.
+ 5. Store secondary metrics for interpretation.
+ 6. Inspect whether selected configurations are stable.
+-7. Shortlist the top few models for final threshold and calibration analysis.
++7. Shortlist the final candidate models for threshold and calibration analysis.
++8. Select exactly one final model using training-only evidence.
+ ```
+ 
+ If using Optuna or Bayesian optimization:
+@@ -378,11 +419,12 @@ fix random seeds
+ record the search space
+ record the selected configuration
+ do not keep expanding the search only for the favourite model
++do not use the final test set to guide additional search
+ ```
+ 
+ ---
+ 
+-## 12. Metric hierarchy for final model selection
++## 13. Metric hierarchy for final model selection
+ 
+ The project should define a metric hierarchy before final selection.
+ 
+@@ -420,13 +462,13 @@ But PR-AUC alone is not enough. A model with high PR-AUC may still have an undes
+ 
+ ---
+ 
+-## 13. Threshold-selection plan
++## 14. Threshold-selection plan
+ 
+ Threshold selection should happen after candidate model comparison, not separately in every early model section.
+ 
+ The model-family sections can show threshold curves, but those are diagnostic.
+ 
+-A final threshold should be selected using training data only, possibly through validation or cross-validation.
++A final threshold should be selected using training data only, possibly through validation, cross-validation, or a pre-specified cost rule.
+ 
+ Possible threshold-selection rules:
+ 
+@@ -452,11 +494,13 @@ false positive:
+     unnecessary retention action or discount
+ ```
+ 
+-If business costs are unknown, the report can present several operating points rather than pretending one threshold is objectively optimal.
++If business costs are unknown, the report can present several training-only operating points rather than pretending one threshold is objectively optimal.
++
++The final threshold must be frozen before final test evaluation.
+ 
+ ---
+ 
+-## 14. Calibration plan
++## 15. Calibration plan
+ 
+ Calibration should be considered if the final model's probabilities are interpreted as risks or used in cost calculations.
+ 
+@@ -489,21 +533,23 @@ validation/calibration folds:
+     fit calibrator
+ 
+ test set:
+-    evaluate calibrated final model once
++    evaluate the already-frozen calibrated final model once
+ ```
+ 
+ For this project, calibration can be a later dedicated section after major model families are compared.
+ 
+ ---
+ 
+-## 15. Final model fitting
++## 16. Final model fitting
+ 
+-After final model family, hyperparameters, threshold, and optional calibration are chosen using training data only:
++After final model family, hyperparameters, threshold, and optional calibration are chosen using training data only, the project freezes exactly one final modelling pipeline.
++
++Then:
+ 
+ ```text
+ 1. Fit the final pipeline on the full training set.
+ 2. Apply the fitted pipeline to the untouched test set.
+-3. Compute final metrics once.
++3. Compute final metrics once for that one final model.
+ ```
+ 
+ The final pipeline should include all preprocessing steps:
+@@ -524,13 +570,13 @@ Everything that learns from data must be fitted only on the training data.
+ 
+ ---
+ 
+-## 16. Final test-set evaluation
++## 17. Final test-set evaluation
+ 
+-The test set should answer:
++The final test set should answer one question:
+ 
+-> How well does the frozen final modelling procedure perform on unseen data?
++> How well does the single frozen final modelling procedure perform on unseen data?
+ 
+-The final test evaluation should report:
++The final test evaluation should report metrics for one model only:
+ 
+ ```text
+ confusion matrix
+@@ -545,44 +591,37 @@ PR-AUC
+ predicted positive rate
+ possibly expected cost
+ possibly calibration metrics
++bootstrap confidence intervals for the single final model
+ ```
+ 
+ The report should explicitly say:
+ 
+ ```text
+ The test set was not used for model-family selection, hyperparameter tuning,
+-threshold selection, or calibration fitting.
++threshold selection, calibration fitting, candidate comparison, or ablation decisions.
+ ```
+ 
+-If this is true, the test estimate is the cleanest final performance evidence.
++If this is true, the test estimate is the clean final performance evidence for the selected model.
+ 
+ ---
+ 
+-## 17. Final uncertainty reporting
++## 18. Final uncertainty reporting
+ 
+ Final test metrics should be reported with uncertainty where possible.
+ 
+-Recommended:
++Recommended for the single final model:
+ 
+ ```text
+ bootstrap confidence intervals for final metrics
+-paired bootstrap intervals for differences against runner-up models
+ ```
+ 
+-For one final model:
++For the single final model:
+ 
+ ```text
+ metric point estimate
+ 95 percent bootstrap confidence interval
+ ```
+ 
+-For model differences:
+-
+-```text
+-metric_A - metric_B
+-95 percent paired bootstrap confidence interval
+-```
+-
+ Metrics suitable for bootstrap CIs:
+ 
+ ```text
+@@ -598,59 +637,37 @@ expected cost
+ Brier score
+ ```
+ 
+-Special tests can be mentioned or optionally included:
+-
+-```text
+-McNemar's test:
+-    paired hard-classification error comparison
+-
+-DeLong test:
+-    paired ROC-AUC comparison
+-
+-permutation test:
+-    predictive signal compared with label-randomized null
+-```
+-
+-But paired bootstrap is the most flexible main method.
++Candidate model-difference methods such as paired bootstrap, McNemar-style tests, or DeLong-style tests should be used before final selection using training-only validation evidence. They should not be applied on the final test set to compare multiple candidate models.
+ 
+ ---
+ 
+-## 18. Final paired comparison against runner-up models
++## 19. No test-set model comparison
+ 
+-The final selected model should be compared with at least one strong runner-up.
++The final test set should not be used to compare multiple candidate models.
+ 
+-Example:
++Do not do:
+ 
+ ```text
+-Final model:
+-    gradient boosting
+-
+-Runner-up:
+-    regularized logistic regression
++fit model A, model B, model C
++evaluate all on the test set
++choose the best test-set result
+ ```
+ 
+-Why compare with logistic regression?
++Also avoid:
+ 
+ ```text
+-it is strong
+-it is interpretable
+-it is simpler
+-it is a natural baseline for tabular binary classification
++evaluate final model and additional candidate models on the test set
++use comparisons on the test set to argue which model should have been selected
++change the final model after seeing test results
+ ```
+ 
+-A complex final model should justify its complexity. If the complex model improves PR-AUC only slightly and the paired interval includes zero, the report should not overstate the improvement.
++All of that turns the test set into another validation set.
+ 
+-Possible language:
+-
+-> The final model has the highest observed PR-AUC on the test set, but the paired bootstrap interval for the difference relative to logistic regression includes zero. Therefore, the evidence for a meaningful ranking-performance improvement is limited. The simpler logistic model remains a competitive alternative.
+-
+-or:
+-
+-> The final model improves PR-AUC and recall relative to logistic regression, and the paired bootstrap interval for PR-AUC difference is mostly positive. This supports the final model choice, although the practical value of the improvement should still be considered relative to model complexity.
++If the project wants paired model comparisons, they should be performed before final test evaluation using training-only validation evidence.
+ 
+ ---
+ 
+-## 19. Ablation study plan
++## 20. Ablation study plan
+ 
+ An ablation study measures the contribution of model components by removing or changing them.
+ 
+@@ -667,7 +684,7 @@ full feature set versus reduced feature set
+ complex model versus interpretable baseline
+ ```
+ 
+-Ablation studies should be used after a strong final candidate exists.
++Ablation studies should be used after a strong final candidate exists, but before final test evaluation if they influence model selection.
+ 
+ The purpose is not only performance ranking. It is understanding:
+ 
+@@ -690,9 +707,11 @@ If calibration improves probability reliability but not ranking,
+ the report should separate calibration from discrimination.
+ ```
+ 
++If ablation results are used to decide the final pipeline, they must use training/validation data only.
++
+ ---
+ 
+-## 20. Feature-importance and explanation plan
++## 21. Feature-importance and explanation plan
+ 
+ After final model selection, model explanation should be handled carefully.
+ 
+@@ -713,16 +732,16 @@ Important caution:
+ feature importance is model-specific
+ correlated features can share or distort importance
+ importance does not imply causality
+-permutation importance should be computed on validation or test data, not training data only
++permutation importance should be computed on training-validation data before final selection
+ ```
+ 
+-For the final report, interpretability should be linked to model type.
++If feature-importance results are used to decide whether to change the model, they must be computed before final test evaluation. After final model selection, feature explanations can be reported as interpretation of the selected model, but they should not cause model changes after the test result is known.
+ 
+-A logistic regression model may provide cleaner coefficient interpretation. A tree ensemble may provide stronger predictive performance but more complex explanations.
++For the final report, interpretability should be linked to model type. A logistic regression model may provide cleaner coefficient interpretation. A tree ensemble may provide stronger predictive performance but more complex explanations.
+ 
+ ---
+ 
+-## 21. Test-set use policy
++## 22. Strict test-set use policy
+ 
+ The project should follow a strict test-set policy.
+ 
+@@ -738,10 +757,12 @@ Not allowed before final evaluation:
+ 
+ ```text
+ checking test metrics to choose models
++checking test metrics to compare candidate models
+ checking test metrics to choose hyperparameters
+ checking test metrics to choose threshold
+ checking test metrics to decide whether to add features
+ checking test metrics to choose calibration
++checking test metrics to decide whether to accept or reject ablation choices
+ repeatedly rerunning final evaluation and adapting the model
+ ```
+ 
+@@ -749,11 +770,11 @@ If test-set results cause model changes, the test set has become validation data
+ 
+ ---
+ 
+-## 22. How to revise earlier report sections
++## 23. How to revise earlier report sections
+ 
+ Earlier model sections should be revised with careful wording.
+ 
+-### 22.1 Logistic regression
++### 23.1 Logistic regression
+ 
+ Add language such as:
+ 
+@@ -763,7 +784,7 @@ Differences between neighbouring C values should be interpreted as evidence
+ about a useful regularization region, not as proof of a uniquely optimal C.
+ ```
+ 
+-### 22.2 kNN
++### 23.2 kNN
+ 
+ Add language such as:
+ 
+@@ -774,7 +795,7 @@ selected configuration should be interpreted as a representative strong kNN
+ candidate rather than a statistically final optimum.
+ ```
+ 
+-### 22.3 Naive Bayes
++### 23.3 Naive Bayes
+ 
+ Add language such as:
+ 
+@@ -786,7 +807,7 @@ variants is useful development evidence, but final model-family claims are
+ deferred to the later comparison stage.
+ ```
+ 
+-### 22.4 Future tree and ensemble sections
++### 23.4 Future tree and ensemble sections
+ 
+ Use the same pattern:
+ 
+@@ -799,7 +820,7 @@ reserve final claims for the final comparison and test evaluation
+ 
+ ---
+ 
+-## 23. Suggested structure for the later report
++## 24. Suggested structure for the later report
+ 
+ A later report structure could be:
+ 
+@@ -818,27 +839,28 @@ A later report structure could be:
+        ensembles
+        SVM
+        MLP
+-8. Model comparison, uncertainty, and final selection
++8. Candidate comparison, uncertainty, and final selection
+        candidate shortlist
+        repeated CV / nested CV if used
+        candidate comparison
+        threshold selection
+        calibration if used
+        ablations if used
++       final frozen model definition
+ 9. Final test-set evaluation
++       one final model only
+        final metrics
+        confidence intervals
+-       paired comparisons
+        final confusion matrix
+        practical interpretation
+ 10. Conclusion
+ ```
+ 
+-The current report already has some of these sections. The main future addition is a dedicated section for model comparison and uncertainty.
++The current report already has some of these sections. The main future addition is a dedicated section for candidate comparison and final selection before the final test section.
+ 
+ ---
+ 
+-## 24. Suggested implementation additions later
++## 25. Suggested implementation additions later
+ 
+ Later code additions may include:
+ 
+@@ -848,7 +870,7 @@ evaluation.py:
+     repeated-CV evaluation utilities
+     pooled OOF versus fold-mean metric summaries
+     bootstrap confidence intervals
+-    paired bootstrap metric differences
++    paired bootstrap metric differences for pre-final validation comparisons
+     threshold-selection utilities
+     calibration evaluation utilities
+ 
+@@ -857,7 +879,7 @@ models.py:
+ 
+ notebooks:
+     model-comparison notebook
+-    final-test-evaluation notebook
++    final-test-evaluation notebook for one frozen model only
+     calibration notebook, if needed
+     ablation notebook, if needed
+ ```
+@@ -866,7 +888,7 @@ The project does not need these utilities immediately before decision trees, but
+ 
+ ---
+ 
+-## 25. Proposed final comparison notebooks
++## 26. Proposed later notebooks
+ 
+ Possible later notebooks:
+ 
+@@ -875,7 +897,7 @@ Possible later notebooks:
+ 09_ensemble_methods.py
+ 10_support_vector_machines.py
+ 11_multilayer_perceptron.py
+-12_model_comparison_and_selection.py
++12_candidate_comparison_and_selection.py
+ 13_calibration_and_threshold_selection.py
+ 14_final_test_evaluation.py
+ 15_ablation_and_interpretability.py
+@@ -883,11 +905,11 @@ Possible later notebooks:
+ 
+ Exact numbering can change depending on the final project structure.
+ 
+-The important point is that final comparison and final test evaluation should be separate from model-family learning notebooks.
++The important point is that candidate comparison, threshold/calibration selection, and final test evaluation should be separate from model-family learning notebooks. The final test evaluation notebook should evaluate exactly one frozen final model.
+ 
+ ---
+ 
+-## 26. Decision rule for whether to use nested CV
++## 27. Decision rule for whether to use nested CV
+ 
+ Before implementing the final comparison stage, decide whether nested CV is worth the cost.
+ 
+@@ -900,51 +922,52 @@ compute cost is manageable
+ the tuning procedures can be clearly defined
+ ```
+ 
+-Skip nested CV and rely on repeated CV plus final test bootstrap if:
++Skip nested CV and rely on repeated CV plus training-only candidate comparison if:
+ 
+ ```text
+ the top model is clearly stronger across metrics
+ the final comparison would become too computationally heavy
+ the project narrative benefits from simplicity
+-the final test set is sufficiently large and untouched
++the training-only evidence is already sufficient for choosing one final model
+ ```
+ 
+ If nested CV is skipped, say so explicitly and explain the alternative:
+ 
+ ```text
+ The project uses training-set cross-validation for model development and
+-a final held-out test set with bootstrap uncertainty for final performance.
+-Nested CV is discussed as a stricter procedure-level evaluation method but
+-is not used because the project already preserves an untouched final test set
+-and prioritizes a readable model-family learning workflow.
++training-only candidate comparison for final selection. Nested CV is discussed
++as a stricter procedure-level evaluation method but is not used because the
++training-only evidence is sufficient and the project prioritizes a readable
++model-family learning workflow.
+ ```
+ 
+ ---
+ 
+-## 27. Final selection checklist
++## 28. Final selection checklist
+ 
+ Before touching the test set, confirm:
+ 
+ ```text
++candidate comparisons completed using training data only
++one final model selected
+ model family selected
+-hyperparameters selected
++hyperparameters fixed
+ preprocessing fixed
+ feature set fixed
+ resampling or class weighting fixed
+ calibration decision fixed
+ threshold fixed or threshold-selection rule fixed
+ primary and secondary metrics fixed
+-runner-up comparison models fixed
+-bootstrap procedure fixed
++bootstrap confidence interval procedure fixed
+ ```
+ 
+ Only after this checklist is complete should the test set be evaluated.
+ 
+ ---
+ 
+-## 28. Final test evaluation checklist
++## 29. Final test evaluation checklist
+ 
+-When evaluating the test set, compute:
++When evaluating the test set, compute for the single final model:
+ 
+ ```text
+ final confusion matrix
+@@ -957,8 +980,7 @@ F1
+ ROC-AUC
+ PR-AUC
+ predicted positive rate
+-bootstrap CIs
+-paired bootstrap differences versus runner-up
++bootstrap CIs for final metrics
+ calibration metrics if probabilities matter
+ business-cost metric if costs are defined
+ ```
+@@ -966,17 +988,18 @@ business-cost metric if costs are defined
+ Then interpret:
+ 
+ ```text
+-Does the final model improve enough over simpler baselines?
+ What tradeoff does the selected threshold create?
+ How many customers would be flagged?
+ How uncertain are the metrics?
+-Is the improvement practically meaningful?
++Is the performance practically useful?
+ Are probabilities reliable enough to interpret as risks?
+ ```
+ 
++Do not compare against other test-set models.
++
+ ---
+ 
+-## 29. Final conclusion style
++## 30. Final conclusion style
+ 
+ The final report conclusion should avoid saying only:
+ 
+@@ -987,12 +1010,18 @@ Model X performed best.
+ A better conclusion style:
+ 
+ ```text
+-Model X was selected because it provided the strongest development-stage
+-positive-class ranking performance while maintaining an acceptable recall,
+-precision, and operational alert rate. On the untouched test set, it achieved
+-PR-AUC ..., recall ..., precision ..., and F1 ..., with bootstrap confidence
+-intervals indicating the remaining test-sample uncertainty. The paired
+-comparison against the strongest simpler baseline suggests that ...
++Model X was selected before final test evaluation because it provided the
++strongest training-only evidence under the project selection criteria. After
++the model, hyperparameters, preprocessing, calibration decision, and threshold
++were frozen, the model was fitted on the full training set and evaluated once
++on the untouched test set. The final test-set estimates are ..., with bootstrap
++confidence intervals indicating finite-test-sample uncertainty.
++```
++
++Avoid:
++
++```text
++After comparing several models on the test set, model X was best.
+ ```
+ 
+ This conclusion style is more professional because it connects:
+@@ -1000,7 +1029,7 @@ This conclusion style is more professional because it connects:
+ ```text
+ selection criterion
+ threshold tradeoff
+-test performance
++single-model test performance
+ uncertainty
+ practical meaning
+ model complexity
+@@ -1008,7 +1037,7 @@ model complexity
+ 
+ ---
+ 
+-## 30. Summary
++## 31. Summary
+ 
+ The project should proceed in layers:
+ 
+@@ -1017,16 +1046,21 @@ Layer 1:
+     individual model-family learning sections using ordinary stratified CV
+ 
+ Layer 2:
+-    later rigorous candidate comparison using repeated CV and possibly nested CV
++    later rigorous candidate comparison using repeated CV, nested CV, and
++    paired validation comparisons if useful
+ 
+ Layer 3:
+     final model, threshold, and calibration selection using training data only
+ 
+ Layer 4:
+-    final untouched test-set evaluation with bootstrap uncertainty and paired comparisons
++    final untouched test-set evaluation for exactly one frozen final model
+ 
+ Layer 5:
+-    ablation and interpretability analysis for the selected model
++    bootstrap uncertainty for the selected final model's test metrics
++
++Layer 6:
++    ablation and interpretability analysis, using training-only evidence if
++    those analyses affect the selected pipeline
+ ```
+ 
+-This structure preserves the educational purpose of the project while also making the final evaluation statistically careful and professionally credible.
++This structure preserves the educational purpose of the project while also making the final evaluation statistically careful and clean.
+diff --git a/docs/knowledge_notes/methodology/statistical_uncertainty_and_tests.md b/docs/knowledge_notes/methodology/statistical_uncertainty_and_tests.md
+index 23af33d..4da7f5e 100644
+--- a/docs/knowledge_notes/methodology/statistical_uncertainty_and_tests.md
++++ b/docs/knowledge_notes/methodology/statistical_uncertainty_and_tests.md
+@@ -1,10 +1,10 @@
+-# Statistical uncertainty, confidence intervals, and model comparison tests
++# Statistical uncertainty, confidence intervals, and pre-final model comparison tests
+ 
+ This note explains statistical uncertainty in model evaluation and introduces practical methods for confidence intervals and statistical comparisons.
+ 
+ The central idea is:
+ 
+-> Model metrics are estimates computed from finite samples. A serious model comparison should ask not only which point estimate is higher, but also how uncertain the estimate is and whether the observed difference is large enough to be meaningful.
++> Model metrics are estimates computed from finite samples. Candidate model comparison should ask not only which point estimate is higher, but also how uncertain the estimate is and whether the observed difference is large enough to be meaningful. In this project, those candidate comparisons are performed before the final test set is used.
+ 
+ This note focuses on uncertainty and tests. It builds on the previous notes:
+ 
+@@ -17,7 +17,7 @@ cross_validation_and_model_selection.md
+ 
+ ## 1. Why uncertainty matters
+ 
+-Suppose two models are evaluated on the same test set:
++Suppose two candidate models are evaluated on the same validation fold, repeated-CV output, nested-CV outer fold, or another training-only evaluation sample:
+ 
+ ```text
+ Model A PR-AUC = 0.657
+@@ -30,7 +30,7 @@ The observed difference may reflect:
+ 
+ ```text
+ true model superiority
+-finite test-sample noise
++finite validation-sample noise
+ threshold choice
+ hyperparameter-selection noise
+ random training variation
+@@ -119,7 +119,7 @@ This does not necessarily mean the method is unstable in a bad way. It may mean
+ 
+ When many model families are compared, the selected family may depend on validation noise.
+ 
+-This is why small differences between tuned families should be interpreted cautiously and why nested CV or final paired test-set comparisons can be useful.
++This is why small differences between tuned families should be interpreted cautiously and why nested CV, repeated CV, paired validation comparisons, or paired bootstrap differences before final selection can be useful.
+ 
+ ---
+ 
+@@ -442,7 +442,7 @@ where \(q_{0.025}\) and \(q_{0.975}\) are bootstrap quantiles.
+ 
+ ```text
+ Input:
+-    y_test
++    y_eval
+     y_score or y_pred
+     metric function
+     number of bootstrap samples B
+@@ -463,25 +463,25 @@ For metrics such as ROC-AUC and PR-AUC, a bootstrap sample must contain at least
+ 
+ ---
+ 
+-## 9. Bootstrap for paired model differences
++## 9. Bootstrap for paired model differences before final selection
+ 
+-Often the most important question is not:
++During model development, an important question is not only:
+ 
+ ```text
+ What is the uncertainty around model A?
+ ```
+ 
+-but:
++but also:
+ 
+ ```text
+-Is model A meaningfully better than model B?
++Is model A meaningfully better than model B before the final model is selected?
+ ```
+ 
+ Because both models are evaluated on the same observations, the comparison is paired.
+ 
+ The paired bootstrap preserves this pairing.
+ 
+-For each bootstrap resample of test rows:
++For each bootstrap resample of validation or cross-validation prediction rows:
+ 
+ ```text
+ 1. sample row indices with replacement;
+@@ -519,7 +519,7 @@ If the interval is wide:
+     evaluation sample may be too small or metric too variable.
+ ```
+ 
+-This is one of the most useful final-comparison tools for this project.
++This is one of the most useful pre-final candidate-comparison tools for this project. It should be applied to validation, repeated-CV, nested-CV, or other training-only evaluation outputs before the one final model is frozen.
+ 
+ ---
+ 
+@@ -610,7 +610,7 @@ threshold stability:
+ 
+ These uses answer different questions. They require refitting models and are more computationally expensive.
+ 
+-For this project, bootstrap is most immediately useful for final test metrics and paired final-model comparisons. Later, it may also be useful for feature-importance stability in tree ensembles or logistic regression.
++For this project, bootstrap is most immediately useful in two distinct places: first, for paired candidate-model comparisons before final selection using validation or cross-validation outputs; and second, for confidence intervals around the single frozen final model's test metrics. Later, it may also be useful for feature-importance stability in tree ensembles or logistic regression.
+ 
+ ---
+ 
+@@ -763,7 +763,7 @@ This is compared to a chi-square distribution with one degree of freedom.
+ McNemar's test is useful when:
+ 
+ ```text
+-two classifiers are evaluated on the same test cases
++two classifiers are evaluated on the same validation cases before final selection
+ hard predictions are fixed
+ the question is whether their error rates differ
+ ```
+@@ -807,7 +807,7 @@ DeLong-style testing is useful when:
+ 
+ ```text
+ the main metric is ROC-AUC
+-two models are evaluated on the same test observations
++two candidate models are evaluated on the same validation observations before final selection
+ a specialized ROC-AUC comparison is desired
+ ```
+ 
+@@ -841,12 +841,12 @@ permutation tests of model-score differences
+ repeated CV paired comparisons
+ ```
+ 
+-For this project, paired bootstrap on the held-out test set is likely the most practical and consistent approach for PR-AUC differences.
++For this project, paired bootstrap on validation or cross-validation predictions is likely the most practical and consistent approach for PR-AUC differences before final model selection.
+ 
+ Procedure:
+ 
+ ```text
+-1. Keep both models' predicted scores on the same test observations.
++1. Keep both candidate models' predicted scores on the same validation or cross-validation observations.
+ 2. Bootstrap resample rows.
+ 3. Compute PR-AUC for both models in each resample.
+ 4. Store PR-AUC difference.
+@@ -893,7 +893,7 @@ one wants a classical test designed for classifier comparison
+ 
+ This project already has a held-out test set and uses cross-validation inside the training set.
+ 
+-Therefore, 5x2 CV tests are useful to know about, but they may not be the primary final comparison method. A final held-out test set with bootstrap intervals and paired model differences is more aligned with the project workflow.
++Therefore, 5x2 CV tests are useful to know about, but they may not be the primary final comparison method. A final held-out test set with bootstrap intervals for one frozen final model is more aligned with the project workflow. Paired model differences belong before final selection.
+ 
+ ---
+ 
+@@ -994,26 +994,20 @@ For the final report, the cleanest practical procedure is:
+        threshold
+        calibration method, if any
+ 
+-2. Fit the final model on the full training data.
++2. Freeze exactly one final modelling pipeline.
+ 
+-3. Predict once on the untouched test set.
++3. Fit that final model on the full training data.
+ 
+-4. Compute final metrics.
++4. Predict once on the untouched test set.
+ 
+-5. Bootstrap the test set to obtain confidence intervals.
++5. Compute final metrics for that single final model.
++
++6. Bootstrap the test set to obtain confidence intervals for that single final model.
+ ```
+ 
+ This produces uncertainty intervals for the final frozen model.
+ 
+-If comparing against a runner-up model:
+-
+-```text
+-1. Fit both final candidate models using training data only.
+-2. Predict both on the same untouched test set.
+-3. Use paired bootstrap differences on test rows.
+-```
+-
+-This is likely the most important final uncertainty method for the project.
++The final test set should not be used to compare multiple candidate models or to choose between a final model and additional candidate models. All candidate comparisons, paired bootstrap differences, nested-CV comparisons, repeated-CV comparisons, McNemar-style hard-classification comparisons, and DeLong-style ROC-AUC comparisons should be completed before the final model is chosen and before the test set is touched.
+ 
+ ---
+ 
+@@ -1130,9 +1124,9 @@ Use:
+ 
+ ```text
+ bootstrap confidence intervals for final metrics
+-paired bootstrap differences against runner-up models
+-possibly McNemar for hard classification accuracy differences
+-possibly DeLong for ROC-AUC if ROC-AUC is central
++paired bootstrap differences before final selection
++possibly McNemar on validation predictions before final selection
++possibly DeLong on validation ROC-AUC before final selection
+ calibration uncertainty if calibrated probabilities are reported
+ ```
+ 
+@@ -1144,9 +1138,9 @@ When reporting one final metric:
+ 
+ > The test-set PR-AUC is \(0.66\). Because this value is computed on a finite test set, it is an estimate of the model's population PR-AUC. A bootstrap confidence interval is reported to quantify test-sample uncertainty.
+ 
+-When comparing two models:
++When comparing two candidate models before final selection:
+ 
+-> Model A has a higher observed PR-AUC than Model B on the test set. Because both models are evaluated on the same observations, the comparison is paired. A paired bootstrap interval for the PR-AUC difference is used to assess whether the observed gap is large relative to test-sample variability.
++> Model A has a higher observed PR-AUC than Model B on the same validation or cross-validation predictions. Because both models are evaluated on the same observations, the comparison is paired. A paired bootstrap interval for the PR-AUC difference is used to assess whether the observed gap is large relative to validation-sample variability.
+ 
+ When discussing CV results:
+ 
+@@ -1164,10 +1158,10 @@ When discussing hyperparameters:
+ |---|---|---|---|
+ | Binomial CI | How uncertain is accuracy/recall/specificity? | Simple proportions | Not enough for PR-AUC, ROC-AUC, F1 |
+ | Bootstrap CI | How uncertain is one metric? | Many metrics | Assumes resampling scheme is appropriate |
+-| Paired bootstrap | Is model A's metric higher than model B's? | Flexible paired comparisons | Computational; depends on test sample |
++| Paired bootstrap | Is model A's validation metric higher than model B's before final selection? | Flexible paired candidate comparisons | Computational; depends on validation sample |
+ | Permutation test | Is there predictive signal beyond chance label association? | Signal detection | Not a direct model A vs B comparison |
+-| McNemar test | Do two hard classifiers have different error rates? | Paired hard predictions | Threshold-dependent; not for AUC/PR-AUC |
+-| DeLong test | Do two ROC-AUCs differ? | Paired ROC-AUC comparison | Specific to ROC-AUC |
++| McNemar test | Do two hard classifiers have different validation error rates before final selection? | Paired hard predictions | Threshold-dependent; not for AUC/PR-AUC |
++| DeLong test | Do two validation ROC-AUCs differ before final selection? | Paired ROC-AUC comparison | Specific to ROC-AUC |
+ | 5x2 CV tests | Do two algorithms differ under repeated train/test splits? | Small-data classifier comparison | Less aligned with held-out-test workflow |
+ | Fold SD | How stable are CV scores across folds? | Descriptive stability | Not a perfect CI |
+ | Nested CV | How well does a tuning procedure generalize? | Comparing tuned families | More computation; not final deployment fit |
+@@ -1180,4 +1174,4 @@ The main message is:
+ 
+ > Model evaluation should report both performance and uncertainty.
+ 
+-For this project, the immediate role of uncertainty is interpretive: it tells us not to overstate small differences in development-stage CV results. Later, uncertainty should become operational: final test-set metrics should be accompanied by bootstrap confidence intervals, and top-model comparisons should use paired uncertainty methods.
++For this project, the immediate role of uncertainty is interpretive: it tells us not to overstate small differences in development-stage CV results. Later, uncertainty should become operational: candidate comparisons should use paired uncertainty methods before final selection, and final test-set metrics should be accompanied by bootstrap confidence intervals for the single frozen final model.
+diff --git a/reports/latex/main.pdf b/reports/latex/main.pdf
+index 056e6d6..5ee9cb9 100644
+--- a/reports/latex/main.pdf
++++ b/reports/latex/main.pdf
+@@ -117,6 +117,8 @@ development-stage estimates rather than final performance claims.
+ 
+ 4.15 Implications for the current report . . . . . . . . . . . . . . . . . . . . . . . . . . . 33
+ 
++4.16 Strict final test-set policy . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 33
++
+ 5 Preprocessing, evaluation, and simple baselines  34
+ 
+ 5.1 Purpose of this stage . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 34
+@@ -135,10 +137,9 @@ development-stage estimates rather than final performance claims.
+ 
+ 5.8 ROC-AUC and PR-AUC . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 37
+ 
+-5.9 Thresholds and calibration . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 38
+-
+                                       3
+-5.10 Class imbalance strategies . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 38
++5.9 Thresholds and calibration . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 38
++5.10 Class imbalance strategies . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 38
+ 5.11 Reusable preprocessing infrastructure . . . . . . . . . . . . . . . . . . . . . . . . . 39
+ 5.12 Simple baseline definitions . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 39
+ 5.13 Simple baseline results . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 40
+@@ -193,10 +194,9 @@ development-stage estimates rather than final performance claims.
+ 
+ 8 Naive Bayes                                    59
+ 
+-8.1 Bayes classifier . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 59
+-
+                         4
+-8.2 Bayes decision rule and unequal costs . . . . . . . . . . . . . . . . . . . . . . . . . 60
++8.1 Bayes classifier . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 59
++8.2 Bayes decision rule and unequal costs . . . . . . . . . . . . . . . . . . . . . . . . . 60
+ 8.3 Bayes’ rule and generative classification . . . . . . . . . . . . . . . . . . . . . . . . 60
+ 8.4 The naive conditional-independence assumption . . . . . . . . . . . . . . . . . . . . 60
+ 8.5 Naive Bayes variants . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 61
+@@ -1003,10 +1003,11 @@ of precision and recall:
+ ROC-AUC and PR-AUC are ranking metrics computed from score distributions across thresholds.
+ Their sampling uncertainty is not captured by the simple binomial formula for accuracy.
+ 
+-For this reason, final model evaluation should eventually use more general uncertainty tools,
+-especially bootstrap confidence intervals and paired bootstrap intervals for differences between
+-top models. Section-level model comparisons before the final stage should therefore be interpreted
+-as development evidence rather than final statistical proof.
++For this reason, candidate comparison should eventually use training-only uncertainty tools, such
++as paired bootstrap intervals on validation or cross-validation predictions. The final test evaluation
++should use bootstrap confidence intervals only for the single frozen final model. Section-level
++model comparisons before the final stage should therefore be interpreted as development evidence
++rather than final statistical proof.
+ 
+                                                28
+ 4.4 Train, validation, and test roles
+@@ -1189,9 +1190,9 @@ using validation data or a cross-validation-based calibration procedure.
+ The final project can use several uncertainty tools, each answering a different question:
+ 
+      bootstrap confidence intervals estimate uncertainty around final test metrics;
+-     paired bootstrap intervals compare metric differences between two models on the same test
++     paired bootstrap intervals can compare metric differences between candidate models before
+ 
+-       observations;
++       final selection, using validation or cross-validation predictions;
+      McNemar’s test compares paired hard-classification errors;
+      DeLong-style tests compare paired ROC-AUCs;
+      permutation tests can assess whether model performance is stronger than expected under
+@@ -1203,8 +1204,8 @@ The final project can use several uncertainty tools, each answering a different
+ 
+ Bootstrap is especially useful because it can be applied to many metrics, including PR-AUC,
+ ROC-AUC, F1, recall, precision, balanced accuracy, Brier score, and expected cost. In the final
+-test stage, the project should report point estimates together with uncertainty intervals wherever
+-feasible.
++test stage, the project should report point estimates together with uncertainty intervals for the
++single frozen final model wherever feasible.
+ 
+                                                               32
+ 4.15 Implications for the current report
+@@ -1219,14 +1220,27 @@ The report therefore uses the following interpretation:
+      small differences between neighbouring hyperparameters are interpreted cautiously;
+      selected configurations are described as selected within a development grid;
+      threshold results are diagnostic rather than final operating rules;
+-     final model-family comparison, threshold selection, calibration decisions, and test-set perfor-
++     final model-family comparison, statistical tests, threshold selection, and calibration decisions
+ 
+-       mance are deferred to later stages.
++       are deferred to later training-only stages. Test-set performance is deferred until exactly one
++       final model has been selected and frozen.
+ This discipline lets the project remain both educational and statistically careful. The individual
+ sections can explain each model in depth, while the final model comparison stage can later use
+ repeated CV, nested CV, bootstrap confidence intervals, paired comparisons, and ablation studies
+ to support stronger final conclusions.
+ 
++4.16 Strict final test-set policy
++
++The final test set is reserved for exactly one frozen final model. It should not be used to compare
++candidate models, additional candidate models, alternative thresholds, alternative calibration
++methods, or alternative preprocessing decisions. All model comparisons and statistical tests used
++for selection should be completed before the final test set is touched, using training-set validation,
++repeated cross-validation, nested cross-validation, or other training-only procedures.
++After the final model, preprocessing, hyperparameters, threshold, and calibration decision are
++frozen, the model is fitted on the full training set and evaluated once on the untouched test set.
++Bootstrap confidence intervals may then be computed for the metrics of that single final model.
++They are used to quantify finite-test-sample uncertainty, not to choose among models.
++
+                                                               33
+ 5 Preprocessing, evaluation, and simple baselines
+ 
+diff --git a/reports/latex/sections/04_statistical_evaluation_methodology.tex b/reports/latex/sections/04_statistical_evaluation_methodology.tex
+index 5b34bee..a6dda79 100644
+--- a/reports/latex/sections/04_statistical_evaluation_methodology.tex
++++ b/reports/latex/sections/04_statistical_evaluation_methodology.tex
+@@ -122,7 +122,7 @@ F_1
+ \]
+ ROC-AUC and PR-AUC are ranking metrics computed from score distributions across thresholds. Their sampling uncertainty is not captured by the simple binomial formula for accuracy.
+ 
+-For this reason, final model evaluation should eventually use more general uncertainty tools, especially bootstrap confidence intervals and paired bootstrap intervals for differences between top models. Section-level model comparisons before the final stage should therefore be interpreted as development evidence rather than final statistical proof.
++For this reason, candidate comparison should eventually use training-only uncertainty tools, such as paired bootstrap intervals on validation or cross-validation predictions. The final test evaluation should use bootstrap confidence intervals only for the single frozen final model. Section-level model comparisons before the final stage should therefore be interpreted as development evidence rather than final statistical proof.
+ 
+ \subsection{Train, validation, and test roles}
+ 
+@@ -261,14 +261,14 @@ Calibration matters if predicted probabilities are interpreted as churn risks or
+ The final project can use several uncertainty tools, each answering a different question:
+ \begin{itemize}
+     \item bootstrap confidence intervals estimate uncertainty around final test metrics;
+-    \item paired bootstrap intervals compare metric differences between two models on the same test observations;
++    \item paired bootstrap intervals can compare metric differences between candidate models before final selection, using validation or cross-validation predictions;
+     \item McNemar's test compares paired hard-classification errors;
+     \item DeLong-style tests compare paired ROC-AUCs;
+     \item permutation tests can assess whether model performance is stronger than expected under random label association;
+     \item repeated CV and nested CV can describe robustness and procedure-level performance before final test evaluation.
+ \end{itemize}
+ 
+-Bootstrap is especially useful because it can be applied to many metrics, including PR-AUC, ROC-AUC, \(F_1\), recall, precision, balanced accuracy, Brier score, and expected cost. In the final test stage, the project should report point estimates together with uncertainty intervals wherever feasible.
++Bootstrap is especially useful because it can be applied to many metrics, including PR-AUC, ROC-AUC, \(F_1\), recall, precision, balanced accuracy, Brier score, and expected cost. In the final test stage, the project should report point estimates together with uncertainty intervals for the single frozen final model wherever feasible.
+ 
+ \subsection{Implications for the current report}
+ 
+@@ -280,7 +280,14 @@ The report therefore uses the following interpretation:
+     \item small differences between neighbouring hyperparameters are interpreted cautiously;
+     \item selected configurations are described as selected within a development grid;
+     \item threshold results are diagnostic rather than final operating rules;
+-    \item final model-family comparison, threshold selection, calibration decisions, and test-set performance are deferred to later stages.
++    \item final model-family comparison, statistical tests, threshold selection, and calibration decisions are deferred to later training-only stages. Test-set performance is deferred until exactly one final model has been selected and frozen.
+ \end{itemize}
+ 
+ This discipline lets the project remain both educational and statistically careful. The individual sections can explain each model in depth, while the final model comparison stage can later use repeated CV, nested CV, bootstrap confidence intervals, paired comparisons, and ablation studies to support stronger final conclusions.
++
++
++\subsection{Strict final test-set policy}
++
++The final test set is reserved for exactly one frozen final model. It should not be used to compare candidate models, additional candidate models, alternative thresholds, alternative calibration methods, or alternative preprocessing decisions. All model comparisons and statistical tests used for selection should be completed before the final test set is touched, using training-set validation, repeated cross-validation, nested cross-validation, or other training-only procedures.
++
++After the final model, preprocessing, hyperparameters, threshold, and calibration decision are frozen, the model is fitted on the full training set and evaluated once on the untouched test set. Bootstrap confidence intervals may then be computed for the metrics of that single final model. They are used to quantify finite-test-sample uncertainty, not to choose among models.

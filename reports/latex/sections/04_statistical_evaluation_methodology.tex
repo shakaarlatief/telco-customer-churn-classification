@@ -122,7 +122,7 @@ F_1
 \]
 ROC-AUC and PR-AUC are ranking metrics computed from score distributions across thresholds. Their sampling uncertainty is not captured by the simple binomial formula for accuracy.
 
-For this reason, final model evaluation should eventually use more general uncertainty tools, especially bootstrap confidence intervals and paired bootstrap intervals for differences between top models. Section-level model comparisons before the final stage should therefore be interpreted as development evidence rather than final statistical proof.
+For this reason, candidate comparison should eventually use training-only uncertainty tools, such as paired bootstrap intervals on validation or cross-validation predictions. The final test evaluation should use bootstrap confidence intervals only for the single frozen final model. Section-level model comparisons before the final stage should therefore be interpreted as development evidence rather than final statistical proof.
 
 \subsection{Train, validation, and test roles}
 
@@ -261,14 +261,14 @@ Calibration matters if predicted probabilities are interpreted as churn risks or
 The final project can use several uncertainty tools, each answering a different question:
 \begin{itemize}
     \item bootstrap confidence intervals estimate uncertainty around final test metrics;
-    \item paired bootstrap intervals compare metric differences between two models on the same test observations;
+    \item paired bootstrap intervals can compare metric differences between candidate models before final selection, using validation or cross-validation predictions;
     \item McNemar's test compares paired hard-classification errors;
     \item DeLong-style tests compare paired ROC-AUCs;
     \item permutation tests can assess whether model performance is stronger than expected under random label association;
     \item repeated CV and nested CV can describe robustness and procedure-level performance before final test evaluation.
 \end{itemize}
 
-Bootstrap is especially useful because it can be applied to many metrics, including PR-AUC, ROC-AUC, \(F_1\), recall, precision, balanced accuracy, Brier score, and expected cost. In the final test stage, the project should report point estimates together with uncertainty intervals wherever feasible.
+Bootstrap is especially useful because it can be applied to many metrics, including PR-AUC, ROC-AUC, \(F_1\), recall, precision, balanced accuracy, Brier score, and expected cost. In the final test stage, the project should report point estimates together with uncertainty intervals for the single frozen final model wherever feasible.
 
 \subsection{Implications for the current report}
 
@@ -280,7 +280,14 @@ The report therefore uses the following interpretation:
     \item small differences between neighbouring hyperparameters are interpreted cautiously;
     \item selected configurations are described as selected within a development grid;
     \item threshold results are diagnostic rather than final operating rules;
-    \item final model-family comparison, threshold selection, calibration decisions, and test-set performance are deferred to later stages.
+    \item final model-family comparison, statistical tests, threshold selection, and calibration decisions are deferred to later training-only stages. Test-set performance is deferred until exactly one final model has been selected and frozen.
 \end{itemize}
 
 This discipline lets the project remain both educational and statistically careful. The individual sections can explain each model in depth, while the final model comparison stage can later use repeated CV, nested CV, bootstrap confidence intervals, paired comparisons, and ablation studies to support stronger final conclusions.
+
+
+\subsection{Strict final test-set policy}
+
+The final test set is reserved for exactly one frozen final model. It should not be used to compare candidate models, additional candidate models, alternative thresholds, alternative calibration methods, or alternative preprocessing decisions. All model comparisons and statistical tests used for selection should be completed before the final test set is touched, using training-set validation, repeated cross-validation, nested cross-validation, or other training-only procedures.
+
+After the final model, preprocessing, hyperparameters, threshold, and calibration decision are frozen, the model is fitted on the full training set and evaluated once on the untouched test set. Bootstrap confidence intervals may then be computed for the metrics of that single final model. They are used to quantify finite-test-sample uncertainty, not to choose among models.

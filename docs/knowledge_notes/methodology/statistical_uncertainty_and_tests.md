@@ -1,10 +1,10 @@
-# Statistical uncertainty, confidence intervals, and model comparison tests
+# Statistical uncertainty, confidence intervals, and pre-final model comparison tests
 
 This note explains statistical uncertainty in model evaluation and introduces practical methods for confidence intervals and statistical comparisons.
 
 The central idea is:
 
-> Model metrics are estimates computed from finite samples. A serious model comparison should ask not only which point estimate is higher, but also how uncertain the estimate is and whether the observed difference is large enough to be meaningful.
+> Model metrics are estimates computed from finite samples. Candidate model comparison should ask not only which point estimate is higher, but also how uncertain the estimate is and whether the observed difference is large enough to be meaningful. In this project, those candidate comparisons are performed before the final test set is used.
 
 This note focuses on uncertainty and tests. It builds on the previous notes:
 
@@ -17,7 +17,7 @@ cross_validation_and_model_selection.md
 
 ## 1. Why uncertainty matters
 
-Suppose two models are evaluated on the same test set:
+Suppose two candidate models are evaluated on the same validation fold, repeated-CV output, nested-CV outer fold, or another training-only evaluation sample:
 
 ```text
 Model A PR-AUC = 0.657
@@ -30,7 +30,7 @@ The observed difference may reflect:
 
 ```text
 true model superiority
-finite test-sample noise
+finite validation-sample noise
 threshold choice
 hyperparameter-selection noise
 random training variation
@@ -119,7 +119,7 @@ This does not necessarily mean the method is unstable in a bad way. It may mean 
 
 When many model families are compared, the selected family may depend on validation noise.
 
-This is why small differences between tuned families should be interpreted cautiously and why nested CV or final paired test-set comparisons can be useful.
+This is why small differences between tuned families should be interpreted cautiously and why nested CV, repeated CV, paired validation comparisons, or paired bootstrap differences before final selection can be useful.
 
 ---
 
@@ -442,7 +442,7 @@ where \(q_{0.025}\) and \(q_{0.975}\) are bootstrap quantiles.
 
 ```text
 Input:
-    y_test
+    y_eval
     y_score or y_pred
     metric function
     number of bootstrap samples B
@@ -463,25 +463,25 @@ For metrics such as ROC-AUC and PR-AUC, a bootstrap sample must contain at least
 
 ---
 
-## 9. Bootstrap for paired model differences
+## 9. Bootstrap for paired model differences before final selection
 
-Often the most important question is not:
+During model development, an important question is not only:
 
 ```text
 What is the uncertainty around model A?
 ```
 
-but:
+but also:
 
 ```text
-Is model A meaningfully better than model B?
+Is model A meaningfully better than model B before the final model is selected?
 ```
 
 Because both models are evaluated on the same observations, the comparison is paired.
 
 The paired bootstrap preserves this pairing.
 
-For each bootstrap resample of test rows:
+For each bootstrap resample of validation or cross-validation prediction rows:
 
 ```text
 1. sample row indices with replacement;
@@ -519,7 +519,7 @@ If the interval is wide:
     evaluation sample may be too small or metric too variable.
 ```
 
-This is one of the most useful final-comparison tools for this project.
+This is one of the most useful pre-final candidate-comparison tools for this project. It should be applied to validation, repeated-CV, nested-CV, or other training-only evaluation outputs before the one final model is frozen.
 
 ---
 
@@ -610,7 +610,7 @@ threshold stability:
 
 These uses answer different questions. They require refitting models and are more computationally expensive.
 
-For this project, bootstrap is most immediately useful for final test metrics and paired final-model comparisons. Later, it may also be useful for feature-importance stability in tree ensembles or logistic regression.
+For this project, bootstrap is most immediately useful in two distinct places: first, for paired candidate-model comparisons before final selection using validation or cross-validation outputs; and second, for confidence intervals around the single frozen final model's test metrics. Later, it may also be useful for feature-importance stability in tree ensembles or logistic regression.
 
 ---
 
@@ -763,7 +763,7 @@ This is compared to a chi-square distribution with one degree of freedom.
 McNemar's test is useful when:
 
 ```text
-two classifiers are evaluated on the same test cases
+two classifiers are evaluated on the same validation cases before final selection
 hard predictions are fixed
 the question is whether their error rates differ
 ```
@@ -807,7 +807,7 @@ DeLong-style testing is useful when:
 
 ```text
 the main metric is ROC-AUC
-two models are evaluated on the same test observations
+two candidate models are evaluated on the same validation observations before final selection
 a specialized ROC-AUC comparison is desired
 ```
 
@@ -841,12 +841,12 @@ permutation tests of model-score differences
 repeated CV paired comparisons
 ```
 
-For this project, paired bootstrap on the held-out test set is likely the most practical and consistent approach for PR-AUC differences.
+For this project, paired bootstrap on validation or cross-validation predictions is likely the most practical and consistent approach for PR-AUC differences before final model selection.
 
 Procedure:
 
 ```text
-1. Keep both models' predicted scores on the same test observations.
+1. Keep both candidate models' predicted scores on the same validation or cross-validation observations.
 2. Bootstrap resample rows.
 3. Compute PR-AUC for both models in each resample.
 4. Store PR-AUC difference.
@@ -893,7 +893,7 @@ one wants a classical test designed for classifier comparison
 
 This project already has a held-out test set and uses cross-validation inside the training set.
 
-Therefore, 5x2 CV tests are useful to know about, but they may not be the primary final comparison method. A final held-out test set with bootstrap intervals and paired model differences is more aligned with the project workflow.
+Therefore, 5x2 CV tests are useful to know about, but they may not be the primary final comparison method. A final held-out test set with bootstrap intervals for one frozen final model is more aligned with the project workflow. Paired model differences belong before final selection.
 
 ---
 
@@ -994,26 +994,20 @@ For the final report, the cleanest practical procedure is:
        threshold
        calibration method, if any
 
-2. Fit the final model on the full training data.
+2. Freeze exactly one final modelling pipeline.
 
-3. Predict once on the untouched test set.
+3. Fit that final model on the full training data.
 
-4. Compute final metrics.
+4. Predict once on the untouched test set.
 
-5. Bootstrap the test set to obtain confidence intervals.
+5. Compute final metrics for that single final model.
+
+6. Bootstrap the test set to obtain confidence intervals for that single final model.
 ```
 
 This produces uncertainty intervals for the final frozen model.
 
-If comparing against a runner-up model:
-
-```text
-1. Fit both final candidate models using training data only.
-2. Predict both on the same untouched test set.
-3. Use paired bootstrap differences on test rows.
-```
-
-This is likely the most important final uncertainty method for the project.
+The final test set should not be used to compare multiple candidate models or to choose between a final model and additional candidate models. All candidate comparisons, paired bootstrap differences, nested-CV comparisons, repeated-CV comparisons, McNemar-style hard-classification comparisons, and DeLong-style ROC-AUC comparisons should be completed before the final model is chosen and before the test set is touched.
 
 ---
 
@@ -1130,9 +1124,9 @@ Use:
 
 ```text
 bootstrap confidence intervals for final metrics
-paired bootstrap differences against runner-up models
-possibly McNemar for hard classification accuracy differences
-possibly DeLong for ROC-AUC if ROC-AUC is central
+paired bootstrap differences before final selection
+possibly McNemar on validation predictions before final selection
+possibly DeLong on validation ROC-AUC before final selection
 calibration uncertainty if calibrated probabilities are reported
 ```
 
@@ -1144,9 +1138,9 @@ When reporting one final metric:
 
 > The test-set PR-AUC is \(0.66\). Because this value is computed on a finite test set, it is an estimate of the model's population PR-AUC. A bootstrap confidence interval is reported to quantify test-sample uncertainty.
 
-When comparing two models:
+When comparing two candidate models before final selection:
 
-> Model A has a higher observed PR-AUC than Model B on the test set. Because both models are evaluated on the same observations, the comparison is paired. A paired bootstrap interval for the PR-AUC difference is used to assess whether the observed gap is large relative to test-sample variability.
+> Model A has a higher observed PR-AUC than Model B on the same validation or cross-validation predictions. Because both models are evaluated on the same observations, the comparison is paired. A paired bootstrap interval for the PR-AUC difference is used to assess whether the observed gap is large relative to validation-sample variability.
 
 When discussing CV results:
 
@@ -1164,10 +1158,10 @@ When discussing hyperparameters:
 |---|---|---|---|
 | Binomial CI | How uncertain is accuracy/recall/specificity? | Simple proportions | Not enough for PR-AUC, ROC-AUC, F1 |
 | Bootstrap CI | How uncertain is one metric? | Many metrics | Assumes resampling scheme is appropriate |
-| Paired bootstrap | Is model A's metric higher than model B's? | Flexible paired comparisons | Computational; depends on test sample |
+| Paired bootstrap | Is model A's validation metric higher than model B's before final selection? | Flexible paired candidate comparisons | Computational; depends on validation sample |
 | Permutation test | Is there predictive signal beyond chance label association? | Signal detection | Not a direct model A vs B comparison |
-| McNemar test | Do two hard classifiers have different error rates? | Paired hard predictions | Threshold-dependent; not for AUC/PR-AUC |
-| DeLong test | Do two ROC-AUCs differ? | Paired ROC-AUC comparison | Specific to ROC-AUC |
+| McNemar test | Do two hard classifiers have different validation error rates before final selection? | Paired hard predictions | Threshold-dependent; not for AUC/PR-AUC |
+| DeLong test | Do two validation ROC-AUCs differ before final selection? | Paired ROC-AUC comparison | Specific to ROC-AUC |
 | 5x2 CV tests | Do two algorithms differ under repeated train/test splits? | Small-data classifier comparison | Less aligned with held-out-test workflow |
 | Fold SD | How stable are CV scores across folds? | Descriptive stability | Not a perfect CI |
 | Nested CV | How well does a tuning procedure generalize? | Comparing tuned families | More computation; not final deployment fit |
@@ -1180,4 +1174,4 @@ The main message is:
 
 > Model evaluation should report both performance and uncertainty.
 
-For this project, the immediate role of uncertainty is interpretive: it tells us not to overstate small differences in development-stage CV results. Later, uncertainty should become operational: final test-set metrics should be accompanied by bootstrap confidence intervals, and top-model comparisons should use paired uncertainty methods.
+For this project, the immediate role of uncertainty is interpretive: it tells us not to overstate small differences in development-stage CV results. Later, uncertainty should become operational: candidate comparisons should use paired uncertainty methods before final selection, and final test-set metrics should be accompanied by bootstrap confidence intervals for the single frozen final model.

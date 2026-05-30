@@ -945,10 +945,9 @@ Use the untouched test set once.
 Report:
 
 ```text
-point estimates
-confidence intervals
-paired comparisons against runner-up models
-calibration diagnostics if probabilities matter
+point estimates for the single frozen final model
+confidence intervals for the single frozen final model
+calibration diagnostics for the single frozen final model if probabilities matter
 ```
 
 ---
@@ -967,7 +966,7 @@ The main lessons are:
 7. Fair model comparison requires comparable tuning effort and transparent search spaces.
 8. Small differences between tuned configurations should be interpreted cautiously.
 9. Simplicity and robustness matter when performance differences are small.
-10. Final performance must be evaluated once on the untouched test set.
+10. Final performance must be evaluated once on the untouched test set for exactly one frozen final model.
 ```
 
 For the current project, the individual model sections should continue to use ordinary stratified CV for clear learning and development. The more advanced repeated-CV, nested-CV, statistical-testing, and final test-set uncertainty methods should be introduced later in a dedicated comparison and final evaluation stage.

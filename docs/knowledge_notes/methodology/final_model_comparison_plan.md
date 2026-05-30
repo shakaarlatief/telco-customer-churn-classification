@@ -1,8 +1,8 @@
-# Final model comparison plan for the Telco churn project
+# Final model selection and single-test-set evaluation plan for the Telco churn project
 
 This note defines the project-specific evaluation plan after the individual model-family sections are complete.
 
-The previous methodology notes explain the theory:
+The previous methodology notes explain the underlying theory:
 
 ```text
 evaluation_foundations.md
@@ -12,9 +12,13 @@ statistical_uncertainty_and_tests.md
 
 This note answers a practical question:
 
-> After we have explained, implemented, tuned, and interpreted all model families, how should the project compare them and choose a final model without overstating the evidence?
+> After we have explained, implemented, tuned, and interpreted all relevant model families, how should the project compare candidates, choose one final model, and evaluate it without overstating the evidence?
 
-The project should not treat every section-level cross-validation table as a final ranking. The section-level tables are development-stage evidence. The final comparison should be a separate stage with stricter language, more careful uncertainty analysis, and a clean final test-set evaluation.
+The central rule is:
+
+> The held-out test set is used for exactly one frozen final model. It is not used to compare candidate models, additional candidate models, hyperparameter settings, thresholds, calibration choices, feature sets, or modelling strategies.
+
+All candidate comparison, statistical testing, repeated cross-validation, nested cross-validation, paired bootstrap comparison, threshold selection, calibration selection, and ablation decisions should happen before the final test set is touched.
 
 ---
 
@@ -51,7 +55,7 @@ multilayer perceptrons
 possibly calibration and resampling variants
 ```
 
-In these sections, ordinary stratified cross-validation is appropriate because the goal is not final statistical proof. The goal is to learn, compare broad behaviour, and build candidate models.
+In these sections, ordinary stratified cross-validation is appropriate because the goal is not final statistical proof. The goal is to learn, compare broad behaviour, understand model assumptions, and build candidate models.
 
 ---
 
@@ -126,19 +130,22 @@ This keeps the interpretation honest while still allowing clear project progress
 After all relevant model families have been studied, the project should add a dedicated stage:
 
 ```text
-Model comparison, uncertainty, and final selection
+Candidate comparison, uncertainty, and final selection
 ```
 
-This stage should not introduce a new model family. It should compare the strongest candidate models from the earlier sections.
+This stage should not introduce a new model family. It should compare the strongest candidate models from the earlier sections using training-only evidence.
 
 The purpose is to answer:
 
 ```text
-Which candidate models remain competitive under a more rigorous comparison?
-Which model should be selected as the final model?
+Which candidate models remain competitive under a more rigorous training-only comparison?
+Which model should be selected as the single final model?
 Which threshold should be selected for the final decision rule?
-How uncertain are the final claims?
+Should probability calibration be used?
+How uncertain are the candidate comparisons?
 ```
+
+This stage must not use the held-out test set.
 
 ---
 
@@ -172,6 +179,8 @@ models with different complexity levels
 ```
 
 The shortlist should not include dozens of nearly identical hyperparameter settings unless the goal is explicitly to study hyperparameter stability.
+
+The shortlist should be created using only training-set development evidence.
 
 ---
 
@@ -259,11 +268,13 @@ models being considered for final selection
 
 Repeated CV should not necessarily be used for every early educational experiment because it increases computation and report complexity.
 
+Repeated CV improves stability, but it does not eliminate selection optimism. If many configurations are tried and the best repeated-CV score is selected, the selected score is still the winner among several estimates.
+
 ---
 
 ## 8. Nested CV for comparing tuned procedures
 
-Nested cross-validation can be used to compare tuned model-family procedures.
+Nested cross-validation can be used to compare tuned model-family procedures before the final model is selected.
 
 The evaluated object is not a single fixed fitted model. It is a procedure:
 
@@ -287,7 +298,7 @@ This gives outer-fold scores for each tuned family.
 
 Nested CV can answer:
 
-> If each model family is allowed to tune itself fairly using only training data, which model-family procedure generalizes best?
+> If each model family is allowed to tune itself fairly using only training data, which model-family procedure generalizes best within the development data?
 
 Nested CV is most useful when the project wants a more statistically careful model-family comparison before touching the test set.
 
@@ -303,34 +314,63 @@ A balanced plan is:
 Use ordinary CV in individual model-family sections.
 Use repeated CV for stable final tuning of serious candidates.
 Use nested CV if the top model families are close or if final model-family comparison needs stronger support.
-Always keep the untouched test set for final evaluation.
+Always keep the untouched test set for one final frozen model only.
 ```
 
 Nested CV should be considered especially if:
 
 ```text
 several tuned families have very similar PR-AUC or ROC-AUC
-the final selected model is much more complex than the runner-up
-the report wants to claim one tuned family is clearly preferable
+the final selected model is much more complex than a simpler alternative
+the report wants stronger evidence about tuned-family comparison
 the tuning search spaces are large and selection optimism may matter
 ```
 
 Nested CV may be skipped if:
 
 ```text
-one model is clearly superior across many metrics
+one model is clearly stronger across metrics using training-only evidence
 the computational cost is too high
-the final comparison will rely mainly on held-out test uncertainty
-the project scope would become too large
+the final comparison would become too complex for the project narrative
+the project prioritizes a readable model-family learning workflow
 ```
 
-If skipped, the report should explicitly say that the final test set provides the primary final performance estimate, while the development-stage CV rankings are used for selection.
+If nested CV is skipped, the report should say so explicitly and explain the alternative:
+
+```text
+The project uses training-set cross-validation for model development and
+a final held-out test set for the single frozen final model. Nested CV is
+discussed as a stricter procedure-level evaluation method but is not used
+because the training-only comparison was sufficient for final selection and
+the project prioritizes a readable model-family learning workflow.
+```
 
 ---
 
-## 10. Fair tuning effort in the final comparison
+## 10. Statistical tests and paired comparisons before final selection
 
-The final comparison must avoid giving one model family much more tuning attention than others.
+Statistical comparison tools should be used before the final test set.
+
+Possible tools:
+
+```text
+paired bootstrap differences on validation or cross-validation predictions
+paired fold comparisons from repeated CV
+nested-CV outer-fold comparisons
+McNemar-style tests on validation hard predictions
+DeLong-style tests for validation ROC-AUC
+permutation tests for predictive signal
+```
+
+These methods can help choose the one final model.
+
+They should not be used after running several models on the held-out test set, because that would make the test set part of model selection.
+
+---
+
+## 11. Fair tuning effort in the final comparison
+
+The final comparison stage must avoid giving one model family much more tuning attention than others.
 
 For example, this would be unfair:
 
@@ -339,7 +379,7 @@ logistic regression:
     default C only
 
 boosting:
-    500 Optuna trials
+    500 Optuna trials over many parameters
 ```
 
 A fairer strategy:
@@ -356,18 +396,19 @@ Search effort does not need to be identical in a literal sense. Some models have
 
 ---
 
-## 11. Suggested final candidate search strategy
+## 12. Suggested final candidate search strategy
 
 A practical final search strategy could be:
 
 ```text
 1. Use previous sections to identify reasonable hyperparameter ranges.
 2. For each serious candidate family, define a compact but fair search space.
-3. Use repeated stratified CV for tuning.
+3. Use repeated stratified CV for tuning, if computation allows.
 4. Use PR-AUC as the primary tuning metric.
 5. Store secondary metrics for interpretation.
 6. Inspect whether selected configurations are stable.
-7. Shortlist the top few models for final threshold and calibration analysis.
+7. Shortlist the final candidate models for threshold and calibration analysis.
+8. Select exactly one final model using training-only evidence.
 ```
 
 If using Optuna or Bayesian optimization:
@@ -378,11 +419,12 @@ fix random seeds
 record the search space
 record the selected configuration
 do not keep expanding the search only for the favourite model
+do not use the final test set to guide additional search
 ```
 
 ---
 
-## 12. Metric hierarchy for final model selection
+## 13. Metric hierarchy for final model selection
 
 The project should define a metric hierarchy before final selection.
 
@@ -420,13 +462,13 @@ But PR-AUC alone is not enough. A model with high PR-AUC may still have an undes
 
 ---
 
-## 13. Threshold-selection plan
+## 14. Threshold-selection plan
 
 Threshold selection should happen after candidate model comparison, not separately in every early model section.
 
 The model-family sections can show threshold curves, but those are diagnostic.
 
-A final threshold should be selected using training data only, possibly through validation or cross-validation.
+A final threshold should be selected using training data only, possibly through validation, cross-validation, or a pre-specified cost rule.
 
 Possible threshold-selection rules:
 
@@ -452,11 +494,13 @@ false positive:
     unnecessary retention action or discount
 ```
 
-If business costs are unknown, the report can present several operating points rather than pretending one threshold is objectively optimal.
+If business costs are unknown, the report can present several training-only operating points rather than pretending one threshold is objectively optimal.
+
+The final threshold must be frozen before final test evaluation.
 
 ---
 
-## 14. Calibration plan
+## 15. Calibration plan
 
 Calibration should be considered if the final model's probabilities are interpreted as risks or used in cost calculations.
 
@@ -489,21 +533,23 @@ validation/calibration folds:
     fit calibrator
 
 test set:
-    evaluate calibrated final model once
+    evaluate the already-frozen calibrated final model once
 ```
 
 For this project, calibration can be a later dedicated section after major model families are compared.
 
 ---
 
-## 15. Final model fitting
+## 16. Final model fitting
 
-After final model family, hyperparameters, threshold, and optional calibration are chosen using training data only:
+After final model family, hyperparameters, threshold, and optional calibration are chosen using training data only, the project freezes exactly one final modelling pipeline.
+
+Then:
 
 ```text
 1. Fit the final pipeline on the full training set.
 2. Apply the fitted pipeline to the untouched test set.
-3. Compute final metrics once.
+3. Compute final metrics once for that one final model.
 ```
 
 The final pipeline should include all preprocessing steps:
@@ -524,13 +570,13 @@ Everything that learns from data must be fitted only on the training data.
 
 ---
 
-## 16. Final test-set evaluation
+## 17. Final test-set evaluation
 
-The test set should answer:
+The final test set should answer one question:
 
-> How well does the frozen final modelling procedure perform on unseen data?
+> How well does the single frozen final modelling procedure perform on unseen data?
 
-The final test evaluation should report:
+The final test evaluation should report metrics for one model only:
 
 ```text
 confusion matrix
@@ -545,42 +591,35 @@ PR-AUC
 predicted positive rate
 possibly expected cost
 possibly calibration metrics
+bootstrap confidence intervals for the single final model
 ```
 
 The report should explicitly say:
 
 ```text
 The test set was not used for model-family selection, hyperparameter tuning,
-threshold selection, or calibration fitting.
+threshold selection, calibration fitting, candidate comparison, or ablation decisions.
 ```
 
-If this is true, the test estimate is the cleanest final performance evidence.
+If this is true, the test estimate is the clean final performance evidence for the selected model.
 
 ---
 
-## 17. Final uncertainty reporting
+## 18. Final uncertainty reporting
 
 Final test metrics should be reported with uncertainty where possible.
 
-Recommended:
+Recommended for the single final model:
 
 ```text
 bootstrap confidence intervals for final metrics
-paired bootstrap intervals for differences against runner-up models
 ```
 
-For one final model:
+For the single final model:
 
 ```text
 metric point estimate
 95 percent bootstrap confidence interval
-```
-
-For model differences:
-
-```text
-metric_A - metric_B
-95 percent paired bootstrap confidence interval
 ```
 
 Metrics suitable for bootstrap CIs:
@@ -598,59 +637,37 @@ expected cost
 Brier score
 ```
 
-Special tests can be mentioned or optionally included:
-
-```text
-McNemar's test:
-    paired hard-classification error comparison
-
-DeLong test:
-    paired ROC-AUC comparison
-
-permutation test:
-    predictive signal compared with label-randomized null
-```
-
-But paired bootstrap is the most flexible main method.
+Candidate model-difference methods such as paired bootstrap, McNemar-style tests, or DeLong-style tests should be used before final selection using training-only validation evidence. They should not be applied on the final test set to compare multiple candidate models.
 
 ---
 
-## 18. Final paired comparison against runner-up models
+## 19. No test-set model comparison
 
-The final selected model should be compared with at least one strong runner-up.
+The final test set should not be used to compare multiple candidate models.
 
-Example:
-
-```text
-Final model:
-    gradient boosting
-
-Runner-up:
-    regularized logistic regression
-```
-
-Why compare with logistic regression?
+Do not do:
 
 ```text
-it is strong
-it is interpretable
-it is simpler
-it is a natural baseline for tabular binary classification
+fit model A, model B, model C
+evaluate all on the test set
+choose the best test-set result
 ```
 
-A complex final model should justify its complexity. If the complex model improves PR-AUC only slightly and the paired interval includes zero, the report should not overstate the improvement.
+Also avoid:
 
-Possible language:
+```text
+evaluate final model and additional candidate models on the test set
+use comparisons on the test set to argue which model should have been selected
+change the final model after seeing test results
+```
 
-> The final model has the highest observed PR-AUC on the test set, but the paired bootstrap interval for the difference relative to logistic regression includes zero. Therefore, the evidence for a meaningful ranking-performance improvement is limited. The simpler logistic model remains a competitive alternative.
+All of that turns the test set into another validation set.
 
-or:
-
-> The final model improves PR-AUC and recall relative to logistic regression, and the paired bootstrap interval for PR-AUC difference is mostly positive. This supports the final model choice, although the practical value of the improvement should still be considered relative to model complexity.
+If the project wants paired model comparisons, they should be performed before final test evaluation using training-only validation evidence.
 
 ---
 
-## 19. Ablation study plan
+## 20. Ablation study plan
 
 An ablation study measures the contribution of model components by removing or changing them.
 
@@ -667,7 +684,7 @@ full feature set versus reduced feature set
 complex model versus interpretable baseline
 ```
 
-Ablation studies should be used after a strong final candidate exists.
+Ablation studies should be used after a strong final candidate exists, but before final test evaluation if they influence model selection.
 
 The purpose is not only performance ranking. It is understanding:
 
@@ -690,9 +707,11 @@ If calibration improves probability reliability but not ranking,
 the report should separate calibration from discrimination.
 ```
 
+If ablation results are used to decide the final pipeline, they must use training/validation data only.
+
 ---
 
-## 20. Feature-importance and explanation plan
+## 21. Feature-importance and explanation plan
 
 After final model selection, model explanation should be handled carefully.
 
@@ -713,16 +732,16 @@ Important caution:
 feature importance is model-specific
 correlated features can share or distort importance
 importance does not imply causality
-permutation importance should be computed on validation or test data, not training data only
+permutation importance should be computed on training-validation data before final selection
 ```
 
-For the final report, interpretability should be linked to model type.
+If feature-importance results are used to decide whether to change the model, they must be computed before final test evaluation. After final model selection, feature explanations can be reported as interpretation of the selected model, but they should not cause model changes after the test result is known.
 
-A logistic regression model may provide cleaner coefficient interpretation. A tree ensemble may provide stronger predictive performance but more complex explanations.
+For the final report, interpretability should be linked to model type. A logistic regression model may provide cleaner coefficient interpretation. A tree ensemble may provide stronger predictive performance but more complex explanations.
 
 ---
 
-## 21. Test-set use policy
+## 22. Strict test-set use policy
 
 The project should follow a strict test-set policy.
 
@@ -738,10 +757,12 @@ Not allowed before final evaluation:
 
 ```text
 checking test metrics to choose models
+checking test metrics to compare candidate models
 checking test metrics to choose hyperparameters
 checking test metrics to choose threshold
 checking test metrics to decide whether to add features
 checking test metrics to choose calibration
+checking test metrics to decide whether to accept or reject ablation choices
 repeatedly rerunning final evaluation and adapting the model
 ```
 
@@ -749,11 +770,11 @@ If test-set results cause model changes, the test set has become validation data
 
 ---
 
-## 22. How to revise earlier report sections
+## 23. How to revise earlier report sections
 
 Earlier model sections should be revised with careful wording.
 
-### 22.1 Logistic regression
+### 23.1 Logistic regression
 
 Add language such as:
 
@@ -763,7 +784,7 @@ Differences between neighbouring C values should be interpreted as evidence
 about a useful regularization region, not as proof of a uniquely optimal C.
 ```
 
-### 22.2 kNN
+### 23.2 kNN
 
 Add language such as:
 
@@ -774,7 +795,7 @@ selected configuration should be interpreted as a representative strong kNN
 candidate rather than a statistically final optimum.
 ```
 
-### 22.3 Naive Bayes
+### 23.3 Naive Bayes
 
 Add language such as:
 
@@ -786,7 +807,7 @@ variants is useful development evidence, but final model-family claims are
 deferred to the later comparison stage.
 ```
 
-### 22.4 Future tree and ensemble sections
+### 23.4 Future tree and ensemble sections
 
 Use the same pattern:
 
@@ -799,7 +820,7 @@ reserve final claims for the final comparison and test evaluation
 
 ---
 
-## 23. Suggested structure for the later report
+## 24. Suggested structure for the later report
 
 A later report structure could be:
 
@@ -818,27 +839,28 @@ A later report structure could be:
        ensembles
        SVM
        MLP
-8. Model comparison, uncertainty, and final selection
+8. Candidate comparison, uncertainty, and final selection
        candidate shortlist
        repeated CV / nested CV if used
        candidate comparison
        threshold selection
        calibration if used
        ablations if used
+       final frozen model definition
 9. Final test-set evaluation
+       one final model only
        final metrics
        confidence intervals
-       paired comparisons
        final confusion matrix
        practical interpretation
 10. Conclusion
 ```
 
-The current report already has some of these sections. The main future addition is a dedicated section for model comparison and uncertainty.
+The current report already has some of these sections. The main future addition is a dedicated section for candidate comparison and final selection before the final test section.
 
 ---
 
-## 24. Suggested implementation additions later
+## 25. Suggested implementation additions later
 
 Later code additions may include:
 
@@ -848,7 +870,7 @@ evaluation.py:
     repeated-CV evaluation utilities
     pooled OOF versus fold-mean metric summaries
     bootstrap confidence intervals
-    paired bootstrap metric differences
+    paired bootstrap metric differences for pre-final validation comparisons
     threshold-selection utilities
     calibration evaluation utilities
 
@@ -857,7 +879,7 @@ models.py:
 
 notebooks:
     model-comparison notebook
-    final-test-evaluation notebook
+    final-test-evaluation notebook for one frozen model only
     calibration notebook, if needed
     ablation notebook, if needed
 ```
@@ -866,7 +888,7 @@ The project does not need these utilities immediately before decision trees, but
 
 ---
 
-## 25. Proposed final comparison notebooks
+## 26. Proposed later notebooks
 
 Possible later notebooks:
 
@@ -875,7 +897,7 @@ Possible later notebooks:
 09_ensemble_methods.py
 10_support_vector_machines.py
 11_multilayer_perceptron.py
-12_model_comparison_and_selection.py
+12_candidate_comparison_and_selection.py
 13_calibration_and_threshold_selection.py
 14_final_test_evaluation.py
 15_ablation_and_interpretability.py
@@ -883,11 +905,11 @@ Possible later notebooks:
 
 Exact numbering can change depending on the final project structure.
 
-The important point is that final comparison and final test evaluation should be separate from model-family learning notebooks.
+The important point is that candidate comparison, threshold/calibration selection, and final test evaluation should be separate from model-family learning notebooks. The final test evaluation notebook should evaluate exactly one frozen final model.
 
 ---
 
-## 26. Decision rule for whether to use nested CV
+## 27. Decision rule for whether to use nested CV
 
 Before implementing the final comparison stage, decide whether nested CV is worth the cost.
 
@@ -900,51 +922,52 @@ compute cost is manageable
 the tuning procedures can be clearly defined
 ```
 
-Skip nested CV and rely on repeated CV plus final test bootstrap if:
+Skip nested CV and rely on repeated CV plus training-only candidate comparison if:
 
 ```text
 the top model is clearly stronger across metrics
 the final comparison would become too computationally heavy
 the project narrative benefits from simplicity
-the final test set is sufficiently large and untouched
+the training-only evidence is already sufficient for choosing one final model
 ```
 
 If nested CV is skipped, say so explicitly and explain the alternative:
 
 ```text
 The project uses training-set cross-validation for model development and
-a final held-out test set with bootstrap uncertainty for final performance.
-Nested CV is discussed as a stricter procedure-level evaluation method but
-is not used because the project already preserves an untouched final test set
-and prioritizes a readable model-family learning workflow.
+training-only candidate comparison for final selection. Nested CV is discussed
+as a stricter procedure-level evaluation method but is not used because the
+training-only evidence is sufficient and the project prioritizes a readable
+model-family learning workflow.
 ```
 
 ---
 
-## 27. Final selection checklist
+## 28. Final selection checklist
 
 Before touching the test set, confirm:
 
 ```text
+candidate comparisons completed using training data only
+one final model selected
 model family selected
-hyperparameters selected
+hyperparameters fixed
 preprocessing fixed
 feature set fixed
 resampling or class weighting fixed
 calibration decision fixed
 threshold fixed or threshold-selection rule fixed
 primary and secondary metrics fixed
-runner-up comparison models fixed
-bootstrap procedure fixed
+bootstrap confidence interval procedure fixed
 ```
 
 Only after this checklist is complete should the test set be evaluated.
 
 ---
 
-## 28. Final test evaluation checklist
+## 29. Final test evaluation checklist
 
-When evaluating the test set, compute:
+When evaluating the test set, compute for the single final model:
 
 ```text
 final confusion matrix
@@ -957,8 +980,7 @@ F1
 ROC-AUC
 PR-AUC
 predicted positive rate
-bootstrap CIs
-paired bootstrap differences versus runner-up
+bootstrap CIs for final metrics
 calibration metrics if probabilities matter
 business-cost metric if costs are defined
 ```
@@ -966,17 +988,18 @@ business-cost metric if costs are defined
 Then interpret:
 
 ```text
-Does the final model improve enough over simpler baselines?
 What tradeoff does the selected threshold create?
 How many customers would be flagged?
 How uncertain are the metrics?
-Is the improvement practically meaningful?
+Is the performance practically useful?
 Are probabilities reliable enough to interpret as risks?
 ```
 
+Do not compare against other test-set models.
+
 ---
 
-## 29. Final conclusion style
+## 30. Final conclusion style
 
 The final report conclusion should avoid saying only:
 
@@ -987,12 +1010,18 @@ Model X performed best.
 A better conclusion style:
 
 ```text
-Model X was selected because it provided the strongest development-stage
-positive-class ranking performance while maintaining an acceptable recall,
-precision, and operational alert rate. On the untouched test set, it achieved
-PR-AUC ..., recall ..., precision ..., and F1 ..., with bootstrap confidence
-intervals indicating the remaining test-sample uncertainty. The paired
-comparison against the strongest simpler baseline suggests that ...
+Model X was selected before final test evaluation because it provided the
+strongest training-only evidence under the project selection criteria. After
+the model, hyperparameters, preprocessing, calibration decision, and threshold
+were frozen, the model was fitted on the full training set and evaluated once
+on the untouched test set. The final test-set estimates are ..., with bootstrap
+confidence intervals indicating finite-test-sample uncertainty.
+```
+
+Avoid:
+
+```text
+After comparing several models on the test set, model X was best.
 ```
 
 This conclusion style is more professional because it connects:
@@ -1000,7 +1029,7 @@ This conclusion style is more professional because it connects:
 ```text
 selection criterion
 threshold tradeoff
-test performance
+single-model test performance
 uncertainty
 practical meaning
 model complexity
@@ -1008,7 +1037,7 @@ model complexity
 
 ---
 
-## 30. Summary
+## 31. Summary
 
 The project should proceed in layers:
 
@@ -1017,16 +1046,21 @@ Layer 1:
     individual model-family learning sections using ordinary stratified CV
 
 Layer 2:
-    later rigorous candidate comparison using repeated CV and possibly nested CV
+    later rigorous candidate comparison using repeated CV, nested CV, and
+    paired validation comparisons if useful
 
 Layer 3:
     final model, threshold, and calibration selection using training data only
 
 Layer 4:
-    final untouched test-set evaluation with bootstrap uncertainty and paired comparisons
+    final untouched test-set evaluation for exactly one frozen final model
 
 Layer 5:
-    ablation and interpretability analysis for the selected model
+    bootstrap uncertainty for the selected final model's test metrics
+
+Layer 6:
+    ablation and interpretability analysis, using training-only evidence if
+    those analyses affect the selected pipeline
 ```
 
-This structure preserves the educational purpose of the project while also making the final evaluation statistically careful and professionally credible.
+This structure preserves the educational purpose of the project while also making the final evaluation statistically careful and clean.
