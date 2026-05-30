@@ -139,7 +139,7 @@ The independence assumption is not literally true for this dataset. For example,
 
 \subsection{Naive Bayes variants}
 
-This section evaluates three transparent Naive Bayes variants.
+This section evaluates four transparent Naive Bayes variants.
 
 First, Gaussian Naive Bayes is applied to the numeric features only. Gaussian Naive Bayes assumes
 \[
@@ -157,11 +157,32 @@ P(X_j=x_j\mid Y=y)
 \]
 Additive smoothing is used to avoid zero probabilities. With smoothing parameter \(\alpha\), estimated probabilities are pulled away from exactly zero and one.
 
-Third, Gaussian Naive Bayes is applied to the full transformed feature matrix, including numeric variables and one-hot encoded categorical indicators. This is not the cleanest theoretical likelihood for binary indicators, but it provides a simple full-feature generative baseline.
+Third, a hybrid Gaussian-Bernoulli Naive Bayes model is applied to the full mixed feature representation. This model uses Gaussian likelihoods for the numeric features and Bernoulli likelihoods for the one-hot categorical indicators. If \(\mathcal{N}\) denotes the numeric feature block and \(\mathcal{B}\) denotes the binary one-hot block, the hybrid likelihood is
+\[
+P(X=x,Z=z\mid Y=y)
+=
+\prod_{j\in\mathcal{N}}
+p(x_j\mid Y=y)
+\prod_{k\in\mathcal{B}}
+P(z_k\mid Y=y).
+\]
+The corresponding class log score is
+\[
+\log P(Y=y)
++
+\sum_{j\in\mathcal{N}}
+\log p(x_j\mid Y=y)
++
+\sum_{k\in\mathcal{B}}
+\log P(z_k\mid Y=y).
+\]
+This is the most theoretically natural Naive Bayes specification for the mixed Telco feature space.
+
+Fourth, Gaussian Naive Bayes is applied to the full transformed feature matrix, including numeric variables and one-hot encoded categorical indicators. This is not the cleanest theoretical likelihood for binary indicators, but it provides a useful comparison with the hybrid model.
 
 \subsection{Model comparison}
 
-Table~\ref{tab:nb-model-comparison} reports the cross-validated results for the three main Naive Bayes variants. The selected model by PR-AUC is the full transformed Gaussian Naive Bayes model. It has PR-AUC approximately \(0.605\), ROC-AUC approximately \(0.819\), and recall approximately \(0.847\). The categorical-only Bernoulli model has slightly better balanced accuracy and \(F_1\), but its PR-AUC is lower. The numeric-only Gaussian model has higher ordinary accuracy, but substantially lower recall.
+Table~\ref{tab:nb-model-comparison} reports the cross-validated results for the four main Naive Bayes variants. The selected model by PR-AUC is the hybrid Gaussian-Bernoulli Naive Bayes model. It has PR-AUC approximately \(0.615\), ROC-AUC approximately \(0.822\), and recall approximately \(0.809\). This result is important because the selected model is now both the strongest Naive Bayes model by the chosen ranking metric and the most theoretically coherent likelihood specification for the mixed feature space.
 
 \begin{table}[H]
 \centering
@@ -171,6 +192,7 @@ Table~\ref{tab:nb-model-comparison} reports the cross-validated results for the 
 \toprule
 Model & Accuracy & Bal. Acc. & Precision & Recall & Specificity & \(F_1\) & ROC-AUC & PR-AUC \\
 \midrule
+Hybrid Gaussian-BernoulliNB, \(\alpha=1\) & 0.727 & 0.753 & 0.491 & 0.809 & 0.697 & 0.611 & 0.822 & 0.615 \\
 GaussianNB full transformed & 0.698 & 0.746 & 0.462 & 0.847 & 0.644 & 0.598 & 0.819 & 0.605 \\
 BernoulliNB categorical only, \(\alpha=1\) & 0.721 & 0.751 & 0.485 & 0.814 & 0.687 & 0.608 & 0.815 & 0.596 \\
 GaussianNB numeric only & 0.764 & 0.696 & 0.557 & 0.549 & 0.842 & 0.553 & 0.774 & 0.584 \\
@@ -181,7 +203,7 @@ GaussianNB numeric only & 0.764 & 0.696 & 0.557 & 0.549 & 0.842 & 0.553 & 0.774 
 \label{tab:nb-model-comparison}
 \end{table}
 
-The corresponding confusion-matrix counts are shown in Table~\ref{tab:nb-confusion}. The selected full transformed Gaussian model detects \(1267\) of the \(1495\) churners, but also flags \(1475\) non-churners as churners. This confirms that the selected Naive Bayes model is a high-recall, high-alert-rate model at the default threshold.
+The corresponding confusion-matrix counts are shown in Table~\ref{tab:nb-confusion}. The selected hybrid model detects \(1209\) of the \(1495\) churners and misses \(286\). It also incorrectly flags \(1253\) non-churners. Compared with the full transformed GaussianNB model, the hybrid model gives up some recall but removes substantially more false positives. This is why it has better precision, \(F_1\), and PR-AUC.
 
 \begin{table}[H]
 \centering
@@ -190,6 +212,7 @@ The corresponding confusion-matrix counts are shown in Table~\ref{tab:nb-confusi
 \toprule
 Model & TP & FN & FP & TN \\
 \midrule
+Hybrid Gaussian-BernoulliNB, \(\alpha=1\) & 1209 & 286 & 1253 & 2886 \\
 GaussianNB full transformed & 1267 & 228 & 1475 & 2664 \\
 BernoulliNB categorical only, \(\alpha=1\) & 1217 & 278 & 1294 & 2845 \\
 GaussianNB numeric only & 821 & 674 & 653 & 3486 \\
@@ -199,7 +222,9 @@ GaussianNB numeric only & 821 & 674 & 653 & 3486 \\
 \label{tab:nb-confusion}
 \end{table}
 
-Compared with logistic regression and k-nearest neighbours, Naive Bayes is more aggressive in predicting churn. The selected Naive Bayes model has recall around \(0.847\), much higher than the default-threshold recall of the selected logistic and kNN models. However, this comes at the cost of weaker precision and specificity. Its ranking metrics are also lower: ROC-AUC is about \(0.819\) and PR-AUC is about \(0.605\), compared with approximately \(0.846\) and \(0.658\) for selected logistic regression, and approximately \(0.836\) and \(0.628\) for selected kNN.
+The categorical-only Bernoulli model remains close to the hybrid model, showing that categorical features contain much of the Naive Bayes signal. The numeric-only Gaussian model has higher ordinary accuracy, but lower recall and weaker ranking performance. This confirms that ordinary accuracy is again not sufficient for comparing churn classifiers.
+
+Compared with logistic regression and k-nearest neighbours, the selected hybrid Naive Bayes model is still weaker in ranking metrics. Logistic regression had ROC-AUC around \(0.846\) and PR-AUC around \(0.658\), while selected kNN had ROC-AUC around \(0.836\) and PR-AUC around \(0.628\). The hybrid Naive Bayes model has ROC-AUC around \(0.822\) and PR-AUC around \(0.615\). It is useful and theoretically coherent, but it is not the strongest model family so far.
 
 \subsection{Smoothing sensitivity for Bernoulli Naive Bayes}
 
@@ -216,43 +241,45 @@ For example, PR-AUC remains around \(0.596\) across the grid, ROC-AUC remains ar
 
 \subsection{Threshold behaviour}
 
-Figure~\ref{fig:nb-threshold-tradeoff} shows the threshold tradeoff for the selected full transformed Gaussian Naive Bayes model. The curve is strikingly flat compared with the threshold curves for logistic regression and kNN. Even when the threshold increases from \(0.05\) to \(0.80\), recall remains high, while precision increases only gradually.
+Figure~\ref{fig:nb-threshold-tradeoff} shows the threshold tradeoff for the selected hybrid Naive Bayes model. The curve remains relatively flat compared with logistic regression and kNN, but it is less extreme than the earlier full GaussianNB variant. Increasing the threshold improves precision and specificity while recall declines gradually.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.88\textwidth]{../figures/naive_bayes_threshold_tradeoff.png}
-\caption{Threshold tradeoff for the selected Naive Bayes model}
+\caption{Threshold tradeoff for the selected hybrid Naive Bayes model}
 \label{fig:nb-threshold-tradeoff}
 \end{figure}
 
-At threshold \(0.50\), the selected model has precision approximately \(0.462\), recall approximately \(0.847\), specificity approximately \(0.644\), and \(F_1\) approximately \(0.598\). At threshold \(0.95\), recall is still approximately \(0.813\), while precision only rises to approximately \(0.492\). This indicates that many predicted probabilities are pushed toward high values. Such overconfident probabilities are consistent with the Naive Bayes independence assumption being violated by correlated feature groups.
+At threshold \(0.50\), the selected model has precision approximately \(0.491\), recall approximately \(0.809\), specificity approximately \(0.697\), and \(F_1\) approximately \(0.611\). At threshold \(0.80\), precision rises to approximately \(0.527\), recall remains high at approximately \(0.768\), specificity rises to approximately \(0.751\), and \(F_1\) is approximately \(0.625\). This illustrates that the default threshold is not necessarily the best operating point. However, final threshold selection is postponed until later model comparison.
 
-This does not mean that the model is useless. It ranks customers much better than chance. However, it suggests that Naive Bayes probability levels should not be interpreted as calibrated churn probabilities without further calibration analysis.
+The broad flatness of the threshold curve is still consistent with the Naive Bayes independence assumption being imperfect for correlated Telco features. The hybrid model improves the feature-type likelihood specification, but it still assumes conditional independence within the numeric and binary feature blocks.
 
 \subsection{ROC and precision-recall curves}
 
-Figure~\ref{fig:nb-roc-curve} shows the ROC curve for the selected Naive Bayes model. The ROC-AUC is approximately \(0.819\), clearly above the random-ranking line. This confirms that Naive Bayes learns meaningful churn-discriminating structure.
+Figure~\ref{fig:nb-roc-curve} shows the ROC curve for the selected hybrid Naive Bayes model. The ROC-AUC is approximately \(0.822\), clearly above the random-ranking line. This confirms that the hybrid model learns meaningful churn-discriminating structure.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.72\textwidth]{../figures/naive_bayes_roc_curve.png}
-\caption{ROC curve for the selected Naive Bayes model}
+\caption{ROC curve for the selected hybrid Naive Bayes model}
 \label{fig:nb-roc-curve}
 \end{figure}
 
-Figure~\ref{fig:nb-pr-curve} shows the precision-recall curve. The PR-AUC is approximately \(0.604\), well above the positive-rate baseline of approximately \(0.265\). This indicates useful positive-class retrieval ability. However, the PR-AUC remains lower than the corresponding logistic regression and kNN values, so Naive Bayes is not the strongest ranking model so far.
+Figure~\ref{fig:nb-pr-curve} shows the precision-recall curve. The PR-AUC is approximately \(0.614\), well above the positive-rate baseline of approximately \(0.265\). This indicates useful positive-class retrieval ability. However, the PR-AUC remains lower than the corresponding logistic regression and kNN values, so Naive Bayes is not the strongest ranking model so far.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.72\textwidth]{../figures/naive_bayes_precision_recall_curve.png}
-\caption{Precision-recall curve for the selected Naive Bayes model}
+\caption{Precision-recall curve for the selected hybrid Naive Bayes model}
 \label{fig:nb-pr-curve}
 \end{figure}
 
 \subsection{Summary}
 
-The Naive Bayes experiment shows that a simple generative model can capture meaningful churn patterns. The selected full transformed Gaussian Naive Bayes model has high recall and useful ROC-AUC and PR-AUC. It is especially good at detecting many churners, but it does so by flagging a large fraction of the customer base.
+The revised Naive Bayes experiment shows that a simple generative model can capture meaningful churn patterns. Adding the hybrid Gaussian-Bernoulli specification improves the section because it uses a likelihood structure that matches the mixed feature representation: Gaussian likelihoods for continuous numeric variables and Bernoulli likelihoods for one-hot categorical indicators.
 
-The main limitation is probability behaviour. Because many Telco features are correlated, the conditional-independence assumption is not realistic. This likely causes related evidence to be counted multiple times and produces overconfident predicted probabilities. The threshold curve reflects this: increasing the threshold does not reduce recall as sharply as expected, and precision remains relatively low.
+The selected hybrid model has high recall, moderate precision, and useful ranking performance. It improves over the full transformed GaussianNB model, which treated binary indicators as Gaussian variables. The improvement is modest but meaningful: PR-AUC rises from about \(0.605\) to about \(0.615\), and the number of false positives falls from \(1475\) to \(1253\).
 
-Compared with the learned models evaluated so far, Naive Bayes is useful but not dominant. Logistic regression remains the strongest model family so far by PR-AUC and ROC-AUC, while kNN is also stronger than Naive Bayes on these ranking metrics. Nevertheless, Naive Bayes adds an important modelling perspective: it connects classification to Bayes' rule, class priors, class-conditional likelihoods, smoothing, and the difference between ideal Bayes classification and practical approximate generative modelling.
+The main limitation remains the conditional-independence assumption. Many Telco features are correlated, especially service-related one-hot indicators. Therefore, Naive Bayes probabilities should be interpreted carefully and should not be treated as calibrated churn probabilities without later calibration checks.
+
+Compared with the learned models evaluated so far, Naive Bayes is useful but not dominant. Logistic regression remains the strongest model family so far by PR-AUC and ROC-AUC, while kNN also remains stronger than Naive Bayes on these ranking metrics. Nevertheless, Naive Bayes adds an important modelling perspective: it connects classification to Bayes' rule, Bayes optimality, class priors, class-conditional likelihoods, smoothing, and the practical difference between ideal Bayes classification and approximate generative modelling.

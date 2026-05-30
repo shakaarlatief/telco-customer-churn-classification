@@ -533,10 +533,11 @@ A practical and transparent approach is to compare simple variants:
 ```text
 GaussianNB on numeric features only
 BernoulliNB on one-hot encoded categorical features only
+Hybrid Gaussian-BernoulliNB on numeric plus one-hot categorical features
 GaussianNB on the full one-hot encoded transformed feature matrix
 ```
 
-The last variant is not theoretically ideal for binary one-hot indicators, but it is commonly used as a quick baseline and can still be informative.
+The hybrid model is the most natural mixed-feature Naive Bayes specification. The last variant is not theoretically ideal for binary one-hot indicators, but it is commonly used as a quick baseline and can still be informative.
 
 ## 13. Gaussian Naive Bayes
 
@@ -574,7 +575,78 @@ the Gaussian assumption is not perfect. EDA showed skewness and multimodality, e
 
 Still, GaussianNB can serve as a useful numeric-only probabilistic baseline.
 
-## 14. Multinomial Naive Bayes
+## 14. Hybrid Gaussian-Bernoulli Naive Bayes
+
+The most natural Naive Bayes specification for this Telco dataset combines different likelihoods for different feature types.
+
+The raw feature space contains:
+
+```text
+numeric features:
+    tenure
+    MonthlyCharges
+    TotalCharges
+
+categorical features:
+    customer/account/service indicators such as Contract, InternetService,
+    OnlineSecurity, TechSupport, PaymentMethod, and others
+```
+
+After preprocessing, the numeric features remain continuous, while the categorical features are represented as one-hot binary indicators.
+
+A hybrid Naive Bayes model can therefore use:
+
+```text
+Gaussian likelihoods for numeric features
+Bernoulli likelihoods for one-hot categorical indicators
+```
+
+Let \(x_{\mathcal{N}}\) denote the numeric part of the feature vector and \(z_{\mathcal{B}}\) denote the binary one-hot indicator part.
+
+The hybrid class-conditional likelihood is:
+
+$$
+P(X=x, Z=z \mid Y=y)
+=
+\prod_{j \in \mathcal{N}}
+p(x_j \mid Y=y)
+\prod_{k \in \mathcal{B}}
+P(z_k \mid Y=y).
+$$
+
+For numeric features:
+
+$$
+X_j \mid Y=y
+\sim
+\mathcal{N}(\mu_{jy}, \sigma_{jy}^{2}).
+$$
+
+For binary indicators:
+
+$$
+Z_k \mid Y=y
+\sim
+\operatorname{Bernoulli}(\theta_{ky}).
+$$
+
+The class log score is:
+
+$$
+\log P(Y=y)
++
+\sum_{j \in \mathcal{N}}
+\log p(x_j \mid Y=y)
++
+\sum_{k \in \mathcal{B}}
+\log P(z_k \mid Y=y).
+$$
+
+This model is more theoretically coherent than applying GaussianNB to the full one-hot encoded feature matrix, because binary indicators are not Gaussian continuous variables.
+
+The hybrid model is therefore the preferred Naive Bayes specification to include before interpreting the section. It is also educational because it shows that Naive Bayes is not one single fixed algorithm: it is a modelling framework where each feature or feature group can have a suitable class-conditional likelihood.
+
+## 15. Multinomial Naive Bayes
 
 Multinomial Naive Bayes is often used for count data, especially text classification. It assumes features represent counts or frequencies, such as word counts in a document.
 
@@ -582,7 +654,7 @@ The Telco dataset is not naturally count-based. Numeric variables such as `Month
 
 Therefore, MultinomialNB is not the most natural model for this project. It can be mentioned conceptually, but it does not need to be a main experiment unless there is a clear transformed representation that justifies non-negative count-like features.
 
-## 15. Naive Bayes and feature scaling
+## 16. Naive Bayes and feature scaling
 
 Unlike kNN, Naive Bayes is not distance-based. Standardization is not required for the same reason.
 
@@ -608,7 +680,7 @@ MultinomialNB:
 
 This is different from logistic regression and kNN, where a general scaled one-hot pipeline was appropriate.
 
-## 16. Naive Bayes and correlated features
+## 17. Naive Bayes and correlated features
 
 The major weakness of Naive Bayes is the conditional-independence assumption.
 
@@ -627,7 +699,7 @@ For example, if several internet-service add-on indicators all encode similar in
 
 This matters for threshold analysis. Naive Bayes may rank customers usefully but produce probabilities that should not be treated as calibrated without checking.
 
-## 17. Evaluation plan
+## 18. Evaluation plan
 
 The Naive Bayes section should use the same training-only evaluation framework as previous sections:
 
@@ -651,25 +723,27 @@ precision-recall curve
 
 Because Naive Bayes is probabilistic, ROC and PR curves are important.
 
-## 18. Candidate experiments
+## 19. Candidate experiments
 
 A useful first experiment set is:
 
 ```text
 1. GaussianNB on numeric features only
 2. BernoulliNB on one-hot encoded categorical features only
-3. GaussianNB on one-hot encoded full feature matrix
+3. Hybrid Gaussian-BernoulliNB on numeric plus one-hot categorical features
+4. GaussianNB on one-hot encoded full feature matrix
 ```
 
-This separates the contribution of numeric and categorical information while keeping the section transparent.
+This separates the contribution of numeric and categorical information while also including the theoretically cleaner mixed-feature Naive Bayes model.
 
-## 19. Expected behaviour on Telco churn
+## 20. Expected behaviour on Telco churn
 
 Expected behaviour:
 
 ```text
 Numeric-only GaussianNB may perform moderately because tenure and MonthlyCharges contain signal.
 Categorical-only BernoulliNB may perform well because contract, internet service, support/security services, payment method, and billing contain strong churn patterns.
+Hybrid Gaussian-BernoulliNB should be more theoretically coherent than full GaussianNB because it uses suitable likelihoods for the two feature types.
 Full GaussianNB may be affected by unrealistic Gaussian assumptions for one-hot indicators.
 Naive Bayes may have useful ROC-AUC and PR-AUC but may be less calibrated than logistic regression.
 Naive Bayes may be more sensitive to correlated groups of features than logistic regression.
@@ -677,7 +751,7 @@ Naive Bayes may be more sensitive to correlated groups of features than logistic
 
 It is not obvious that Naive Bayes will beat logistic regression. The main value of this section is to learn probabilistic generative classification and compare its assumptions against discriminative and distance-based models.
 
-## 20. Implementation plan for notebook 07
+## 21. Implementation plan for notebook 07
 
 The notebook should include:
 
@@ -687,18 +761,19 @@ The notebook should include:
 3. Build model-specific preprocessing pipelines.
 4. Evaluate numeric-only GaussianNB.
 5. Evaluate categorical-only BernoulliNB.
-6. Evaluate full transformed GaussianNB.
-7. Compare models using cross-validated metrics.
-8. Select a representative Naive Bayes model by PR-AUC.
-9. Produce out-of-fold predicted probabilities.
-10. Save model comparison table.
-11. Save confusion-matrix table.
-12. Save threshold table and threshold plot.
-13. Save ROC and precision-recall curves.
-14. Interpret performance versus logistic regression and kNN.
+6. Evaluate hybrid Gaussian-BernoulliNB.
+7. Evaluate full transformed GaussianNB.
+8. Compare models using cross-validated metrics.
+9. Select a representative Naive Bayes model by PR-AUC.
+10. Produce out-of-fold predicted probabilities.
+11. Save model comparison table.
+12. Save confusion-matrix table.
+13. Save threshold table and threshold plot.
+14. Save ROC and precision-recall curves.
+15. Interpret performance versus logistic regression and kNN.
 ```
 
-## 21. Report plan for section 07
+## 22. Report plan for section 07
 
 The report section should include:
 
@@ -710,6 +785,7 @@ The report section should include:
 - generative versus discriminative classification
 - Naive Bayes conditional-independence assumption
 - categorical / Bernoulli / Gaussian likelihoods
+- hybrid Gaussian-Bernoulli Naive Bayes for mixed tabular features
 - smoothing for categorical or Bernoulli probabilities
 - model variants used in this project
 - cross-validated results
@@ -719,7 +795,7 @@ The report section should include:
 - limitations of independence assumptions and probability calibration
 ```
 
-## 22. Update policy
+## 23. Update policy
 
 This note should be updated if the implementation introduces additional details, such as:
 
