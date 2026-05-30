@@ -32,7 +32,7 @@
 \maketitle
 
 \begin{abstract}
-This document reports the initial data workflow for the Telco Customer Churn classification project. It audits the raw file, validates the target definition, identifies missing or disguised missing values, checks identifier columns, applies deterministic data-quality corrections, constructs a held-out train-test split, and performs exploratory data analysis on the training set only. Feature-target patterns are inspected only after the split, so that modelling decisions are based on the development data while the held-out test set remains reserved for final evaluation.
+This document reports a supervised classification project for the Telco Customer Churn dataset. The workflow audits the raw file, validates the target definition, handles deterministic data-quality issues, constructs a held-out train-test split, performs training-set exploratory analysis, defines a statistical evaluation methodology, establishes simple baselines, and then develops multiple model families. A central principle is that all modelling decisions are made using the training data and cross-validation only. The held-out test set remains reserved for final evaluation after model family, preprocessing, hyperparameters, threshold rule, and any calibration decisions are fixed. Section-level cross-validated results are therefore interpreted as development-stage estimates rather than final performance claims.
 \end{abstract}
 
 \newpage
@@ -46,6 +46,9 @@ This document reports the initial data workflow for the Telco Customer Churn cla
 
 \newpage
 \input{sections/03_training_set_eda}
+
+\newpage
+\input{sections/04_statistical_evaluation_methodology}
 
 \newpage
 \input{sections/04_preprocessing_and_simple_baselines}
@@ -70,7 +73,12 @@ Used for the principles of not taking data at face value, distinguishing missing
 \bibitem{ml-evaluation}
 Vrije Universiteit Amsterdam Machine Learning course notes.
 \textit{Model Evaluation, Part 1: Experiments}.
-Used for the principle that the held-out test set should not be reused during model selection, preprocessing design, feature engineering, or hyperparameter tuning.
+Used for train/validation/test discipline, cross-validation, the distinction between true performance and estimated performance, and the principle that held-out test data should not be reused during model development.
+
+\bibitem{dl-tools}
+Vrije Universiteit Amsterdam Deep Learning course notes.
+\textit{Tools of the trade}.
+Used for the practical evaluation principles that test-set size controls metric uncertainty, validation data is used for development and hyperparameter tuning, test data is reserved for final reporting, leakage must be actively avoided, baselines should be used during development, hyperparameter tuning should balance performance and simplicity, and fair comparisons require comparable tuning effort.
 
 \end{thebibliography}
 

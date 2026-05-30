@@ -3,11 +3,13 @@
 
 \subsection{Purpose of this stage}
 
-This stage introduces the first learned classification models in the project. The previous stage established the evaluation framework, simple dummy baselines, and an EDA-inspired rule. The purpose here is to move from manually specified or non-informative baselines to learned linear classifiers that estimate decision rules from the training data.
+This stage introduces the first learned classification models in the project. The previous stages established the statistical evaluation methodology, the binary classification evaluation framework, simple dummy baselines, and an EDA-inspired rule. The purpose here is to move from manually specified or non-informative baselines to learned linear classifiers that estimate decision rules from the training data.
 
 The held-out test set is not used in this section. All performance estimates are based on stratified cross-validation inside the training set. Preprocessing is included inside each modelling pipeline, so scaling and one-hot encoding are fitted only on the training portion of each cross-validation fold.
 
 The models considered in this section are regularized least-squares classification, logistic regression with L2 regularization, logistic regression with L1 regularization, and a class-weighted logistic regression variant. These models are useful first learned models because they are mathematically transparent, computationally efficient, and interpretable through their fitted coefficients.
+
+The results in this section should be read as development-stage cross-validated estimates. They are used to understand the behaviour of linear classifiers and to choose representative linear candidates for later comparison. They are not final test-set estimates, and small differences between neighbouring regularization settings should not be interpreted as proof of unique population-level optimality.
 
 \subsection{Linear score functions and decision boundaries}
 
@@ -170,6 +172,8 @@ For this first learned-model section, a small log-scale grid is sufficient and m
 
 Table~\ref{tab:linear-model-comparison} reports the cross-validated performance of the main linear classifiers. Logistic regression with L1 and L2 regularization performs almost identically. The L1 model obtains the highest PR-AUC, approximately \(0.659\), while the L2 model obtains ROC-AUC approximately \(0.846\) and PR-AUC approximately \(0.658\). The class-weighted L2 logistic regression has a much higher recall, approximately \(0.801\), but lower precision, approximately \(0.517\). This is expected because class weighting makes the model more willing to predict the minority churn class.
 
+The L1 and L2 PR-AUC values differ by only about \(0.001\). This is much smaller than the kind of difference that should be interpreted as strong statistical evidence. The practical conclusion is that both L1 and L2 logistic regression are competitive in this development-stage comparison. L2 logistic regression is retained as the main coefficient-interpretation model because it is stable, standard, and produces dense coefficients, while L1 remains useful as a sparse alternative.
+
 \begin{table}[H]
 \centering
 \small
@@ -209,6 +213,8 @@ RidgeClassifier alpha=1 & 779 & 716 & 403 & 3736 \\
 
 Table~\ref{tab:l2-regularization} and Figure~\ref{fig:l2-regularization} show the L2 regularization path. Very strong regularization, \(C=0.001\), produces a conservative classifier with high precision but low recall. As \(C\) increases, recall and F1 improve. The ranking metrics are stable over most of the grid, with ROC-AUC around \(0.845\) and PR-AUC around \(0.658\) once \(C\geq 0.1\). This indicates that the logistic model is not highly sensitive to the exact L2 regularization strength over the tested range.
 
+This is a good example of why the report should focus on stable hyperparameter regions rather than exact winners. The difference between \(C=0.1\), \(C=1\), \(C=10\), and \(C=100\) is very small for ROC-AUC and PR-AUC. The development-stage evidence mainly says that extremely strong L2 regularization underfits, while a broad range of weaker regularization strengths performs similarly.
+
 \begin{table}[H]
 \centering
 \small
@@ -237,6 +243,8 @@ Table~\ref{tab:l2-regularization} and Figure~\ref{fig:l2-regularization} show th
 
 The L1 grid in Table~\ref{tab:l1-regularization} and Figure~\ref{fig:l1-regularization} shows a more visible effect of very strong regularization. At \(C=0.001\), the L1 model effectively predicts no churners, so recall and F1 are zero and PR-AUC equals the positive-class prevalence. Once \(C\) reaches \(0.1\) or larger, the L1 model behaves similarly to L2 logistic regression. This suggests that mild L1 regularization is compatible with the predictive structure in the data, but excessive sparsity removes too much useful signal.
 
+Here again, the exact best value should not be overinterpreted. \(C=1\) and \(C=10\) differ only slightly. The important conclusion is that the L1 model needs enough flexibility to keep the relevant one-hot and numeric signals active.
+
 \begin{table}[H]
 \centering
 \small
@@ -264,7 +272,7 @@ The L1 grid in Table~\ref{tab:l1-regularization} and Figure~\ref{fig:l1-regulari
 
 \subsection{Selected logistic model and coefficient interpretation}
 
-For interpretation, the selected model is the L2 logistic regression model with the highest cross-validated PR-AUC in the L2 grid. This selects \(C=1\). The model is then fitted on the full training set only for coefficient extraction. These fitted coefficients are not used to report in-sample performance.
+For interpretation, the selected model is the L2 logistic regression model with \(C=1\). This is not selected because it is statistically proven to be uniquely optimal. Rather, it is a representative, stable, standard logistic model from the high-performing regularization region. It has development-stage PR-AUC essentially equal to the best L2 configurations, and it supports straightforward coefficient interpretation. The model is fitted on the full training set only for coefficient extraction. These fitted coefficients are not used to report in-sample performance.
 
 Table~\ref{tab:logistic-coefficients} and Figure~\ref{fig:logistic-coefficients} show the largest coefficients by absolute value. The strongest negative coefficient is \texttt{tenure}, meaning longer-tenure customers receive lower fitted churn scores. \texttt{Contract\_Two year} also has a negative coefficient, consistent with the EDA finding that two-year contracts have low churn rates. The strongest positive coefficients are \texttt{InternetService\_Fiber optic}, \texttt{Contract\_Month-to-month}, and \texttt{TotalCharges}, all associated with higher fitted churn scores in this linear model.
 
@@ -359,8 +367,10 @@ Figures~\ref{fig:logistic-roc} and~\ref{fig:logistic-pr} summarize threshold-ind
 
 Logistic regression is a strong first learned model for the churn task. It clearly improves on non-informative baselines and provides useful probability rankings, with ROC-AUC around \(0.846\) and PR-AUC around \(0.658\). L1 and L2 regularization give very similar cross-validated performance once regularization is not excessively strong. Ridge classification is slightly weaker but remains a reasonable least-squares linear baseline.
 
+The regularization grids show that the exact value of \(C\) is not the main conclusion. The important development-stage lesson is that extremely strong regularization underfits, while a broad moderate-to-weak regularization region performs similarly. This is why the selected L2 logistic model should be understood as a representative stable linear benchmark rather than a uniquely optimal hyperparameter setting.
+
 The class-weighted logistic regression variant demonstrates the central classification tradeoff: it detects many more churners, but it also creates many more false positives. This confirms that model assessment cannot rely on accuracy alone. Confusion-matrix counts, recall, precision, specificity, ROC-AUC, PR-AUC, and threshold behaviour must be considered together.
 
 The coefficient analysis is also useful. Tenure and two-year contracts are associated with lower fitted churn scores, while fiber optic internet, month-to-month contracts, and higher accumulated charges are associated with higher fitted churn scores. These patterns are consistent with the training-set EDA, but they remain predictive associations rather than causal effects.
 
-This section establishes logistic regression as the first interpretable learned benchmark. Later model families should be compared against it by asking whether they improve ranking performance, reduce false positives at useful recall levels, or capture nonlinear feature interactions that linear models cannot represent directly.
+This section establishes logistic regression as the first interpretable learned benchmark. Later model families should be compared against it by asking whether they improve ranking performance, reduce false positives at useful recall levels, or capture nonlinear feature interactions that linear models cannot represent directly. Final claims about model-family superiority are deferred to the later comparison and test-evaluation stages.

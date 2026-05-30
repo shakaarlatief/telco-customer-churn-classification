@@ -6,6 +6,8 @@ This section evaluates k-nearest neighbours as the first non-parametric and dist
 
 The same validation discipline is used as in the previous modelling sections. The held-out test set is not used. All reported results are based on stratified cross-validation inside the training set. Preprocessing is kept inside the scikit-learn pipeline so that standardization and one-hot encoding are fitted only on each fold's training data.
 
+The results in this section should be interpreted as a development-stage comparison of kNN configurations. The selected kNN model is the strongest configuration in the tried grid according to the chosen selection criterion. It is not a final statistical claim that this exact value of \(k\), distance metric, and weighting rule is uniquely optimal in the population.
+
 \subsection{k-nearest-neighbour prediction rule}
 
 Let the training set be
@@ -90,6 +92,8 @@ p \in \{1,2\}.
 \]
 The \(p=1\) setting corresponds to Manhattan distance, and \(p=2\) corresponds to Euclidean distance. The selection rule chooses the configuration with the highest cross-validated PR-AUC, using balanced accuracy and F1 as secondary criteria if needed. PR-AUC is used as the primary criterion because churn is the minority class, and the positive-class ranking quality is important.
 
+Because this grid tries multiple configurations, the winning cross-validated score should be interpreted with the model-selection caveat from Section~\ref{sec:statistical-evaluation-methodology}. It identifies a strong configuration within the tried grid, but the observed best score can contain some selection optimism.
+
 \subsection{Grid-search behaviour}
 
 Figure~\ref{fig:knn-pr-auc-by-k} shows the cross-validated PR-AUC across the neighbour grid. Performance improves strongly as \(k\) increases from very small values. This pattern indicates that small neighbourhoods are too noisy for this dataset. Larger neighbourhoods smooth over local irregularities and give more stable churn rankings.
@@ -110,11 +114,13 @@ Figure~\ref{fig:knn-balanced-accuracy-by-k} shows the same grid from the perspec
 \label{fig:knn-balanced-accuracy-by-k}
 \end{figure}
 
-The best configuration by PR-AUC is the uniform-weighted Manhattan model with \(k=101\). Uniform weighting outperforms distance weighting among the best configurations. This suggests that allowing very close neighbours to dominate does not improve generalization in this transformed feature space. A smoother average over many neighbours is more stable.
+The strongest configuration by PR-AUC in the tried grid is the uniform-weighted Manhattan model with \(k=101\). Uniform weighting outperforms distance weighting among the best configurations. This suggests that allowing very close neighbours to dominate does not improve development-stage generalization in this transformed feature space. A smoother average over many neighbours is more stable.
+
+The interpretation should focus on the broader pattern rather than the exact integer \(k=101\). The grid evidence suggests that very small neighbourhoods are too noisy and that larger, smoother neighbourhoods work better for this representation. It does not prove that \(k=101\) is uniquely optimal; nearby large-\(k\) settings may be practically similar.
 
 \subsection{Model comparison}
 
-Table~\ref{tab:knn-model-comparison} compares the default \(k=5\) Euclidean kNN model with the selected kNN model. The selected model improves substantially over the default setting. Accuracy rises from approximately \(0.765\) to \(0.792\), balanced accuracy from approximately \(0.691\) to \(0.722\), ROC-AUC from approximately \(0.782\) to \(0.836\), and PR-AUC from approximately \(0.505\) to \(0.628\).
+Table~\ref{tab:knn-model-comparison} compares the default \(k=5\) Euclidean kNN model with the selected kNN model. The selected model improves substantially over the default setting. Accuracy rises from approximately \(0.765\) to \(0.792\), balanced accuracy from approximately \(0.691\) to \(0.722\), ROC-AUC from approximately \(0.782\) to \(0.836\), and PR-AUC from approximately \(0.505\) to \(0.628\). This difference is large enough to support the development-stage conclusion that tuning \(k\), distance, and weighting is important for kNN on this dataset.
 
 \begin{table}[H]
 \centering
@@ -150,7 +156,9 @@ kNN, \(k=5\), uniform, Euclidean & 796 & 699 & 623 & 3516 \\
 \label{tab:knn-confusion}
 \end{table}
 
-Although the selected kNN model is much better than the default kNN model, it remains weaker than logistic regression from Section~\ref{sec:linear-classification-and-logistic-regression}. The selected logistic regression model had ROC-AUC around \(0.846\) and PR-AUC around \(0.658\), while selected kNN has ROC-AUC around \(0.836\) and PR-AUC around \(0.628\). This suggests that the global feature-weighting structure learned by logistic regression is more effective than direct distance-based local similarity for this transformed Telco churn dataset.
+Compared with logistic regression from Section~\ref{sec:linear-classification-and-logistic-regression}, selected kNN has lower development-stage ranking metrics. The selected logistic regression model had ROC-AUC around \(0.846\) and PR-AUC around \(0.658\), while selected kNN has ROC-AUC around \(0.836\) and PR-AUC around \(0.628\). This suggests that the global feature-weighting structure learned by logistic regression is more effective than direct distance-based local similarity for this transformed Telco churn dataset.
+
+This comparison should still be read as development-stage evidence. The gap is meaningful enough to keep logistic regression as the stronger candidate so far, but final statistical claims about model-family superiority are deferred to the later model-comparison and test-evaluation stages.
 
 \subsection{Threshold behaviour}
 
@@ -163,7 +171,9 @@ The selected kNN model provides predicted probabilities from neighbour proportio
 \label{fig:knn-threshold-tradeoff}
 \end{figure}
 
-At threshold \(0.25\), recall is approximately \(0.862\), but precision is only approximately \(0.455\). At threshold \(0.40\), the model reaches a more balanced operating point, with precision approximately \(0.548\), recall approximately \(0.742\), specificity approximately \(0.779\), and F1 approximately \(0.631\). At the default threshold \(0.50\), precision improves to approximately \(0.617\), but recall falls to approximately \(0.571\). This again shows that threshold \(0.50\) is not necessarily the best operating point for churn detection, although final threshold selection is postponed until later model comparison.
+At threshold \(0.25\), recall is approximately \(0.862\), but precision is only approximately \(0.455\). At threshold \(0.40\), the model reaches a more balanced operating point, with precision approximately \(0.548\), recall approximately \(0.742\), specificity approximately \(0.779\), and F1 approximately \(0.631\). At the default threshold \(0.50\), precision improves to approximately \(0.617\), but recall falls to approximately \(0.571\). This again shows that threshold \(0.50\) is not necessarily the best operating point for churn detection.
+
+These threshold results are diagnostic rather than final. Threshold selection is itself a modelling decision and is postponed until the later model-comparison stage, where the project objective and candidate model families can be considered together.
 
 \subsection{ROC and precision-recall curves}
 
@@ -176,7 +186,7 @@ Figure~\ref{fig:knn-roc-curve} shows the ROC curve for the selected kNN model. T
 \label{fig:knn-roc-curve}
 \end{figure}
 
-Figure~\ref{fig:knn-pr-curve} shows the precision-recall curve. The PR-AUC is approximately \(0.631\), well above the positive-rate baseline of approximately \(0.265\). This confirms that kNN has useful positive-class retrieval ability. However, it remains below the logistic regression PR-AUC from Section~\ref{sec:linear-classification-and-logistic-regression}. The gap is not extremely large, but it is consistent across the ranking metrics.
+Figure~\ref{fig:knn-pr-curve} shows the precision-recall curve. The PR-AUC is approximately \(0.631\), well above the positive-rate baseline of approximately \(0.265\). This confirms that kNN has useful positive-class retrieval ability. However, it remains below the logistic regression PR-AUC from Section~\ref{sec:linear-classification-and-logistic-regression}. The gap is not extremely large, so it should be interpreted as development-stage evidence rather than final statistical proof.
 
 \begin{figure}[H]
 \centering
@@ -187,6 +197,6 @@ Figure~\ref{fig:knn-pr-curve} shows the precision-recall curve. The PR-AUC is ap
 
 \subsection{Summary}
 
-The k-nearest-neighbour experiment shows that distance-based classification learns meaningful churn structure, but it does not outperform logistic regression. The most important findings are as follows. First, kNN performance is highly sensitive to the number of neighbours. Small \(k\) values are too noisy, while larger neighbourhoods perform better. Second, uniform weighting works better than distance weighting in the strongest configurations. Third, the best PR-AUC is obtained by the uniform Manhattan model with \(k=101\), which is a relatively smooth kNN classifier. Fourth, the selected kNN model improves substantially over the default \(k=5\) baseline, but remains weaker than logistic regression in ROC-AUC and PR-AUC.
+The k-nearest-neighbour experiment shows that distance-based classification learns meaningful churn structure, but it does not outperform logistic regression in the current development-stage comparison. The most important findings are as follows. First, kNN performance is highly sensitive to the number of neighbours. Small \(k\) values are too noisy, while larger neighbourhoods perform better. Second, uniform weighting works better than distance weighting in the strongest configurations. Third, the strongest PR-AUC in the grid is obtained by the uniform Manhattan model with \(k=101\), which is a relatively smooth kNN classifier. Fourth, the selected kNN model improves substantially over the default \(k=5\) baseline, but remains below logistic regression in ROC-AUC and PR-AUC.
 
-The section is useful because it introduces local, distance-based learning and the bias-variance role of \(k\). It also illustrates a limitation of distance-based methods on one-hot encoded tabular data: the constructed distance space may not be as informative as a model that learns feature weights directly. The next modelling stage can introduce a different probabilistic classifier, such as Naive Bayes, before moving to tree-based models.
+The section is useful because it introduces local, distance-based learning and the bias-variance role of \(k\). It also illustrates a limitation of distance-based methods on one-hot encoded tabular data: the constructed distance space may not be as informative as a model that learns feature weights directly. The exact selected \(k\) should not be overinterpreted; the robust lesson is that smoothing over a larger neighbourhood is preferable to very local neighbour voting for this feature representation. The next modelling stage introduces Naive Bayes before the project moves to tree-based models.

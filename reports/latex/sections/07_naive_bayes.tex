@@ -6,6 +6,8 @@ This section evaluates Naive Bayes classifiers as the first explicitly generativ
 
 The same training-only validation discipline is used as in the previous modelling sections. The held-out test set remains unused. All reported results are based on stratified cross-validation inside the training set, using out-of-fold predictions.
 
+The comparisons in this section are development-stage comparisons of Naive Bayes variants. The selected variant is the strongest Naive Bayes candidate in the tried set according to the chosen metric and modelling rationale. This does not constitute a final statistical superiority claim over other model families.
+
 \subsection{Bayes classifier}
 
 For binary classification, the ideal classifier predicts the class with the largest true posterior probability:
@@ -182,7 +184,9 @@ Fourth, Gaussian Naive Bayes is applied to the full transformed feature matrix, 
 
 \subsection{Model comparison}
 
-Table~\ref{tab:nb-model-comparison} reports the cross-validated results for the four main Naive Bayes variants. The selected model by PR-AUC is the hybrid Gaussian-Bernoulli Naive Bayes model. It has PR-AUC approximately \(0.615\), ROC-AUC approximately \(0.822\), and recall approximately \(0.809\). This result is important because the selected model is now both the strongest Naive Bayes model by the chosen ranking metric and the most theoretically coherent likelihood specification for the mixed feature space.
+Table~\ref{tab:nb-model-comparison} reports the cross-validated results for the four main Naive Bayes variants. The selected model by PR-AUC is the hybrid Gaussian-Bernoulli Naive Bayes model. It has PR-AUC approximately \(0.615\), ROC-AUC approximately \(0.822\), and recall approximately \(0.809\). This result is important because the selected model is both the strongest Naive Bayes model by the chosen ranking metric and the most theoretically coherent likelihood specification for the mixed feature space.
+
+The performance gap between the hybrid model and the full transformed GaussianNB model is useful development evidence, but it should not be overstated as final statistical proof. The improvement in PR-AUC is modest, from approximately \(0.605\) to \(0.615\). The stronger reason for preferring the hybrid specification in this section is the combination of a better development-stage PR-AUC and a more appropriate likelihood structure for mixed numeric and binary features.
 
 \begin{table}[H]
 \centering
@@ -224,7 +228,7 @@ GaussianNB numeric only & 821 & 674 & 653 & 3486 \\
 
 The categorical-only Bernoulli model remains close to the hybrid model, showing that categorical features contain much of the Naive Bayes signal. The numeric-only Gaussian model has higher ordinary accuracy, but lower recall and weaker ranking performance. This confirms that ordinary accuracy is again not sufficient for comparing churn classifiers.
 
-Compared with logistic regression and k-nearest neighbours, the selected hybrid Naive Bayes model is still weaker in ranking metrics. Logistic regression had ROC-AUC around \(0.846\) and PR-AUC around \(0.658\), while selected kNN had ROC-AUC around \(0.836\) and PR-AUC around \(0.628\). The hybrid Naive Bayes model has ROC-AUC around \(0.822\) and PR-AUC around \(0.615\). It is useful and theoretically coherent, but it is not the strongest model family so far.
+Compared with logistic regression and k-nearest neighbours, the selected hybrid Naive Bayes model is still weaker in ranking metrics. Logistic regression had ROC-AUC around \(0.846\) and PR-AUC around \(0.658\), while selected kNN had ROC-AUC around \(0.836\) and PR-AUC around \(0.628\). The hybrid Naive Bayes model has ROC-AUC around \(0.822\) and PR-AUC around \(0.615\). It is useful and theoretically coherent, but it is not the strongest model family so far under the development-stage ranking metrics. Final model-family claims are deferred to the later comparison and test-evaluation stages.
 
 \subsection{Smoothing sensitivity for Bernoulli Naive Bayes}
 
@@ -237,7 +241,7 @@ Figure~\ref{fig:bernoulli-nb-alpha} shows the Bernoulli Naive Bayes smoothing ex
 \label{fig:bernoulli-nb-alpha}
 \end{figure}
 
-For example, PR-AUC remains around \(0.596\) across the grid, ROC-AUC remains around \(0.815\), and balanced accuracy remains close to \(0.751\). This stability suggests that the categorical indicator likelihoods are not overly sensitive to rare zero-probability problems under this cross-validation setup.
+For example, PR-AUC remains around \(0.596\) across the grid, ROC-AUC remains around \(0.815\), and balanced accuracy remains close to \(0.751\). This stability suggests that the categorical indicator likelihoods are not overly sensitive to rare zero-probability problems under this cross-validation setup. It also means that the exact smoothing value should not be overinterpreted; the useful conclusion is that BernoulliNB performance is stable over the tested smoothing range.
 
 \subsection{Threshold behaviour}
 
@@ -265,7 +269,7 @@ Figure~\ref{fig:nb-roc-curve} shows the ROC curve for the selected hybrid Naive 
 \label{fig:nb-roc-curve}
 \end{figure}
 
-Figure~\ref{fig:nb-pr-curve} shows the precision-recall curve. The PR-AUC is approximately \(0.614\), well above the positive-rate baseline of approximately \(0.265\). This indicates useful positive-class retrieval ability. However, the PR-AUC remains lower than the corresponding logistic regression and kNN values, so Naive Bayes is not the strongest ranking model so far.
+Figure~\ref{fig:nb-pr-curve} shows the precision-recall curve. The PR-AUC is approximately \(0.614\), well above the positive-rate baseline of approximately \(0.265\). This indicates useful positive-class retrieval ability. However, the PR-AUC remains lower than the corresponding logistic regression and kNN values, so Naive Bayes is not the strongest ranking model so far in the development-stage comparison.
 
 \begin{figure}[H]
 \centering
@@ -278,8 +282,8 @@ Figure~\ref{fig:nb-pr-curve} shows the precision-recall curve. The PR-AUC is app
 
 The revised Naive Bayes experiment shows that a simple generative model can capture meaningful churn patterns. Adding the hybrid Gaussian-Bernoulli specification improves the section because it uses a likelihood structure that matches the mixed feature representation: Gaussian likelihoods for continuous numeric variables and Bernoulli likelihoods for one-hot categorical indicators.
 
-The selected hybrid model has high recall, moderate precision, and useful ranking performance. It improves over the full transformed GaussianNB model, which treated binary indicators as Gaussian variables. The improvement is modest but meaningful: PR-AUC rises from about \(0.605\) to about \(0.615\), and the number of false positives falls from \(1475\) to \(1253\).
+The selected hybrid model has high recall, moderate precision, and useful ranking performance. It improves over the full transformed GaussianNB model, which treated binary indicators as Gaussian variables. The observed improvement is modest: PR-AUC rises from about \(0.605\) to about \(0.615\), and the number of false positives falls from \(1475\) to \(1253\). Therefore, the result should be interpreted as a practical and theoretically motivated Naive Bayes selection, not as a final statistical superiority claim.
 
 The main limitation remains the conditional-independence assumption. Many Telco features are correlated, especially service-related one-hot indicators. Therefore, Naive Bayes probabilities should be interpreted carefully and should not be treated as calibrated churn probabilities without later calibration checks.
 
-Compared with the learned models evaluated so far, Naive Bayes is useful but not dominant. Logistic regression remains the strongest model family so far by PR-AUC and ROC-AUC, while kNN also remains stronger than Naive Bayes on these ranking metrics. Nevertheless, Naive Bayes adds an important modelling perspective: it connects classification to Bayes' rule, Bayes optimality, class priors, class-conditional likelihoods, smoothing, and the practical difference between ideal Bayes classification and approximate generative modelling.
+Compared with the learned models evaluated so far, Naive Bayes is useful but not dominant. Logistic regression remains the strongest model family so far by development-stage PR-AUC and ROC-AUC, while kNN also remains stronger than Naive Bayes on these ranking metrics. Nevertheless, Naive Bayes adds an important modelling perspective: it connects classification to Bayes' rule, Bayes optimality, class priors, class-conditional likelihoods, smoothing, and the practical difference between ideal Bayes classification and approximate generative modelling.

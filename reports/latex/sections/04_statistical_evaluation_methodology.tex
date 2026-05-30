@@ -1,0 +1,286 @@
+\section{Statistical evaluation methodology}
+\label{sec:statistical-evaluation-methodology}
+
+This section defines the statistical interpretation of the model evaluations used throughout the project. It is placed before the learned-model sections because later tables compare multiple model families, hyperparameter settings, thresholds, and ranking metrics. Without a careful evaluation framework, it is easy to overinterpret small differences in cross-validated scores.
+
+The main principle is that a reported metric is an estimate of an unobserved population quantity. A model does not have only a table of observed scores; it has an unknown true generalization performance under the data-generating process. The dataset provides finite-sample estimates of that performance. Therefore, model evaluation is a statistical estimation problem.
+
+\subsection{Data-generating distribution and true performance}
+
+Let \((X,Y)\) denote a customer feature vector and the corresponding churn label. The supervised learning problem can be written as
+\[
+(X,Y) \sim p(x,y),
+\]
+where \(p(x,y)\) is the unknown data-generating distribution. The observed dataset is a finite sample,
+\[
+\mathcal{D}
+=
+\{(x_i,y_i)\}_{i=1}^{n}.
+\]
+The goal is not to perform well only on the observed rows, but to perform well on future customers drawn from the same, or sufficiently similar, distribution.
+
+For a fitted classifier \(h\), the true accuracy is
+\[
+A(h)
+=
+P(h(X)=Y)
+=
+\mathbb{E}_{(X,Y)\sim p}
+\left[
+\mathbb{1}\{h(X)=Y\}
+\right].
+\]
+This quantity is not directly observable because \(p(x,y)\) is unknown. On a finite evaluation sample, it is estimated by
+\[
+\widehat{A}(h)
+=
+\frac{1}{n}
+\sum_{i=1}^{n}
+\mathbb{1}\{h(x_i)=y_i\}.
+\]
+The same distinction applies to recall, precision, specificity, \(F_1\), ROC-AUC, PR-AUC, calibration metrics, and expected cost. Each reported value is a finite-sample estimate of a population quantity.
+
+This distinction is especially important when comparing models with close observed scores. A difference such as \(0.658\) versus \(0.655\) in PR-AUC is not automatically a meaningful population-level difference. It may reflect real model quality, sampling noise, fold-split randomness, hyperparameter-selection noise, or training randomness.
+
+\subsection{Accuracy as a statistical estimator}
+
+Accuracy has a simple statistical interpretation. For a fixed classifier \(h\), define
+\[
+Z_i
+=
+\mathbb{1}\{h(x_i)=y_i\}.
+\]
+If the evaluation observations are independent draws from the population, then \(Z_i\) can be viewed as a Bernoulli variable with success probability equal to the true accuracy \(A(h)\). The sample accuracy is the average of these Bernoulli variables,
+\[
+\widehat{A}(h)
+=
+\frac{1}{n}
+\sum_{i=1}^{n} Z_i.
+\]
+A rough standard error is
+\[
+\widehat{\mathrm{SE}}(\widehat{A})
+=
+\sqrt{
+\frac{\widehat{A}(1-\widehat{A})}{n}
+}.
+\]
+A normal-approximation 95 percent confidence interval is
+\[
+\widehat{A}
+\pm
+1.96
+\sqrt{
+\frac{\widehat{A}(1-\widehat{A})}{n}
+}.
+\]
+This formula is not the final uncertainty method used for all metrics in this project, but it gives the core intuition: evaluation-set size controls how precisely performance can be estimated.
+
+For example, if an accuracy estimate is \(0.80\) on only \(100\) observations, the rough standard error is
+\[
+\sqrt{\frac{0.8(0.2)}{100}}=0.04,
+\]
+so a rough 95 percent interval is approximately
+\[
+0.80 \pm 1.96(0.04)
+=
+0.80 \pm 0.078.
+\]
+That interval is wide. The same point estimate on \(10000\) observations has standard error
+\[
+\sqrt{\frac{0.8(0.2)}{10000}}=0.004,
+\]
+which gives a much narrower interval. Thus, evaluation data size can be as important as training data size when the aim is to make precise performance claims.
+
+\subsection{Why other classification metrics need care}
+
+Accuracy is a simple average of correct/incorrect indicators. Other metrics are more complicated. Recall and specificity are class-conditional proportions:
+\[
+\mathrm{Recall}
+=
+\frac{TP}{TP+FN},
+\qquad
+\mathrm{Specificity}
+=
+\frac{TN}{TN+FP}.
+\]
+Precision is a proportion among predicted positives:
+\[
+\mathrm{Precision}
+=
+\frac{TP}{TP+FP},
+\]
+where the denominator depends on the model's predictions. The \(F_1\)-score is a nonlinear combination of precision and recall:
+\[
+F_1
+=
+\frac{
+2\cdot\mathrm{Precision}\cdot\mathrm{Recall}
+}{
+\mathrm{Precision}+\mathrm{Recall}
+}.
+\]
+ROC-AUC and PR-AUC are ranking metrics computed from score distributions across thresholds. Their sampling uncertainty is not captured by the simple binomial formula for accuracy.
+
+For this reason, final model evaluation should eventually use more general uncertainty tools, especially bootstrap confidence intervals and paired bootstrap intervals for differences between top models. Section-level model comparisons before the final stage should therefore be interpreted as development evidence rather than final statistical proof.
+
+\subsection{Train, validation, and test roles}
+
+The project follows a strict separation between training, validation, and test roles:
+\begin{itemize}
+    \item training data are used to estimate model parameters;
+    \item validation data or cross-validation inside the training set are used to choose preprocessing, features, hyperparameters, thresholds, calibration methods, and model families;
+    \item test data are reserved for final performance estimation after all choices are fixed.
+\end{itemize}
+
+The held-out test set is not used in the current model sections. This is intentional. If the test set is repeatedly checked during development, it becomes part of the model-selection process and can no longer provide an honest final estimate. Once test-set information has influenced modelling decisions, that mistake cannot be undone without obtaining a new independent test set.
+
+In this project, all section-level model results are computed inside the training set using stratified cross-validation. They are development-stage estimates. Final performance will be evaluated later on the untouched held-out test set after the final model, threshold, and any calibration choices have been fixed.
+
+\subsection{Cross-validation as a development-stage estimator}
+
+In \(K\)-fold cross-validation, the training set is split into \(K\) folds. For fold \(k\), the model is fitted on the other \(K-1\) folds and evaluated on fold \(k\). If \(\widehat{M}^{(k)}\) is the metric on fold \(k\), then the fold-mean cross-validation estimate is
+\[
+\widehat{M}_{CV}
+=
+\frac{1}{K}
+\sum_{k=1}^{K}
+\widehat{M}^{(k)}.
+\]
+For the churn task, stratified cross-validation is used so that each fold approximately preserves the churn rate. This matters because churn is the minority class.
+
+Cross-validation is useful because it uses the training data efficiently and avoids relying on a single validation split. However, it is still part of model development. When the same cross-validation procedure is used to choose a model or hyperparameter setting, the selected cross-validated score may be mildly optimistic.
+
+\subsection{Fold-mean metrics and pooled out-of-fold metrics}
+
+Two related summaries are used in cross-validation:
+\begin{itemize}
+    \item fold-mean metrics, where the metric is computed separately on each fold and then averaged;
+    \item pooled out-of-fold metrics, where all out-of-fold predictions are collected and one metric is computed on the pooled prediction vector.
+\end{itemize}
+
+Pooled out-of-fold predictions are very useful for confusion matrices, threshold curves, ROC curves, precision-recall curves, and calibration plots. However, for nonlinear ranking metrics such as ROC-AUC and PR-AUC, the pooled out-of-fold AUC can differ from the mean of the fold-level AUC values because pooled ranking compares observations whose scores were produced by different fitted models.
+
+The current model sections use pooled out-of-fold predictions for threshold and curve diagnostics. Later, when the project adds a dedicated model-comparison stage, it can store both fold-level and pooled out-of-fold summaries.
+
+\subsection{Hyperparameter tuning and selection optimism}
+
+Hyperparameter tuning changes the interpretation of cross-validation scores. For a fixed modelling setup, cross-validation estimates that setup's development-stage performance. But when many settings are tried and the best score is selected, the selected score is the maximum of several noisy estimates.
+
+For example, suppose a kNN grid tries many values of \(k\), two distance metrics, and two weighting schemes. Some settings may receive slightly lucky validation folds. The best observed configuration is likely to be both good and somewhat lucky. This is selection optimism.
+
+Therefore, when a section says that a configuration is selected, the intended meaning is:
+\[
+\text{selected within the development grid according to the chosen metric.}
+\]
+It does not mean:
+\[
+\text{proven to be uniquely optimal in the population.}
+\]
+This distinction is especially important when neighbouring hyperparameter settings have very similar scores.
+
+\subsection{Repeated cross-validation}
+
+Repeated cross-validation repeats the fold construction several times with different random splits. For example, repeated 5-fold CV with 10 repeats produces 50 validation scores. This reduces dependence on one particular fold split and can make hyperparameter tuning more stable.
+
+Repeated CV is useful for serious candidate models later in the project, especially if model rankings are close. However, repeated CV does not remove selection optimism completely. If the best setting is selected after many repeated-CV comparisons, the selected score is still the winner among several estimates.
+
+Thus:
+\[
+\text{repeated CV improves stability,}
+\]
+whereas
+\[
+\text{nested CV evaluates a tuning procedure more honestly.}
+\]
+
+\subsection{Nested cross-validation}
+
+Nested cross-validation separates tuning from evaluation. It has two loops:
+\begin{itemize}
+    \item the inner loop chooses hyperparameters using only the outer-training data;
+    \item the outer loop evaluates the resulting tuned procedure on held-out outer-validation folds.
+\end{itemize}
+
+For each outer fold:
+\begin{enumerate}
+    \item split the development data into outer-training and outer-validation parts;
+    \item run inner cross-validation on the outer-training part to choose hyperparameters;
+    \item fit the selected configuration on the full outer-training part;
+    \item evaluate once on the outer-validation part.
+\end{enumerate}
+
+Nested CV estimates the performance of a procedure, not one fixed hyperparameter setting. For example, a nested-CV estimate for kNN evaluates the procedure ``choose \(k\), distance, and weights by inner CV, then fit kNN with those selected settings.'' Different outer folds may choose different values of \(k\). That is normal because the object being evaluated is the tuning procedure.
+
+Nested CV is useful for comparing tuned model families, such as tuned logistic regression versus tuned kNN versus tuned random forest. The current project does not need nested CV inside every educational model section. Instead, nested CV can be considered later when the strongest model families are compared more formally.
+
+\subsection{Fair hyperparameter-search effort}
+
+Model comparisons can be unfair when one model receives much more tuning effort than another. For example, comparing default logistic regression with a heavily optimized boosting model would partly compare tuning effort rather than model-family quality.
+
+Fair comparison principles include:
+\begin{itemize}
+    \item use the same training and validation data;
+    \item use the same primary selection metric;
+    \item use comparable search effort where feasible;
+    \item document the search spaces;
+    \item avoid tuning the favourite model much more than the baselines;
+    \item consider random search, Bayesian optimization, or Optuna-style search when search spaces are large.
+\end{itemize}
+
+This does not mean every model family requires identical compute. Some model families have more consequential hyperparameters than others. But the final comparison should be transparent about search effort.
+
+\subsection{Grid search, random search, and adaptive search}
+
+Grid search evaluates every combination from predefined hyperparameter values. It is simple and transparent, but inefficient when the hyperparameter space has many dimensions and only some parameters matter strongly.
+
+Random search samples configurations from predefined distributions. It is often more efficient in high-dimensional spaces because it explores more distinct values of the important dimensions for the same number of trials.
+
+Adaptive methods such as Bayesian optimization or Optuna-style search use earlier trials to decide which configurations to try next. They can be useful for expensive model families, but they are less transparent and add another layer of procedure choice. For this project, simple grids are suitable for early educational sections. More advanced search may be introduced later for final candidate models.
+
+\subsection{Threshold selection as model selection}
+
+Many classifiers output scores or probabilities. A threshold turns a score into a hard prediction:
+\[
+\hat{y}_{\tau}
+=
+\mathbb{1}\{s(x)\geq \tau\}.
+\]
+Changing \(\tau\) changes recall, precision, specificity, \(F_1\), predicted positive rate, and expected cost. Therefore, threshold choice is a model-selection decision.
+
+Threshold curves in the model sections are diagnostic. They show how a model behaves across operating points. The final threshold should be chosen later using training/validation information only, then frozen before the test set is evaluated.
+
+\subsection{Calibration as a separate evaluation dimension}
+
+Ranking performance and probability calibration are different. ROC-AUC and PR-AUC measure whether the model ranks churners above non-churners. Calibration asks whether predicted probabilities are numerically reliable. A model can rank customers well but still produce overconfident or underconfident probabilities.
+
+Calibration matters if predicted probabilities are interpreted as churn risks or used in cost-based decision rules. If calibration is applied later, the calibrator must also be fitted without test leakage, using validation data or a cross-validation-based calibration procedure.
+
+\subsection{Statistical tests and uncertainty methods}
+
+The final project can use several uncertainty tools, each answering a different question:
+\begin{itemize}
+    \item bootstrap confidence intervals estimate uncertainty around final test metrics;
+    \item paired bootstrap intervals compare metric differences between two models on the same test observations;
+    \item McNemar's test compares paired hard-classification errors;
+    \item DeLong-style tests compare paired ROC-AUCs;
+    \item permutation tests can assess whether model performance is stronger than expected under random label association;
+    \item repeated CV and nested CV can describe robustness and procedure-level performance before final test evaluation.
+\end{itemize}
+
+Bootstrap is especially useful because it can be applied to many metrics, including PR-AUC, ROC-AUC, \(F_1\), recall, precision, balanced accuracy, Brier score, and expected cost. In the final test stage, the project should report point estimates together with uncertainty intervals wherever feasible.
+
+\subsection{Implications for the current report}
+
+The model sections that follow should be read as model-development sections. They explain model families and use training-set cross-validation to compare configurations. Their selected models are representative strong candidates within the tried development grids. They are not final claims of statistical superiority.
+
+The report therefore uses the following interpretation:
+\begin{itemize}
+    \item large differences are treated as useful development evidence;
+    \item small differences between neighbouring hyperparameters are interpreted cautiously;
+    \item selected configurations are described as selected within a development grid;
+    \item threshold results are diagnostic rather than final operating rules;
+    \item final model-family comparison, threshold selection, calibration decisions, and test-set performance are deferred to later stages.
+\end{itemize}
+
+This discipline lets the project remain both educational and statistically careful. The individual sections can explain each model in depth, while the final model comparison stage can later use repeated CV, nested CV, bootstrap confidence intervals, paired comparisons, and ablation studies to support stronger final conclusions.
