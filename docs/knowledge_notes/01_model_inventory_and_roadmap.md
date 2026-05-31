@@ -10,16 +10,11 @@ The polished report should read as a standalone technical report. Knowledge note
 
 ## Current project state at time of this update
 
-Latest confirmed GitHub commit at the time this roadmap was last updated:
+Section 08, decision trees, has been completed locally in the collaborative workflow and the report has compiled with the decision-tree section included.
 
-```text
-4d6a61991110dde65b8720197d3c18a2be982f3b
-Enforce single final test model evaluation policy
-```
+When starting from this roadmap in a later chat, first check GitHub for newer commits. If section 08 has been committed and pushed, record the exact commit hash in the tactical status or handoff file.
 
-When starting from this roadmap in a later chat, first check GitHub for newer commits. Treat this commit as the latest confirmed checkpoint only as of the time this roadmap was written.
-
-Completed and committed modelling/report stages through that commit:
+Completed modelling/report stages now include:
 
 ```text
 01_raw_data_audit
@@ -30,12 +25,13 @@ Completed and committed modelling/report stages through that commit:
 05_linear_classification_and_logistic_regression
 06_k_nearest_neighbours
 07_naive_bayes
+08_decision_trees
 ```
 
 The next modelling stage is:
 
 ```text
-08_decision_trees
+09_bagging_and_random_forests
 ```
 
 ## Important data state
@@ -304,19 +300,101 @@ conditional independence remains a major limitation
 logistic regression remains strongest so far by PR-AUC and ROC-AUC
 ```
 
-## Methodology knowledge module
+### 08. Decision trees
 
-The project has these committed methodology notes:
+Role:
 
 ```text
-docs/knowledge_notes/methodology/evaluation_foundations.md
-docs/knowledge_notes/methodology/cross_validation_and_model_selection.md
-docs/knowledge_notes/methodology/statistical_uncertainty_and_tests.md
-docs/knowledge_notes/methodology/final_model_comparison_plan.md
-docs/knowledge_notes/methodology/hyperparameter_tuning.md
+first tree-based model family and first nonlinear rule-based classifier
+foundation for bagging, random forests, and boosting
 ```
 
-Together these cover:
+Models and experiments:
+
+```text
+decision stump
+default unrestricted decision tree
+pre-pruned tree grid
+cost-complexity pruning grid
+selected pre-pruned tree
+```
+
+Topics covered:
+
+```text
+recursive partitioning
+leaf predictions
+leaf churn proportions as probabilities
+ranking by leaf churn proportions
+Gini impurity
+entropy
+information gain / impurity reduction
+max depth
+minimum samples split
+minimum samples leaf
+cost-complexity pruning
+validation discipline for pruning and hyperparameter tuning
+overfitting and interpretability
+decision stumps
+```
+
+Selected development configuration:
+
+```text
+criterion = gini
+max_depth = 6
+min_samples_split = 25
+min_samples_leaf = 10
+ccp_alpha = 0
+```
+
+Main development results:
+
+```text
+Accuracy about 0.789
+Balanced accuracy about 0.701
+Precision about 0.624
+Recall about 0.514
+Specificity about 0.888
+F1 about 0.564
+ROC-AUC about 0.824
+PR-AUC about 0.628
+```
+
+Comparison results:
+
+```text
+Selected pre-pruned tree:
+    ROC-AUC about 0.824
+    PR-AUC about 0.628
+
+Best cost-complexity-pruned tree:
+    ROC-AUC about 0.822
+    PR-AUC about 0.615
+
+Decision stump:
+    ROC-AUC about 0.726
+    PR-AUC about 0.413
+
+Default unrestricted tree:
+    ROC-AUC about 0.648
+    PR-AUC about 0.371
+```
+
+Main lesson:
+
+```text
+single decision trees are interpretable and nonlinear but unstable
+unrestricted trees can overfit badly
+regularization through depth, leaf-size constraints, or pruning is essential
+pre-pruning produced the strongest single-tree result in this grid
+single-tree PR-AUC is close to kNN but below logistic regression
+this motivates bagging and random forests as the next stage
+```
+
+## Methodology knowledge module
+
+The project has methodology notes covering:
 
 ```text
 true metric versus sample metric
@@ -335,50 +413,35 @@ statistical tests
 final model comparison plan
 ```
 
+Decision-tree-specific validation nuance added during section 08:
+
+```text
+Cost-complexity pruning is a hyperparameter.
+It can be tuned by normal training-set CV for development-stage selection.
+If a validation set is reserved for higher-level model-family comparison, that same validation set should not also control pruning.
+A stricter estimate of the full tune-and-select procedure requires nested validation.
+```
+
 ## Remaining model-family roadmap
 
-### 08. Decision trees
+### 09. Bagging and random forests
 
 Planned next.
 
 Topics:
 
 ```text
-recursive partitioning
-leaf predictions
-Gini impurity
-entropy
-information gain / impurity reduction
-max depth
-minimum samples split
-minimum samples leaf
-cost-complexity pruning
-overfitting and interpretability
-decision stumps
-```
-
-Expected experiments:
-
-```text
-simple stump
-default decision tree
-small grid over depth and leaf size
-possibly cost-complexity pruning path
-threshold and ranking diagnostics
-comparison against logistic regression, kNN, and Naive Bayes
-```
-
-### 09. Bagging and random forests
-
-Topics:
-
-```text
 bootstrap aggregation
-variance reduction
-decorrelated trees
+why single trees have high variance
+variance reduction by averaging
+bagging with decision trees
+random forests as decorrelated bagged trees
 feature subsampling
 out-of-bag intuition
-random forest feature importance
+forest size
+maximum features
+minimum leaf size
+feature importance and its limitations
 ```
 
 Expected experiments:
@@ -387,7 +450,17 @@ Expected experiments:
 bagged trees
 random forest
 small or moderate hyperparameter search
-comparison with single decision tree
+comparison with the selected single decision tree
+threshold and ranking diagnostics
+ROC and precision-recall curves
+feature importance diagnostics
+possibly out-of-bag score discussion if implemented
+```
+
+Important comparison question:
+
+```text
+Does averaging many trees improve the instability and ranking limitations observed for a single tree?
 ```
 
 ### 10. Boosting
@@ -502,23 +575,19 @@ They can be mentioned as future-project topics but should not distract from the 
 
 ## Immediate next stage
 
-Start decision trees:
+Start bagging and random forests:
 
 ```text
-1. Create or update the decision-tree knowledge note.
-2. Build notebook 08 using training-set cross-validation only.
-3. Evaluate stump/default/tuned/pruned tree variants.
-4. Save tables and figures.
-5. Write the decision-tree report section.
-6. Compile and check the report.
-7. Commit the decision-tree section after review.
+1. Create or update the bagging/random-forest knowledge note.
+2. Build notebook 09 using training-set cross-validation only.
+3. Evaluate bagged trees and random forests.
+4. Compare against the selected single decision tree.
+5. Save tables and figures.
+6. Write the report section after actual outputs are available.
+7. Compile and check the report.
+8. Commit the bagging/random-forest section after review.
 ```
-
 
 ## Strict final test-set policy clarification
 
-The final test set should be used for exactly one frozen final model.
-
-Do not use the test set to compare multiple candidate models, additional candidate models, alternative thresholds, alternative calibration methods, or alternative preprocessing decisions. All model-family comparison, repeated CV, nested CV, statistical tests, paired bootstrap differences, McNemar-style comparisons, DeLong-style comparisons, threshold selection, calibration selection, and ablation decisions should happen before final test evaluation using training-only validation evidence.
-
-After one final model is selected and frozen, evaluate that model once on the untouched test set. Bootstrap confidence intervals may be reported for that single final model's test metrics.
+The final test set should be used for exactly one frozen final model. It should not be used to compare multiple candidate models, additional candidate models, alternative thresholds, alternative calibration methods, or alternative preprocessing decisions.
