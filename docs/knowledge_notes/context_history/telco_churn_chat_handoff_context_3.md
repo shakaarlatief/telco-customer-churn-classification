@@ -590,6 +590,24 @@ enumitem
 microtype
 ```
 
+## Collaborative workflow for future model sections
+
+For each model-family section, use this loop:
+
+```text
+1. Create/update the `.md` knowledge note first.
+2. Create/update the notebook source `.py`.
+3. User runs the `.py` locally.
+4. User sends back the executed `.ipynb` plus generated tables/figures/files.
+5. Assistant updates the `.py` and, when useful, the `.ipynb` interpretation using the actual outputs.
+6. Assistant writes or revises the LaTeX report section.
+7. User compiles/checks the report.
+8. Fix issues, then commit.
+```
+
+Do not write final report claims before seeing the actual executed results. If the assistant does not have the current local version of a file, ask the user to upload it or provide exact copy-paste replacement text.
+
+
 ## Immediate next actions
 
 Before continuing modelling in the new chat:
@@ -597,7 +615,7 @@ Before continuing modelling in the new chat:
 ```text
 1. Check GitHub for commits newer than the checkpoint listed above.
 2. Confirm the working tree is clean locally.
-3. Start section 08: decision trees.
+3. Start section 08: decision trees, following the collaborative workflow described above.
 ```
 
 

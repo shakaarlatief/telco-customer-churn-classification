@@ -314,7 +314,67 @@ The knowledge note usually comes before coding because it forces the modelling d
 
 The report usually comes after coding because it should include actual results.
 
-## 10. Current documentation map
+## 10. Collaborative model-section workflow
+
+For model-family sections, the preferred workflow is more specific than the general topic workflow above. It should be followed unless there is a clear reason to deviate.
+
+```text
+1. Knowledge note first:
+       Create or update the relevant `.md` knowledge note in
+       `docs/knowledge_notes/models/` or `docs/knowledge_notes/methodology/`.
+
+       This note should preserve reusable theory, assumptions, mathematics,
+       preprocessing implications, evaluation implications, and an implementation plan.
+
+2. Assistant prepares executable source:
+       Create or update the notebook source `.py` file.
+
+       The `.py` file is the primary editable notebook source. It should contain
+       professional code, concise markdown-style explanations, saved tables/figures,
+       and enough interpretation to make the executed notebook understandable.
+
+3. User runs the notebook locally:
+       The user executes the `.py` workflow locally and generates the rendered
+       `.ipynb`, tables, figures, and other saved artifacts.
+
+       This is important because the assistant may not have access to the local
+       environment, data paths, package versions, or generated outputs.
+
+4. User sends the executed outputs back:
+       The user sends the executed `.ipynb` and relevant generated files, such as
+       CSV tables, PNG figures, logs, or screenshots.
+
+       These outputs are treated as the observed results. The assistant should not
+       invent results that were not produced.
+
+5. Assistant updates interpretation:
+       After seeing the actual results, update the `.py` source and, when useful,
+       the rendered `.ipynb` interpretation.
+
+       This step should add result-specific interpretation, fix unclear wording,
+       adjust plots/tables if needed, and make sure the notebook remains professional.
+
+6. Assistant writes or revises the LaTeX report:
+       Only after the executed results are known, write or update the polished
+       LaTeX report section.
+
+       The report should include selected mathematics, modelling decisions,
+       result tables/figures, interpretation, limitations, and statistically careful
+       language around development-stage estimates.
+
+7. User compiles/checks the report:
+       The user compiles the LaTeX report locally and sends the PDF, screenshots,
+       or errors if review is needed.
+
+8. Fix and commit:
+       Fix formatting, wording, code, or interpretation issues.
+       Commit only after the section is checked.
+```
+
+This workflow separates theory, execution, observed results, and polished reporting. The assistant should not write final report claims before seeing the actual executed results. If a file may have changed locally and the assistant does not have the current version, ask the user to upload it or provide an exact copy-paste replacement rather than overwriting unknown work.
+
+
+## 11. Current documentation map
 
 The expected documentation map is:
 
@@ -351,7 +411,7 @@ calibration.md
 final_test_evaluation_template.md
 ```
 
-## 11. Where to put "what should we do next?"
+## 12. Where to put "what should we do next?"
 
 Use this rule:
 

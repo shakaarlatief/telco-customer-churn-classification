@@ -223,13 +223,14 @@ Notebook-local helper functions can remain notebook-local when they are section-
 ## Immediate next actions before continuing modelling
 
 1. Start section 08: decision trees.
-2. Create or update the decision-tree knowledge note.
-3. Build notebook 08 using training-set cross-validation only.
-4. Evaluate a stump, default tree, tuned tree, and possibly cost-complexity-pruned tree.
-5. Save tables and figures.
-6. Write the report section with development-stage wording.
-7. Compile the report.
-8. Commit after the section is checked.
+2. Follow the collaborative model-section workflow in `docs/knowledge_notes/00_documentation_workflow.md`.
+3. Create or update the decision-tree knowledge note.
+4. Build notebook 08 using training-set cross-validation only.
+5. The user runs it locally and sends the executed `.ipynb` plus generated tables/figures.
+6. Update notebook interpretation from the observed outputs.
+7. Write the report section with development-stage wording.
+8. Compile the report.
+9. Commit after the section is checked.
 
 Suggested future commit message after section 08 is complete:
 
