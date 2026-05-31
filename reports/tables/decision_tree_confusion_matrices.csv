@@ -1,0 +1,6 @@
+model,tp,fn,fp,tn
+Best pre-pruned decision tree,769,726,463,3676
+Selected decision tree,769,726,463,3676
+Best cost-complexity-pruned decision tree,807,688,495,3644
+Decision stump max_depth=1,0,1495,0,4139
+Default decision tree,723,772,777,3362

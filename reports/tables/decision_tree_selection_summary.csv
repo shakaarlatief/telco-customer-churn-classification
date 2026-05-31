@@ -1,0 +1,13 @@
+item,value
+selection_rule,highest cross-validated PR-AUC among decision-tree candidates; balanced accuracy and F1 as secondary criteria
+selected_model,Tree gini depth=6 split=25 leaf=10
+selected_variant_source,prepruned_grid
+selected_criterion,gini
+selected_max_depth,6.0
+selected_min_samples_split,25
+selected_min_samples_leaf,10
+selected_ccp_alpha,0.0
+selected_pr_auc,0.6284711600442233
+selected_roc_auc,0.823687398035329
+selected_balanced_accuracy,0.7012592510591398
+selected_f1,0.563989732306564
