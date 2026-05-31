@@ -8,40 +8,39 @@ Use it to answer:
 
 ```text
 Where are we now?
-What has been prepared or completed?
+What has been committed?
+What was prepared but may still need to be added?
 What should happen before continuing modelling?
 What is the immediate next step?
 ```
 
 This file is intentionally shorter and more operational than the knowledge notes and the report.
 
-## Latest project state at time of this update
+## Latest known GitHub state at time of this update
 
-Section 08, decision trees, has been completed in the collaborative workflow.
-
-The following files were prepared for section 08:
+Latest confirmed GitHub commit at the time this file was last updated:
 
 ```text
-docs/knowledge_notes/models/08_decision_trees.md
-notebooks/08_decision_trees.py
-notebooks/08_decision_trees.ipynb
-reports/latex/sections/08_decision_trees.tex
+d91fa9bf086bdfba58e4118d371c882e71452b05
+Update project status after decision trees
 ```
 
-The report was compiled locally after adding:
+Important note:
 
-```latex
-\newpage
-\input{sections/08_decision_trees}
+```text
+The previous status-update commit was pushed after the decision-tree modelling commit, but the replacement files used there still contained stale checkpoint text in some places. This version corrects those live status and roadmap references.
 ```
 
-inside `reports/latex/main.tex` after the Naive Bayes section.
+The actual section 08 modelling commit is:
 
-The compiled report includes the decision-tree section as report Section 9, with subsections from recursive partitioning through the decision-tree summary.
+```text
+08fb64873d4c8a929cfde529638d2e1ed49fcd5d
+Add decision tree modelling section
+```
 
-If this file is read in a later chat, first check GitHub for newer commits and confirm whether the section 08 files were committed and pushed. This file records the state after the local section 08 workflow was completed in the chat, not a guaranteed remote commit hash.
+That commit added the decision-tree knowledge note, notebook source, executed notebook, generated tables and figures, report section, and compiled report update.
 
-Completed model/report stages now include:
+At the current confirmed state, the project includes completed and committed sections through:
 
 ```text
 01_raw_data_audit
@@ -55,7 +54,13 @@ Completed model/report stages now include:
 08_decision_trees
 ```
 
-## Important methodological policy still active
+The next modelling step is:
+
+```text
+09_bagging_and_random_forests
+```
+
+## Important methodological decision that still governs the project
 
 Section-level cross-validation results are development-stage estimates.
 
@@ -63,21 +68,20 @@ They are useful for:
 
 ```text
 model learning
-tuning inside a model family
+tuning
 candidate comparison
-understanding bias-variance behaviour
-selecting representative configurations within tried grids
+understanding model-family behaviour
 ```
 
 They are not:
 
 ```text
-final test-set performance claims
-proof that a small metric difference is population-level superiority
-proof that a hyperparameter value is uniquely optimal
+final performance claims
+proof that a small metric difference is a population-level superiority result
+proof that one hyperparameter value is uniquely optimal
 ```
 
-Preferred language remains:
+Preferred language:
 
 ```text
 selected within the development grid
@@ -88,7 +92,16 @@ small differences should be interpreted cautiously
 final test evaluation is deferred
 ```
 
-The held-out test set remains unused and must remain unused until one final model, threshold rule, calibration decision, and preprocessing strategy are frozen.
+Avoid:
+
+```text
+this model is definitively best
+this hyperparameter is uniquely optimal
+this small metric difference proves superiority
+final performance is ...
+```
+
+The held-out test set remains unused and should be evaluated only once after one final model, threshold, preprocessing strategy, calibration decision, and any final comparison decisions are fixed.
 
 ## Current status of model sections
 
@@ -97,7 +110,7 @@ The held-out test set remains unused and must remain unused until one final mode
 Status:
 
 ```text
-complete
+complete and committed
 ```
 
 Key role:
@@ -111,9 +124,9 @@ thresholds, and calibration introduction
 Main lesson:
 
 ```text
-accuracy alone is misleading under churn imbalance
-majority/prior baselines have high accuracy but zero recall
-EDA rule has very high recall but many false positives
+accuracy alone is misleading under churn imbalance.
+The majority and prior baselines have high ordinary accuracy but zero recall.
+The EDA-inspired rule has very high recall but many false positives.
 ```
 
 ### Section 05: linear classification and logistic regression
@@ -121,7 +134,7 @@ EDA rule has very high recall but many false positives
 Status:
 
 ```text
-complete
+complete and committed
 ```
 
 Main development results:
@@ -153,7 +166,7 @@ The exact C value should not be overinterpreted because several values are close
 Status:
 
 ```text
-complete
+complete and committed
 ```
 
 Main development result:
@@ -180,13 +193,13 @@ kNN improves strongly over default k=5 but remains below logistic regression in 
 Status:
 
 ```text
-complete
+complete and committed
 ```
 
 Important source-code addition:
 
 ```text
-HybridGaussianBernoulliNB in src/telco_churn/models.py
+Added custom HybridGaussianBernoulliNB in src/telco_churn/models.py
 ```
 
 Main development result:
@@ -205,7 +218,6 @@ Interpretation:
 The hybrid model is theoretically cleaner for mixed numeric and one-hot categorical features.
 It improves modestly over full transformed GaussianNB.
 The result is a practical and theoretical Naive Bayes selection, not a final statistical superiority claim.
-Logistic regression remains the strongest model family so far by development-stage PR-AUC and ROC-AUC.
 ```
 
 ### Section 08: decision trees
@@ -213,101 +225,98 @@ Logistic regression remains the strongest model family so far by development-sta
 Status:
 
 ```text
-complete locally in the section 08 workflow
-commit/push status should be checked in GitHub when this file is read later
+complete and committed
 ```
 
-Files prepared:
+Actual section commit:
+
+```text
+08fb64873d4c8a929cfde529638d2e1ed49fcd5d
+Add decision tree modelling section
+```
+
+Files added or updated in the section:
 
 ```text
 docs/knowledge_notes/models/08_decision_trees.md
 notebooks/08_decision_trees.py
 notebooks/08_decision_trees.ipynb
 reports/latex/sections/08_decision_trees.tex
-reports/latex/main.tex updated to include sections/08_decision_trees
+reports/latex/main.tex
+reports/latex/main.pdf
+reports/figures/decision_tree_*.png
+reports/tables/decision_tree_*.csv
 ```
 
 Main concepts covered:
 
 ```text
 recursive partitioning
-internal split rules and terminal leaves
-leaf churn proportions
+internal split nodes and terminal leaves
 Gini impurity
 entropy and information gain
-impurity reduction
-decision stumps
+leaf churn proportions
+ranking with tree probabilities
+stepwise tied rankings
 pre-pruning
 cost-complexity pruning
-ranking with leaf probabilities
-validation discipline for pruning and hyperparameter tuning
+validation discipline for pruning and hyperparameter selection
+feature importance and tree-structure interpretation
 ```
 
 Main development result:
 
 ```text
 Selected decision tree:
-    variant = pre-pruned grid
-    criterion = gini
+    Gini criterion
     max_depth = 6
     min_samples_split = 25
     min_samples_leaf = 10
-    ccp_alpha = 0
+    ccp_alpha = 0.0
 
-    Accuracy about 0.789
-    Balanced accuracy about 0.701
-    Precision about 0.624
-    Recall about 0.514
-    Specificity about 0.888
+Cross-validated metrics:
+    accuracy about 0.789
+    balanced accuracy about 0.701
+    precision about 0.624
+    recall about 0.514
     F1 about 0.564
     ROC-AUC about 0.824
     PR-AUC about 0.628
 ```
 
-Comparison results:
+Decision-tree comparison:
 
 ```text
 Selected pre-pruned tree:
-    ROC-AUC about 0.824
     PR-AUC about 0.628
+    ROC-AUC about 0.824
 
 Best cost-complexity-pruned tree:
-    ROC-AUC about 0.822
     PR-AUC about 0.615
+    ROC-AUC about 0.822
 
 Decision stump:
-    ROC-AUC about 0.726
     PR-AUC about 0.413
-    default hard prediction detects no churners
+    ROC-AUC about 0.726
 
 Default unrestricted tree:
-    ROC-AUC about 0.648
     PR-AUC about 0.371
+    ROC-AUC about 0.648
 ```
 
 Interpretation:
 
 ```text
-The unrestricted default tree overfits badly.
-Regularization is essential for single decision trees.
-Pre-pruning with moderate depth and leaf-size constraints gives the strongest single-tree result in this grid.
-Cost-complexity pruning substantially improves over the unrestricted tree but does not beat the best pre-pruned tree here.
-Single trees learn meaningful nonlinear churn structure but remain below logistic regression in ranking metrics.
-The result motivates bagging and random forests as the next stage, because ensembles can reduce the variance and instability of single trees.
-```
-
-Important decision-tree validation note:
-
-```text
-Cost-complexity pruning is treated as a tree hyperparameter and is tuned by training-set cross-validation in this section.
-This is acceptable for development-stage model selection.
-If a separate validation set were reserved for higher-level model-family comparison, that same validation set should not also be used to select pruning strength.
-A stricter evaluation of the full tune-and-select procedure would require nested validation.
+The default unrestricted tree overfits strongly.
+Regularization is essential for useful single-tree performance.
+The selected pre-pruned tree is a useful transparent nonlinear model, but it does not overtake logistic regression.
+Its PR-AUC is close to selected kNN and stronger than selected Naive Bayes by PR-AUC.
+Single trees are useful mainly as the foundation for bagging, random forests, and boosting.
 ```
 
 ## Current source-module status
 
-`src/telco_churn/models.py` contains reusable model classes and factories from earlier sections, including:
+`src/telco_churn/models.py` contains reusable model utilities through Naive Bayes, including:
 
 ```text
 EDAInspiredRuleClassifier
@@ -319,20 +328,25 @@ make_hybrid_gaussian_bernoulli_nb_classifier
 make_classifier_pipeline
 ```
 
-For section 08, decision-tree helper functions were kept notebook-local because they were section-specific workflow helpers rather than reusable custom estimators. This matches the documentation workflow: reusable stable components go in `src/`, while section-specific plotting and grid helpers can remain in the notebook source.
+The decision-tree section kept section-specific tree factories and plotting helpers inside the notebook source rather than moving them to `src/`, because they are currently notebook-specific workflow code rather than stable shared package utilities.
 
 ## Immediate next actions before continuing modelling
 
-1. Confirm the section 08 files are in the correct paths locally.
-2. Confirm the report compiles after including `sections/08_decision_trees`.
-3. Commit and push the completed decision-tree section if not already pushed.
-4. After the commit, optionally update this file with the exact Git commit hash.
-5. Start section 09: bagging and random forests.
+1. Replace the stale status/roadmap/handoff files with the corrected versions generated after the section 08 commit.
+2. Commit the corrected status files.
+3. Start section 09: bagging and random forests.
+4. Follow the collaborative model-section workflow in `docs/knowledge_notes/00_documentation_workflow.md`.
+5. Create the bagging/random-forest knowledge note first.
+6. Build notebook 09 using training-set cross-validation only.
+7. User runs it locally and sends executed outputs.
+8. Update notebook interpretation from observed results.
+9. Write the report section after results are known.
+10. Compile and check the report.
 
-Suggested commit message for section 08:
+Suggested corrective commit message for these status files:
 
 ```text
-Add decision tree modelling section
+Correct project status after decision trees
 ```
 
 ## Next modelling stage
@@ -346,25 +360,21 @@ Next section:
 Expected workflow:
 
 ```text
-1. Create or update the bagging/random-forest knowledge note.
-2. Use the trees and methodology slides before writing the section.
-3. Explain bootstrap aggregation, variance reduction, tree instability, feature subsampling, random forests, and out-of-bag intuition.
-4. Build notebook 09 using training-set cross-validation only.
-5. Compare bagged trees and random forests against the selected single decision tree.
-6. Save model-comparison tables, threshold diagnostics, ROC/PR curves, feature importance diagnostics, and any useful forest-size or max-feature plots.
-7. User runs the notebook locally and returns executed outputs.
-8. Update notebook interpretation from actual results.
-9. Write the LaTeX report section.
-10. Compile/check before committing.
+1. Create or update the bagging and random forest knowledge note.
+2. Explain bootstrap aggregation, variance reduction, tree decorrelation, feature subsampling, and out-of-bag intuition.
+3. Build notebook 09 using training-set CV only.
+4. Evaluate bagged trees and random forests.
+5. Compare against the selected single decision tree and earlier model families.
+6. Save tables and figures.
+7. Write report section after actual outputs are known.
 ```
 
-Expected evaluation language for section 09:
+Important evaluation language for section 09:
 
 ```text
-Use ordinary stratified CV for development.
-Treat forest hyperparameters as selected within a development grid.
-Compare against the single-tree section as development evidence.
-Do not claim final test performance.
+Use ordinary stratified CV for section-level development.
+Do not claim final superiority.
+Treat ensemble hyperparameters as selected within a development grid.
 Reserve final model-family comparison for later.
 ```
 

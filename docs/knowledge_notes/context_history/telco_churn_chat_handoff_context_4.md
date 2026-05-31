@@ -4,7 +4,7 @@
 
 Use this file when continuing the Telco Customer Churn classification project in a new chat.
 
-This handoff is intended to be standalone. It supersedes earlier handoff files for the current state, while earlier files remain useful for detailed background on raw data audit, cleaning, splitting, EDA, methodology cleanup, and early model-family sections.
+This handoff is intended to be standalone. It supersedes earlier handoff files for the current state, while earlier files remain useful for detailed background on raw data audit, cleaning, splitting, EDA, methodology cleanup, and earlier model sections.
 
 ## Project identity
 
@@ -46,42 +46,46 @@ explicit mention of changes made
 no silent deletion of useful content
 ```
 
-Do not write report sections as if they are lecture notes. The source slides and course material should guide the work, but the report should read as a standalone technical report.
+Do not write report sections as if they are lecture notes. The source slides and course material can guide the work, but the report should read as a standalone technical report.
 
-The project workflow is collaborative:
+When updating code or files, be careful not to overwrite good current content. If the exact current file is not available, ask the user for it or provide exact replacement files/snippets.
+
+## Latest confirmed GitHub state at time of this handoff update
+
+Latest confirmed commit at the time this handoff was last updated:
 
 ```text
-Assistant reads project files and course slides.
-Assistant creates the actual files.
-User places files locally, runs notebooks/LaTeX, and pushes to Git.
-Codex is used only for small mechanical tasks unless explicitly requested.
+d91fa9bf086bdfba58e4118d371c882e71452b05
+Update project status after decision trees
 ```
 
-When updating code or files, be careful not to overwrite good current content. If the exact current file is not available, ask the user to upload it or provide exact copy-paste replacement text.
+Important note:
 
-## Latest project state at time of this handoff update
+```text
+The previous status-update commit was pushed after the decision-tree modelling commit, but the replacement files used there still contained stale checkpoint text in some places. This version corrects those live status and roadmap references.
+```
 
-Section 08, decision trees, was completed locally in the chat workflow.
+The actual section 08 modelling commit is:
 
-Prepared files:
+```text
+08fb64873d4c8a929cfde529638d2e1ed49fcd5d
+Add decision tree modelling section
+```
+
+That commit includes:
 
 ```text
 docs/knowledge_notes/models/08_decision_trees.md
 notebooks/08_decision_trees.py
 notebooks/08_decision_trees.ipynb
 reports/latex/sections/08_decision_trees.tex
+reports/latex/main.tex
+reports/latex/main.pdf
+reports/figures/decision_tree_*.png
+reports/tables/decision_tree_*.csv
 ```
 
-The report was compiled locally after adding the decision-tree section to `reports/latex/main.tex`:
-
-```latex
-\newpage
-\input{sections/08_decision_trees}
-```
-
-The compiled report shows the decision-tree section as report Section 9 with subsections from recursive partitioning through summary.
-
-When starting a later chat from this handoff, first check GitHub for newer commits. This handoff records the completed local section 08 workflow, but the exact commit hash may need to be checked after the user pushes.
+When starting a later chat from this handoff, first check GitHub for newer commits. Treat the commit listed above as the latest confirmed checkpoint only as of the time this handoff was written.
 
 ## Dataset state
 
@@ -257,7 +261,7 @@ reports/latex:
 
 ## Completed sections
 
-Completed through the section 08 local workflow:
+Completed and committed through the current checkpoint:
 
 ```text
 01_raw_data_audit
@@ -277,16 +281,6 @@ Role:
 
 ```text
 preprocessing, evaluation framework, and simple baselines
-```
-
-Baselines:
-
-```text
-majority class
-prior probability
-stratified random
-uniform random
-EDA-inspired rule
 ```
 
 Important results:
@@ -314,15 +308,6 @@ Role:
 
 ```text
 linear classification and logistic regression
-```
-
-Models:
-
-```text
-RidgeClassifier
-L2 logistic regression
-L1 logistic regression
-class-weighted L2 logistic regression
 ```
 
 Main results:
@@ -358,14 +343,6 @@ Role:
 k-nearest neighbours as local, non-parametric, distance-based learning
 ```
 
-Grid:
-
-```text
-n_neighbors = [1, 3, 5, 7, 11, 15, 21, 31, 51, 75, 101]
-weights = ["uniform", "distance"]
-p = [1, 2]
-```
-
 Selected development configuration:
 
 ```text
@@ -398,27 +375,10 @@ Role:
 Naive Bayes and generative classification
 ```
 
-Models:
-
-```text
-GaussianNB numeric only
-BernoulliNB categorical only
-Hybrid Gaussian-BernoulliNB
-GaussianNB full transformed
-```
-
 Important source-code addition:
 
 ```text
 HybridGaussianBernoulliNB in src/telco_churn/models.py
-```
-
-Reason:
-
-```text
-The Telco feature space is mixed:
-    numeric features should use Gaussian likelihoods
-    one-hot categorical indicators should use Bernoulli likelihoods
 ```
 
 Selected Naive Bayes model:
@@ -451,7 +411,6 @@ hybrid NB is theoretically cleaner than full GaussianNB
 categorical features contain much of the NB signal
 Naive Bayes has high recall but moderate precision
 conditional independence remains a limitation
-logistic regression remains strongest so far by PR-AUC and ROC-AUC
 ```
 
 ## Section 08 summary
@@ -459,92 +418,56 @@ logistic regression remains strongest so far by PR-AUC and ROC-AUC
 Role:
 
 ```text
-decision trees as the first single-tree, nonlinear, rule-based classifier
-foundation for later bagging, random forests, and boosting
+single decision trees as nonlinear, rule-based classifiers and foundation for later tree ensembles
 ```
 
-Files created or updated:
+Important files:
 
 ```text
 docs/knowledge_notes/models/08_decision_trees.md
 notebooks/08_decision_trees.py
 notebooks/08_decision_trees.ipynb
 reports/latex/sections/08_decision_trees.tex
-reports/latex/main.tex
+reports/figures/decision_tree_*.png
+reports/tables/decision_tree_*.csv
 ```
 
-Important theory included:
+Topics covered:
 
 ```text
 recursive partitioning
-split rules and terminal leaves
-local leaf churn proportions
-hard predictions from leaf proportions
-ranking by leaf churn proportions
-stepwise scores and ties
+split nodes and terminal leaves
+leaf class proportions
 Gini impurity
 entropy and information gain
-weighted child impurity
-impurity reduction
+ranking with decision trees
+stepwise tied score structure
 pre-pruning
 cost-complexity pruning
-decision stumps
-validation discipline for pruning and hyperparameter tuning
+validation discipline for pruning and hyperparameter selection
+feature importance
+top-level tree interpretation
 ```
 
-Important validation discussion from this section:
+Selected decision tree:
 
 ```text
-Pruning strength is a hyperparameter, just like max_depth or min_samples_leaf.
-For this section, ccp_alpha was tuned by ordinary training-set cross-validation.
-This is appropriate for development-stage model selection.
-If a separate validation set is held out for higher-level model-family comparison, that same validation set should not also be used to tune pruning.
-A stricter estimate of the full tune-and-select procedure would require nested validation.
-```
-
-Experiments:
-
-```text
-decision stump
-default unrestricted decision tree
-pre-pruned tree grid
-cost-complexity pruning grid
-selected pre-pruned tree
-threshold diagnostics
-ROC curve
-precision-recall curve
-truncated tree plot
-impurity-based feature importance
-```
-
-Selected development tree:
-
-```text
-variant = pre-pruned grid
 criterion = gini
 max_depth = 6
 min_samples_split = 25
 min_samples_leaf = 10
-ccp_alpha = 0
+ccp_alpha = 0.0
 ```
 
-Selected tree results:
-
-```text
-Accuracy about 0.789
-Balanced accuracy about 0.701
-Precision about 0.624
-Recall about 0.514
-Specificity about 0.888
-F1 about 0.564
-ROC-AUC about 0.824
-PR-AUC about 0.628
-```
-
-Comparison results:
+Main results:
 
 ```text
 Selected pre-pruned tree:
+    accuracy about 0.789
+    balanced accuracy about 0.701
+    precision about 0.624
+    recall about 0.514
+    F1 about 0.564
     ROC-AUC about 0.824
     PR-AUC about 0.628
     TP = 769
@@ -555,84 +478,35 @@ Selected pre-pruned tree:
 Best cost-complexity-pruned tree:
     ROC-AUC about 0.822
     PR-AUC about 0.615
-    TP = 807
-    FN = 688
-    FP = 495
-    TN = 3644
-
-Decision stump:
-    ROC-AUC about 0.726
-    PR-AUC about 0.413
-    TP = 0
-    FN = 1495
-    FP = 0
-    TN = 4139
 
 Default unrestricted tree:
     ROC-AUC about 0.648
     PR-AUC about 0.371
-    TP = 723
-    FN = 772
-    FP = 777
-    TN = 3362
 ```
 
-Main interpretation:
+Interpretation:
 
 ```text
-The unrestricted tree overfits and performs poorly in ranking metrics.
-Regularization is essential for single decision trees.
-Pre-pruning with moderate depth and minimum leaf-size constraints gives the strongest single-tree result in the tried grid.
-Cost-complexity pruning substantially improves over the unrestricted tree but does not beat the best pre-pruned tree here.
-The decision stump illustrates that hard classification and ranking can differ: it predicts no churn at threshold 0.5 but still has useful ROC-AUC because the leaf scores rank customers somewhat.
-The selected tree is interpretable and nonlinear but does not overtake logistic regression.
-This motivates bagging and random forests, because averaging many trees can reduce single-tree variance and instability.
+default unrestricted trees overfit strongly
+regularization is essential for useful single-tree performance
+pre-pruning gave the best single-tree result in the tried grids
+cost-complexity pruning improved strongly over the default tree but did not beat the selected pre-pruned tree
+the selected tree is useful and interpretable but does not overtake logistic regression
+single trees motivate bagging, random forests, and boosting
 ```
 
-Selected tree interpretation:
+## Major methodology decision that still applies
 
-```text
-The first split is on Contract_Month-to-month.
-Top impurity-based feature importances include:
-    Contract_Month-to-month
-    InternetService_Fiber optic
-    tenure
-    TotalCharges
-    MonthlyCharges
-```
-
-Important caution:
-
-```text
-The selected tree was refitted on the full training set only for interpretation.
-That refit is not used to estimate performance.
-Impurity-based feature importance is not causal and can be affected by correlated predictors and feature structure.
-```
-
-## Major methodology decision still active
-
-The project paused before decision trees to improve statistical evaluation methodology.
-
-Reason:
-
-```text
-model sections compare tuned models and close hyperparameter settings
-small cross-validated differences should not be overinterpreted
-the report should explain true metric versus sample estimate, uncertainty,
-CV, repeated CV, nested CV, tests, and final test evaluation discipline
-```
+Section-level cross-validation results are development-stage estimates, not final performance claims.
 
 Main ideas:
 
 ```text
 reported metrics are finite-sample estimates
-section-level CV results are development-stage estimates
 hyperparameter tuning creates selection optimism
 repeated CV improves stability
 nested CV evaluates tuning procedures
 final test set is used once after all choices are fixed
-bootstrap CIs should be used for the single final model's test metrics
-paired bootstrap differences should be used only before final model selection
 threshold selection and calibration are model-selection decisions
 ```
 
@@ -677,36 +551,7 @@ save_roc_curve_plot
 save_precision_recall_curve_plot
 ```
 
-Decision-tree section helpers were kept in the notebook source because they are section-specific and not stable reusable project abstractions.
-
-## Local LaTeX setup
-
-The user compiles locally with TinyTeX / TeX Live 2024.
-
-`pdflatex` path:
-
-```text
-C:\Users\shaka\AppData\Roaming\TinyTeX\bin\windows\pdflatex.exe
-```
-
-`tlmgr.bat` path:
-
-```text
-C:\Users\shaka\AppData\Roaming\TinyTeX\bin\windows\tlmgr.bat
-```
-
-Repository configured:
-
-```bash
-/c/Users/shaka/AppData/Roaming/TinyTeX/bin/windows/tlmgr.bat option repository https://ftp.math.utah.edu/pub/tex/historic/systems/texlive/2024/tlnet-final
-```
-
-Installed packages include:
-
-```text
-enumitem
-microtype
-```
+Decision-tree helper code is currently notebook-local because it is section-specific rather than stable package functionality.
 
 ## Collaborative workflow for future model sections
 
@@ -727,60 +572,16 @@ Do not write final report claims before seeing the actual executed results. If t
 
 ## Immediate next actions
 
-Before continuing modelling:
+Before continuing modelling in the new chat:
 
 ```text
-1. Check whether the section 08 files were committed and pushed.
-2. If not, commit/push the section 08 files.
-3. Suggested commit message: Add decision tree modelling section.
-4. Start section 09: bagging and random forests.
+1. Check GitHub for commits newer than the checkpoint listed above.
+2. Confirm the working tree is clean locally.
+3. Start section 09: bagging and random forests, following the collaborative workflow described above.
 ```
 
-Section 09 should follow the same workflow:
-
-```text
-1. Read the relevant tree/ensemble slides and current project files.
-2. Create the bagging/random-forest knowledge note.
-3. Create the notebook source.
-4. User runs locally and returns outputs.
-5. Update interpretations from actual outputs.
-6. Write the report section.
-7. User compiles and checks.
-```
-
-## Next modelling stage
-
-Next section:
+Next modelling section:
 
 ```text
 09_bagging_and_random_forests
-```
-
-Expected topics:
-
-```text
-bootstrap aggregation
-single-tree variance
-variance reduction by averaging
-bagged decision trees
-random forests
-feature subsampling to decorrelate trees
-out-of-bag intuition
-forest-size effects
-max_features
-minimum leaf size
-feature importance limitations
-```
-
-Expected experiments:
-
-```text
-bagged trees
-random forest
-small or moderate hyperparameter grid
-comparison against selected single tree
-threshold diagnostics
-ROC and precision-recall curves
-feature importance diagnostics
-possibly out-of-bag score discussion if implemented
 ```
