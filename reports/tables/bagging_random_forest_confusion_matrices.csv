@@ -1,0 +1,5 @@
+model,tp,fn,fp,tn
+Best bagged trees,753,742,385,3754
+Best random forest,744,751,354,3785
+Selected single decision tree,769,726,463,3676
+"Default random forest, 100 estimators",727,768,429,3710
