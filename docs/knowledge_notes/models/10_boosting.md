@@ -525,6 +525,67 @@ For this project, the boosting notebook should use transparent development grids
 
 `AdaBoostClassifier` is the most direct implementation of classical boosting in scikit-learn. It fits a sequence of classifiers where later classifiers focus more on observations that previous classifiers handled incorrectly. The default base estimator is a depth-one decision tree, which corresponds to a decision stump.
 
+Implementation lens: weighted splits, class-label leaves, and weighted votes.
+
+In AdaBoost with a decision stump or shallow classification tree, the base estimator is fitted using the current AdaBoost observation weights. Split criteria such as Gini impurity or entropy are therefore computed from weighted class counts rather than raw class counts. For class $k$, the weighted class proportion in a node is
+
+$$
+p_k^{\mathrm{weighted}}
+=
+\frac{\sum_{i \in \mathrm{node},\, y_i=k} w_i^{(t)}}
+{\sum_{i \in \mathrm{node}} w_i^{(t)}}.
+$$
+
+For example, weighted Gini impurity can be written as
+
+$$
+Gini_{\mathrm{weighted}}
+=
+1
+-
+\sum_k
+\left(p_k^{\mathrm{weighted}}\right)^2.
+$$
+
+A split is preferred when it reduces weighted impurity, so observations with larger AdaBoost weights have more influence on the chosen split.
+
+For classical binary AdaBoost, the weak learner outputs a class label, not a numeric gradient correction. With labels encoded as $y_i \in \{-1,+1\}$, the weak learner output is
+
+$$
+h_t(x) \in \{-1,+1\}.
+$$
+
+For a classification stump or shallow classification tree, each leaf predicts the weighted majority class among the observations that reach that leaf. After the weak learner is fitted, AdaBoost computes the weighted classification error $\varepsilon_t$ and assigns the learner weight
+
+$$
+\alpha_t
+=
+\frac{1}{2}
+\log
+\left(
+\frac{1-\varepsilon_t}{\varepsilon_t}
+\right).
+$$
+
+The final ensemble score is
+
+$$
+F_T(x)
+=
+\sum_{t=1}^{T}
+\alpha_t h_t(x),
+$$
+
+and the hard prediction is
+
+$$
+\hat{y}(x)
+=
+\operatorname{sign}(F_T(x)).
+$$
+
+This is an important contrast with gradient boosting: AdaBoost weak learners output class labels and are combined through weighted voting, whereas gradient-boosted trees output numeric score corrections such as pseudo-residual or Newton-style leaf values.
+
 For the Telco project, useful AdaBoost variants include:
 
 ```text
