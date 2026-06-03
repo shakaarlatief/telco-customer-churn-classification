@@ -1,0 +1,11 @@
+model,tp,fn,fp,tn
+Best XGBoost,806,689,395,3744
+Best GradientBoostingClassifier,793,702,379,3760
+Best CatBoost native categorical,785,710,377,3762
+Best LightGBM native categorical,765,730,373,3766
+Best AdaBoost,797,698,400,3739
+Selected bagged trees,753,742,385,3754
+Selected random forest,744,751,354,3785
+Best HistGradientBoostingClassifier,796,699,391,3748
+Selected L2 logistic regression,813,682,434,3705
+Selected single decision tree,769,726,463,3676

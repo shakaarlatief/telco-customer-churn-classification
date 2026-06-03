@@ -10,6 +10,7 @@
 \usepackage{xcolor}
 \usepackage{hyperref}
 \usepackage{microtype}
+\usepackage{tocloft}
 
 \hypersetup{
     colorlinks=true,
@@ -21,6 +22,7 @@
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0.75em}
 \renewcommand{\arraystretch}{1.15}
+\setlength{\cftsubsecnumwidth}{3.5em}
 
 \title{\textbf{Telco Customer Churn Classification}\\[0.25em]
 \large A Training-Only Workflow from Data Audit to Supervised Classification}
@@ -67,6 +69,9 @@ This document reports a supervised classification project for the Telco Customer
 
 \newpage
 \input{sections/09_bagging_and_random_forests}
+
+\newpage
+\input{sections/10_boosting}
 
 \newpage
 \begin{thebibliography}{9}

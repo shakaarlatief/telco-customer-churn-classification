@@ -36,11 +36,25 @@ from scipy import sparse
 from scipy.special import logsumexp
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.dummy import DummyClassifier
+from sklearn.ensemble import (
+    AdaBoostClassifier,
+    BaggingClassifier,
+    GradientBoostingClassifier,
+    HistGradientBoostingClassifier,
+    RandomForestClassifier,
+)
 from sklearn.linear_model import LogisticRegression, RidgeClassifier
 from sklearn.pipeline import Pipeline
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.utils.validation import check_is_fitted
 
-from telco_churn.config import RANDOM_STATE
+from telco_churn.config import CATEGORICAL_FEATURES, RANDOM_STATE
+from telco_churn.preprocessing import (
+    make_dense_unscaled_preprocessor,
+    make_native_categorical_preprocessor,
+    make_scaled_preprocessor,
+    make_unscaled_preprocessor,
+)
 
 
 @dataclass
@@ -512,4 +526,562 @@ def make_classifier_pipeline(
             ("preprocessor", preprocessor),
             ("classifier", classifier),
         ]
+    )
+
+
+def make_l2_logistic_regression_pipeline(
+    *,
+    C: float = 1.0,
+    class_weight: str | dict[int, float] | None = None,
+    max_iter: int = 5000,
+    random_state: int = RANDOM_STATE,
+) -> Pipeline:
+    """Create a scaled preprocessing plus L2 logistic regression pipeline."""
+    return make_classifier_pipeline(
+        preprocessor=make_scaled_preprocessor(),
+        classifier=make_l2_logistic_regression_classifier(
+            C=C,
+            class_weight=class_weight,
+            max_iter=max_iter,
+            random_state=random_state,
+        ),
+    )
+
+
+def normalize_optional_positive_int(value: object) -> int | None:
+    """Normalize optional positive integer hyperparameters recovered from tables.
+
+    Several notebooks select hyperparameters from pandas result rows. Values
+    such as ``None`` may therefore return as ``NaN`` and integer values may
+    return as floats, for example ``6.0``. Scikit-learn validates tree parameters
+    strictly, so reusable factories normalize these values before constructing
+    estimators.
+    """
+    if value is None or pd.isna(value):
+        return None
+    return int(value)
+
+
+def make_decision_tree_classifier(
+    *,
+    criterion: str = "gini",
+    max_depth: int | None = None,
+    min_samples_split: int = 2,
+    min_samples_leaf: int = 1,
+    max_leaf_nodes: int | None = None,
+    ccp_alpha: float = 0.0,
+    random_state: int = RANDOM_STATE,
+) -> DecisionTreeClassifier:
+    """Create a decision-tree classifier with normalized hyperparameters."""
+    return DecisionTreeClassifier(
+        criterion=criterion,
+        max_depth=normalize_optional_positive_int(max_depth),
+        min_samples_split=int(min_samples_split),
+        min_samples_leaf=int(min_samples_leaf),
+        max_leaf_nodes=normalize_optional_positive_int(max_leaf_nodes),
+        ccp_alpha=float(ccp_alpha),
+        random_state=random_state,
+    )
+
+
+def make_decision_tree_pipeline(
+    *,
+    criterion: str = "gini",
+    max_depth: int | None = None,
+    min_samples_split: int = 2,
+    min_samples_leaf: int = 1,
+    max_leaf_nodes: int | None = None,
+    ccp_alpha: float = 0.0,
+) -> Pipeline:
+    """Create an unscaled preprocessing plus decision-tree pipeline."""
+    return make_classifier_pipeline(
+        preprocessor=make_unscaled_preprocessor(),
+        classifier=make_decision_tree_classifier(
+            criterion=criterion,
+            max_depth=max_depth,
+            min_samples_split=min_samples_split,
+            min_samples_leaf=min_samples_leaf,
+            max_leaf_nodes=max_leaf_nodes,
+            ccp_alpha=ccp_alpha,
+        ),
+    )
+
+
+def make_bagging_classifier(
+    *,
+    n_estimators: int,
+    max_samples: float,
+    base_max_depth: int | None,
+    base_min_samples_leaf: int,
+    oob_score: bool = False,
+    random_state: int = RANDOM_STATE,
+) -> BaggingClassifier:
+    """Create a bagged decision-tree classifier.
+
+    The constructor supports both newer scikit-learn versions, where the base
+    learner argument is called ``estimator``, and older versions, where it is
+    called ``base_estimator``.
+    """
+    base_tree = make_decision_tree_classifier(
+        criterion="gini",
+        max_depth=base_max_depth,
+        min_samples_leaf=base_min_samples_leaf,
+        random_state=random_state,
+    )
+
+    common_kwargs = {
+        "n_estimators": int(n_estimators),
+        "max_samples": float(max_samples),
+        "bootstrap": True,
+        "oob_score": bool(oob_score),
+        "n_jobs": -1,
+        "random_state": random_state,
+    }
+
+    try:
+        return BaggingClassifier(estimator=base_tree, **common_kwargs)
+    except TypeError:
+        return BaggingClassifier(base_estimator=base_tree, **common_kwargs)
+
+
+def make_bagging_pipeline(
+    *,
+    n_estimators: int,
+    max_samples: float,
+    base_max_depth: int | None,
+    base_min_samples_leaf: int,
+    oob_score: bool = False,
+) -> Pipeline:
+    """Create an unscaled preprocessing plus bagged-tree pipeline."""
+    return make_classifier_pipeline(
+        preprocessor=make_unscaled_preprocessor(),
+        classifier=make_bagging_classifier(
+            n_estimators=n_estimators,
+            max_samples=max_samples,
+            base_max_depth=base_max_depth,
+            base_min_samples_leaf=base_min_samples_leaf,
+            oob_score=oob_score,
+        ),
+    )
+
+
+def make_random_forest_classifier(
+    *,
+    n_estimators: int,
+    max_depth: int | None,
+    min_samples_leaf: int,
+    max_features: str | float,
+    oob_score: bool = False,
+    random_state: int = RANDOM_STATE,
+) -> RandomForestClassifier:
+    """Create a random-forest classifier with normalized hyperparameters."""
+    return RandomForestClassifier(
+        n_estimators=int(n_estimators),
+        criterion="gini",
+        max_depth=normalize_optional_positive_int(max_depth),
+        min_samples_leaf=int(min_samples_leaf),
+        max_features=max_features,
+        bootstrap=True,
+        oob_score=bool(oob_score),
+        n_jobs=-1,
+        random_state=random_state,
+    )
+
+
+def make_random_forest_pipeline(
+    *,
+    n_estimators: int,
+    max_depth: int | None,
+    min_samples_leaf: int,
+    max_features: str | float,
+    oob_score: bool = False,
+) -> Pipeline:
+    """Create an unscaled preprocessing plus random-forest pipeline."""
+    return make_classifier_pipeline(
+        preprocessor=make_unscaled_preprocessor(),
+        classifier=make_random_forest_classifier(
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            min_samples_leaf=min_samples_leaf,
+            max_features=max_features,
+            oob_score=oob_score,
+        ),
+    )
+
+
+def make_one_hot_boosting_pipeline(classifier) -> Pipeline:
+    """Create dense one-hot preprocessing plus a boosting classifier."""
+    return make_classifier_pipeline(
+        preprocessor=make_dense_unscaled_preprocessor(),
+        classifier=classifier,
+    )
+
+
+def make_native_lightgbm_pipeline(classifier) -> Pipeline:
+    """Create native-categorical preprocessing plus a LightGBM classifier."""
+    return make_classifier_pipeline(
+        preprocessor=make_native_categorical_preprocessor(categorical_dtype=True),
+        classifier=classifier,
+    )
+
+
+def make_native_catboost_pipeline(classifier) -> Pipeline:
+    """Create native-categorical preprocessing plus a CatBoost classifier."""
+    return make_classifier_pipeline(
+        preprocessor=make_native_categorical_preprocessor(categorical_dtype=False),
+        classifier=classifier,
+    )
+
+
+def make_adaboost_classifier(
+    *,
+    base_depth: int,
+    n_estimators: int,
+    learning_rate: float,
+    random_state: int = RANDOM_STATE,
+) -> AdaBoostClassifier:
+    """Create an AdaBoost classifier with a shallow decision-tree base learner."""
+    base_tree = make_decision_tree_classifier(
+        max_depth=int(base_depth),
+        random_state=random_state,
+    )
+    kwargs = {
+        "n_estimators": int(n_estimators),
+        "learning_rate": float(learning_rate),
+        "random_state": random_state,
+    }
+
+    try:
+        return AdaBoostClassifier(estimator=base_tree, **kwargs)
+    except TypeError:
+        return AdaBoostClassifier(base_estimator=base_tree, **kwargs)
+
+
+def make_adaboost_pipeline(
+    *,
+    base_depth: int,
+    n_estimators: int,
+    learning_rate: float,
+) -> Pipeline:
+    """Create a dense one-hot preprocessing plus AdaBoost pipeline."""
+    return make_one_hot_boosting_pipeline(
+        make_adaboost_classifier(
+            base_depth=base_depth,
+            n_estimators=n_estimators,
+            learning_rate=learning_rate,
+        )
+    )
+
+
+def make_gradient_boosting_classifier(
+    *,
+    n_estimators: int,
+    learning_rate: float,
+    max_depth: int,
+    min_samples_leaf: int,
+    subsample: float,
+    random_state: int = RANDOM_STATE,
+) -> GradientBoostingClassifier:
+    """Create scikit-learn's classical gradient boosting classifier."""
+    return GradientBoostingClassifier(
+        loss="log_loss",
+        n_estimators=int(n_estimators),
+        learning_rate=float(learning_rate),
+        max_depth=int(max_depth),
+        min_samples_leaf=int(min_samples_leaf),
+        subsample=float(subsample),
+        random_state=random_state,
+    )
+
+
+def make_gradient_boosting_pipeline(
+    *,
+    n_estimators: int,
+    learning_rate: float,
+    max_depth: int,
+    min_samples_leaf: int,
+    subsample: float,
+) -> Pipeline:
+    """Create a dense one-hot preprocessing plus GradientBoosting pipeline."""
+    return make_one_hot_boosting_pipeline(
+        make_gradient_boosting_classifier(
+            n_estimators=n_estimators,
+            learning_rate=learning_rate,
+            max_depth=max_depth,
+            min_samples_leaf=min_samples_leaf,
+            subsample=subsample,
+        )
+    )
+
+
+def make_hist_gradient_boosting_classifier(
+    *,
+    max_iter: int,
+    learning_rate: float,
+    max_leaf_nodes: int,
+    min_samples_leaf: int,
+    l2_regularization: float,
+    random_state: int = RANDOM_STATE,
+) -> HistGradientBoostingClassifier:
+    """Create scikit-learn's histogram gradient boosting classifier."""
+    return HistGradientBoostingClassifier(
+        loss="log_loss",
+        max_iter=int(max_iter),
+        learning_rate=float(learning_rate),
+        max_leaf_nodes=int(max_leaf_nodes),
+        min_samples_leaf=int(min_samples_leaf),
+        l2_regularization=float(l2_regularization),
+        early_stopping=False,
+        random_state=random_state,
+    )
+
+
+def make_hist_gradient_boosting_pipeline(
+    *,
+    max_iter: int,
+    learning_rate: float,
+    max_leaf_nodes: int,
+    min_samples_leaf: int,
+    l2_regularization: float,
+) -> Pipeline:
+    """Create a dense one-hot preprocessing plus HistGradientBoosting pipeline."""
+    return make_one_hot_boosting_pipeline(
+        make_hist_gradient_boosting_classifier(
+            max_iter=max_iter,
+            learning_rate=learning_rate,
+            max_leaf_nodes=max_leaf_nodes,
+            min_samples_leaf=min_samples_leaf,
+            l2_regularization=l2_regularization,
+        )
+    )
+
+
+def _raise_optional_dependency_error(package_name: str, install_name: str):
+    """Raise an informative error for optional modern boosting packages."""
+    raise ImportError(
+        f"{package_name} is required for this model factory. Install it with "
+        f"`pip install {install_name}` in the project environment."
+    )
+
+
+def make_xgboost_classifier(
+    *,
+    n_estimators: int,
+    learning_rate: float,
+    max_depth: int,
+    min_child_weight: float,
+    subsample: float,
+    colsample_bytree: float,
+    reg_lambda: float,
+    random_state: int = RANDOM_STATE,
+):
+    """Create an XGBoost classifier for dense one-hot encoded input."""
+    try:
+        from xgboost import XGBClassifier
+    except ImportError as exc:
+        _raise_optional_dependency_error("XGBoost", "xgboost")
+        raise exc
+
+    return XGBClassifier(
+        objective="binary:logistic",
+        eval_metric="aucpr",
+        tree_method="hist",
+        n_estimators=int(n_estimators),
+        learning_rate=float(learning_rate),
+        max_depth=int(max_depth),
+        min_child_weight=float(min_child_weight),
+        subsample=float(subsample),
+        colsample_bytree=float(colsample_bytree),
+        reg_lambda=float(reg_lambda),
+        random_state=random_state,
+        n_jobs=-1,
+        verbosity=0,
+    )
+
+
+def make_xgboost_pipeline(
+    *,
+    n_estimators: int,
+    learning_rate: float,
+    max_depth: int,
+    min_child_weight: float,
+    subsample: float,
+    colsample_bytree: float,
+    reg_lambda: float,
+) -> Pipeline:
+    """Create a dense one-hot preprocessing plus XGBoost pipeline."""
+    return make_one_hot_boosting_pipeline(
+        make_xgboost_classifier(
+            n_estimators=n_estimators,
+            learning_rate=learning_rate,
+            max_depth=max_depth,
+            min_child_weight=min_child_weight,
+            subsample=subsample,
+            colsample_bytree=colsample_bytree,
+            reg_lambda=reg_lambda,
+        )
+    )
+
+
+def make_lightgbm_classifier(
+    *,
+    n_estimators: int,
+    learning_rate: float,
+    num_leaves: int,
+    min_child_samples: int,
+    subsample: float,
+    colsample_bytree: float,
+    reg_lambda: float,
+    random_state: int = RANDOM_STATE,
+):
+    """Create a LightGBM classifier for native-categorical input."""
+    try:
+        from lightgbm import LGBMClassifier
+    except ImportError as exc:
+        _raise_optional_dependency_error("LightGBM", "lightgbm")
+        raise exc
+
+    return LGBMClassifier(
+        objective="binary",
+        n_estimators=int(n_estimators),
+        learning_rate=float(learning_rate),
+        num_leaves=int(num_leaves),
+        min_child_samples=int(min_child_samples),
+        subsample=float(subsample),
+        subsample_freq=1,
+        colsample_bytree=float(colsample_bytree),
+        reg_lambda=float(reg_lambda),
+        random_state=random_state,
+        n_jobs=-1,
+        verbose=-1,
+    )
+
+
+def make_lightgbm_pipeline(
+    *,
+    n_estimators: int,
+    learning_rate: float,
+    num_leaves: int,
+    min_child_samples: int,
+    subsample: float,
+    colsample_bytree: float,
+    reg_lambda: float,
+) -> Pipeline:
+    """Create a native-categorical preprocessing plus LightGBM pipeline."""
+    return make_native_lightgbm_pipeline(
+        make_lightgbm_classifier(
+            n_estimators=n_estimators,
+            learning_rate=learning_rate,
+            num_leaves=num_leaves,
+            min_child_samples=min_child_samples,
+            subsample=subsample,
+            colsample_bytree=colsample_bytree,
+            reg_lambda=reg_lambda,
+        )
+    )
+
+
+class CloneSafeCatBoostClassifier(ClassifierMixin, BaseEstimator):
+    """Clone-safe CatBoost wrapper for native categorical columns.
+
+    Passing ``cat_features`` directly to ``CatBoostClassifier`` can fail
+    scikit-learn's strict clone validation in some package combinations because
+    CatBoost normalizes that constructor parameter internally. This wrapper keeps
+    the constructor parameters simple and passes categorical feature names during
+    ``fit`` instead.
+    """
+
+    def __init__(
+        self,
+        *,
+        iterations: int = 100,
+        learning_rate: float = 0.1,
+        depth: int = 3,
+        l2_leaf_reg: float = 3.0,
+        random_state: int = RANDOM_STATE,
+        thread_count: int = -1,
+    ):
+        self.iterations = iterations
+        self.learning_rate = learning_rate
+        self.depth = depth
+        self.l2_leaf_reg = l2_leaf_reg
+        self.random_state = random_state
+        self.thread_count = thread_count
+
+    def fit(self, X: pd.DataFrame, y: pd.Series | np.ndarray):
+        """Fit CatBoost with categorical feature names supplied at fit time."""
+        try:
+            from catboost import CatBoostClassifier
+        except ImportError as exc:
+            _raise_optional_dependency_error("CatBoost", "catboost")
+            raise exc
+
+        self.model_ = CatBoostClassifier(
+            loss_function="Logloss",
+            eval_metric="PRAUC",
+            iterations=int(self.iterations),
+            learning_rate=float(self.learning_rate),
+            depth=int(self.depth),
+            l2_leaf_reg=float(self.l2_leaf_reg),
+            random_seed=int(self.random_state),
+            verbose=False,
+            allow_writing_files=False,
+            thread_count=int(self.thread_count),
+        )
+        self.model_.fit(X, y, cat_features=list(CATEGORICAL_FEATURES))
+        self.classes_ = np.asarray(self.model_.classes_)
+        return self
+
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        """Predict class labels using the fitted CatBoost model."""
+        check_is_fitted(self, "model_")
+        return np.asarray(self.model_.predict(X)).reshape(-1)
+
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        """Predict class probabilities using the fitted CatBoost model."""
+        check_is_fitted(self, "model_")
+        return self.model_.predict_proba(X)
+
+    @property
+    def feature_importances_(self) -> np.ndarray:
+        """Expose CatBoost feature importances after fitting."""
+        check_is_fitted(self, "model_")
+        return np.asarray(self.model_.feature_importances_, dtype=float)
+
+
+def make_catboost_classifier(
+    *,
+    iterations: int,
+    learning_rate: float,
+    depth: int,
+    l2_leaf_reg: float,
+    random_state: int = RANDOM_STATE,
+    thread_count: int = -1,
+) -> CloneSafeCatBoostClassifier:
+    """Create the clone-safe CatBoost classifier wrapper."""
+    return CloneSafeCatBoostClassifier(
+        iterations=int(iterations),
+        learning_rate=float(learning_rate),
+        depth=int(depth),
+        l2_leaf_reg=float(l2_leaf_reg),
+        random_state=random_state,
+        thread_count=thread_count,
+    )
+
+
+def make_catboost_pipeline(
+    *,
+    iterations: int,
+    learning_rate: float,
+    depth: int,
+    l2_leaf_reg: float,
+) -> Pipeline:
+    """Create a native-categorical preprocessing plus clone-safe CatBoost pipeline."""
+    return make_native_catboost_pipeline(
+        make_catboost_classifier(
+            iterations=iterations,
+            learning_rate=learning_rate,
+            depth=depth,
+            l2_leaf_reg=l2_leaf_reg,
+        )
     )

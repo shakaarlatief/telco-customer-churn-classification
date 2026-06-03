@@ -1,0 +1,177 @@
+model,feature,importance
+Best AdaBoost,categorical__Contract_Two year,0.22903027019584016
+Best AdaBoost,categorical__Contract_Month-to-month,0.19100226575548812
+Best AdaBoost,numeric__tenure,0.18092391414145625
+Best AdaBoost,numeric__MonthlyCharges,0.11661953109180682
+Best AdaBoost,categorical__OnlineSecurity_No,0.10056172255239239
+Best AdaBoost,numeric__TotalCharges,0.08033736811084685
+Best AdaBoost,categorical__InternetService_Fiber optic,0.019609061135803213
+Best AdaBoost,categorical__StreamingTV_Yes,0.014975450020187216
+Best AdaBoost,categorical__PaymentMethod_Credit card (automatic),0.013650719401130083
+Best AdaBoost,categorical__PaymentMethod_Electronic check,0.013416866420821396
+Best AdaBoost,categorical__TechSupport_No,0.012573727019005105
+Best AdaBoost,categorical__PaperlessBilling_No,0.0045940426978178855
+Best AdaBoost,categorical__MultipleLines_No,0.0038605630127366178
+Best AdaBoost,categorical__StreamingMovies_Yes,0.0036982309555589443
+Best AdaBoost,categorical__InternetService_No,0.003215516218641634
+Best AdaBoost,categorical__DeviceProtection_No internet service,0.0030717790163663455
+Best AdaBoost,categorical__OnlineBackup_No,0.0023671363605690184
+Best AdaBoost,categorical__StreamingMovies_No internet service,0.001913371057859869
+Best AdaBoost,categorical__Dependents_Yes,0.0015737417608603012
+Best AdaBoost,categorical__PaperlessBilling_Yes,0.0011094156472576631
+Best AdaBoost,categorical__SeniorCitizen_0,0.0010666517247982772
+Best AdaBoost,categorical__Dependents_No,0.000828655702755749
+Best AdaBoost,categorical__PhoneService_Yes,0.0
+Best AdaBoost,categorical__PhoneService_No,0.0
+Best AdaBoost,categorical__Partner_No,0.0
+Best AdaBoost,categorical__Partner_Yes,0.0
+Best AdaBoost,categorical__gender_Male,0.0
+Best AdaBoost,categorical__gender_Female,0.0
+Best AdaBoost,categorical__SeniorCitizen_1,0.0
+Best AdaBoost,categorical__MultipleLines_No phone service,0.0
+Best AdaBoost,categorical__DeviceProtection_Yes,0.0
+Best AdaBoost,categorical__DeviceProtection_No,0.0
+Best AdaBoost,categorical__OnlineBackup_Yes,0.0
+Best AdaBoost,categorical__OnlineBackup_No internet service,0.0
+Best AdaBoost,categorical__OnlineSecurity_No internet service,0.0
+Best AdaBoost,categorical__OnlineSecurity_Yes,0.0
+Best AdaBoost,categorical__MultipleLines_Yes,0.0
+Best AdaBoost,categorical__InternetService_DSL,0.0
+Best AdaBoost,categorical__StreamingMovies_No,0.0
+Best AdaBoost,categorical__StreamingTV_No internet service,0.0
+Best AdaBoost,categorical__TechSupport_Yes,0.0
+Best AdaBoost,categorical__StreamingTV_No,0.0
+Best AdaBoost,categorical__TechSupport_No internet service,0.0
+Best AdaBoost,categorical__Contract_One year,0.0
+Best AdaBoost,categorical__PaymentMethod_Bank transfer (automatic),0.0
+Best AdaBoost,categorical__PaymentMethod_Mailed check,0.0
+Best GradientBoostingClassifier,categorical__Contract_Month-to-month,0.37315642778271335
+Best GradientBoostingClassifier,numeric__tenure,0.14994736807477882
+Best GradientBoostingClassifier,categorical__InternetService_Fiber optic,0.09464044763400159
+Best GradientBoostingClassifier,numeric__TotalCharges,0.07263984802312347
+Best GradientBoostingClassifier,numeric__MonthlyCharges,0.06847608554115164
+Best GradientBoostingClassifier,categorical__OnlineSecurity_No,0.0678909746491585
+Best GradientBoostingClassifier,categorical__TechSupport_No,0.048257173437388994
+Best GradientBoostingClassifier,categorical__PaymentMethod_Electronic check,0.04392586853258355
+Best GradientBoostingClassifier,categorical__MultipleLines_No,0.013653833109573188
+Best GradientBoostingClassifier,categorical__PaperlessBilling_No,0.01236394395996452
+Best GradientBoostingClassifier,categorical__OnlineBackup_No,0.00933350835542366
+Best GradientBoostingClassifier,categorical__PaperlessBilling_Yes,0.009270181279314489
+Best GradientBoostingClassifier,categorical__StreamingMovies_Yes,0.006635647446184701
+Best GradientBoostingClassifier,categorical__Contract_Two year,0.006356190952067653
+Best GradientBoostingClassifier,categorical__Contract_One year,0.003951005171863643
+Best GradientBoostingClassifier,categorical__SeniorCitizen_1,0.0033043238810692497
+Best GradientBoostingClassifier,categorical__Dependents_No,0.002525025365856099
+Best GradientBoostingClassifier,categorical__gender_Female,0.0018728291710539498
+Best GradientBoostingClassifier,categorical__StreamingTV_Yes,0.001824468737883046
+Best GradientBoostingClassifier,categorical__gender_Male,0.0014184993537023718
+Best GradientBoostingClassifier,categorical__OnlineSecurity_Yes,0.0012581805208484336
+Best GradientBoostingClassifier,categorical__PhoneService_Yes,0.0010458859224229144
+Best GradientBoostingClassifier,categorical__StreamingTV_No,0.0010286060101719833
+Best GradientBoostingClassifier,categorical__SeniorCitizen_0,0.0008756834547330181
+Best GradientBoostingClassifier,categorical__TechSupport_Yes,0.0007968718427093336
+Best GradientBoostingClassifier,categorical__PaymentMethod_Mailed check,0.0007360173161582063
+Best GradientBoostingClassifier,categorical__PaymentMethod_Credit card (automatic),0.0006838292609216238
+Best GradientBoostingClassifier,categorical__Dependents_Yes,0.00038826198862102325
+Best GradientBoostingClassifier,categorical__InternetService_DSL,0.00028716015727724473
+Best GradientBoostingClassifier,categorical__Partner_No,0.00024142689485595191
+Best GradientBoostingClassifier,categorical__StreamingMovies_No,0.00018536658727989137
+Best GradientBoostingClassifier,categorical__PaymentMethod_Bank transfer (automatic),0.0001816244765265117
+Best GradientBoostingClassifier,categorical__MultipleLines_No phone service,0.00016801358091112555
+Best GradientBoostingClassifier,categorical__PhoneService_No,0.0001468839934463455
+Best GradientBoostingClassifier,categorical__DeviceProtection_Yes,0.00013992972971212502
+Best GradientBoostingClassifier,categorical__DeviceProtection_No,0.00013871442294131187
+Best GradientBoostingClassifier,categorical__OnlineBackup_Yes,0.00013339750110862077
+Best GradientBoostingClassifier,categorical__MultipleLines_Yes,0.00012049588049785374
+Best GradientBoostingClassifier,categorical__Partner_Yes,0.0
+Best GradientBoostingClassifier,categorical__OnlineBackup_No internet service,0.0
+Best GradientBoostingClassifier,categorical__OnlineSecurity_No internet service,0.0
+Best GradientBoostingClassifier,categorical__InternetService_No,0.0
+Best GradientBoostingClassifier,categorical__DeviceProtection_No internet service,0.0
+Best GradientBoostingClassifier,categorical__StreamingMovies_No internet service,0.0
+Best GradientBoostingClassifier,categorical__TechSupport_No internet service,0.0
+Best GradientBoostingClassifier,categorical__StreamingTV_No internet service,0.0
+Best XGBoost,categorical__Contract_Month-to-month,0.4181084930896759
+Best XGBoost,categorical__OnlineSecurity_No,0.10420063138008118
+Best XGBoost,categorical__InternetService_Fiber optic,0.09973470866680145
+Best XGBoost,categorical__PaymentMethod_Electronic check,0.07119431346654892
+Best XGBoost,categorical__TechSupport_No,0.059646110981702805
+Best XGBoost,categorical__Contract_Two year,0.03578605502843857
+Best XGBoost,numeric__tenure,0.027863120660185814
+Best XGBoost,categorical__StreamingTV_Yes,0.02057536132633686
+Best XGBoost,categorical__PaperlessBilling_No,0.019072290509939194
+Best XGBoost,categorical__Contract_One year,0.015678973868489265
+Best XGBoost,categorical__StreamingMovies_Yes,0.014765013009309769
+Best XGBoost,categorical__StreamingMovies_No,0.014637789689004421
+Best XGBoost,categorical__OnlineBackup_No,0.012791814282536507
+Best XGBoost,categorical__MultipleLines_No,0.01212263759225607
+Best XGBoost,categorical__InternetService_No,0.011742430739104748
+Best XGBoost,numeric__MonthlyCharges,0.009530392475426197
+Best XGBoost,numeric__TotalCharges,0.008835293352603912
+Best XGBoost,categorical__SeniorCitizen_0,0.008567593060433865
+Best XGBoost,categorical__Dependents_No,0.008053300902247429
+Best XGBoost,categorical__gender_Female,0.006237150635570288
+Best XGBoost,categorical__PhoneService_No,0.005609198473393917
+Best XGBoost,categorical__InternetService_DSL,0.005249458365142345
+Best XGBoost,categorical__OnlineBackup_Yes,0.00436767004430294
+Best XGBoost,categorical__PaymentMethod_Mailed check,0.0029807258397340775
+Best XGBoost,categorical__MultipleLines_Yes,0.0026494415942579508
+Best XGBoost,categorical__Dependents_Yes,0.0
+Best XGBoost,categorical__gender_Male,0.0
+Best XGBoost,categorical__SeniorCitizen_1,0.0
+Best XGBoost,categorical__Partner_No,0.0
+Best XGBoost,categorical__Partner_Yes,0.0
+Best XGBoost,categorical__PhoneService_Yes,0.0
+Best XGBoost,categorical__DeviceProtection_No internet service,0.0
+Best XGBoost,categorical__DeviceProtection_No,0.0
+Best XGBoost,categorical__OnlineBackup_No internet service,0.0
+Best XGBoost,categorical__OnlineSecurity_No internet service,0.0
+Best XGBoost,categorical__OnlineSecurity_Yes,0.0
+Best XGBoost,categorical__MultipleLines_No phone service,0.0
+Best XGBoost,categorical__PaperlessBilling_Yes,0.0
+Best XGBoost,categorical__DeviceProtection_Yes,0.0
+Best XGBoost,categorical__StreamingMovies_No internet service,0.0
+Best XGBoost,categorical__TechSupport_Yes,0.0
+Best XGBoost,categorical__StreamingTV_No,0.0
+Best XGBoost,categorical__TechSupport_No internet service,0.0
+Best XGBoost,categorical__StreamingTV_No internet service,0.0
+Best XGBoost,categorical__PaymentMethod_Credit card (automatic),0.0
+Best XGBoost,categorical__PaymentMethod_Bank transfer (automatic),0.0
+Best LightGBM native categorical,MonthlyCharges,261.0
+Best LightGBM native categorical,TotalCharges,237.0
+Best LightGBM native categorical,tenure,226.0
+Best LightGBM native categorical,Contract,135.0
+Best LightGBM native categorical,PaperlessBilling,68.0
+Best LightGBM native categorical,OnlineSecurity,62.0
+Best LightGBM native categorical,MultipleLines,57.0
+Best LightGBM native categorical,InternetService,52.0
+Best LightGBM native categorical,TechSupport,51.0
+Best LightGBM native categorical,PaymentMethod,49.0
+Best LightGBM native categorical,StreamingMovies,43.0
+Best LightGBM native categorical,OnlineBackup,41.0
+Best LightGBM native categorical,Dependents,24.0
+Best LightGBM native categorical,gender,23.0
+Best LightGBM native categorical,SeniorCitizen,22.0
+Best LightGBM native categorical,StreamingTV,21.0
+Best LightGBM native categorical,DeviceProtection,13.0
+Best LightGBM native categorical,PhoneService,10.0
+Best LightGBM native categorical,Partner,5.0
+Best CatBoost native categorical,Contract,25.51104590848909
+Best CatBoost native categorical,tenure,22.347208978330173
+Best CatBoost native categorical,MonthlyCharges,20.726136090706106
+Best CatBoost native categorical,OnlineSecurity,6.253624219147577
+Best CatBoost native categorical,TechSupport,6.1940656800359815
+Best CatBoost native categorical,TotalCharges,4.297234315240496
+Best CatBoost native categorical,PaymentMethod,3.6223770127620822
+Best CatBoost native categorical,PaperlessBilling,3.3061744559629487
+Best CatBoost native categorical,InternetService,1.800513462703316
+Best CatBoost native categorical,MultipleLines,1.676228453523377
+Best CatBoost native categorical,OnlineBackup,1.3260872087565214
+Best CatBoost native categorical,Dependents,0.7646865134972778
+Best CatBoost native categorical,SeniorCitizen,0.6644158908741946
+Best CatBoost native categorical,PhoneService,0.45667139976738413
+Best CatBoost native categorical,StreamingMovies,0.4510017829449452
+Best CatBoost native categorical,StreamingTV,0.24300867959480682
+Best CatBoost native categorical,Partner,0.18473562762402043
+Best CatBoost native categorical,gender,0.14390511284603497
+Best CatBoost native categorical,DeviceProtection,0.030879207193654796
