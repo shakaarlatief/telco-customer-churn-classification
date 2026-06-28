@@ -1,0 +1,9 @@
+model,tp,fn,fp,tn
+Best XGBoost reference,806,689,395,3744
+Selected bagged trees,753,742,385,3754
+Selected random forest,744,751,354,3785
+Selected L2 logistic regression,813,682,434,3705
+Selected LinearSVC,1206,289,1147,2992
+Selected RBF SVC,1246,249,1410,2729
+Selected single decision tree,769,726,463,3676
+Selected kNN,854,641,530,3609

@@ -22,6 +22,13 @@ data:
 - Gaussian likelihoods for numeric features;
 - Bernoulli likelihoods for one-hot encoded categorical indicators.
 
+Section 11 introduces support vector machines:
+
+- LinearSVC for scalable maximum-margin linear classification;
+- kernel-capable SVC for linear, polynomial, RBF, and sigmoid kernels;
+- scaled preprocessing pipelines that keep fold-level feature transformation
+  inside cross-validation.
+
 The functions intentionally return scikit-learn estimators rather than fitting
 them. Fitting happens inside cross-validation pipelines in the notebooks.
 """
@@ -45,6 +52,7 @@ from sklearn.ensemble import (
 )
 from sklearn.linear_model import LogisticRegression, RidgeClassifier
 from sklearn.pipeline import Pipeline
+from sklearn.svm import LinearSVC, SVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.utils.validation import check_is_fitted
 
@@ -545,6 +553,174 @@ def make_l2_logistic_regression_pipeline(
             max_iter=max_iter,
             random_state=random_state,
         ),
+    )
+
+
+def make_linear_svc_classifier(
+    *,
+    C: float = 1.0,
+    loss: str = "squared_hinge",
+    class_weight: str | dict[int, float] | None = None,
+    tol: float = 1e-4,
+    max_iter: int = 20_000,
+    random_state: int = RANDOM_STATE,
+) -> LinearSVC:
+    """Create a regularized linear support vector classifier.
+
+    The classifier uses L2 regularization and either the ordinary hinge loss or
+    scikit-learn's squared-hinge variant. ``C`` is the inverse strength of the
+    penalty applied to margin violations: smaller values impose stronger
+    regularization and allow a wider-margin, more tolerant fit.
+
+    ``dual="auto"`` preserves the solver-selection behaviour used by the SVM
+    notebook. In particular, scikit-learn can choose a primal or dual
+    optimization formulation when the selected loss supports both, while hinge
+    loss continues to use its valid dual formulation. This keeps the reusable
+    factory aligned with the originally executed notebook workflow.
+
+    The returned estimator exposes ``decision_function`` scores, not
+    probabilities. Those signed margin scores can be used directly for ranking
+    metrics and score-threshold diagnostics.
+    """
+    valid_losses = {"hinge", "squared_hinge"}
+    if loss not in valid_losses:
+        raise ValueError(f"loss must be one of {sorted(valid_losses)}.")
+    if C <= 0:
+        raise ValueError("C must be strictly positive.")
+    if tol <= 0:
+        raise ValueError("tol must be strictly positive.")
+    if max_iter <= 0:
+        raise ValueError("max_iter must be strictly positive.")
+
+    return LinearSVC(
+        penalty="l2",
+        loss=loss,
+        dual="auto",
+        C=float(C),
+        class_weight=class_weight,
+        tol=float(tol),
+        max_iter=int(max_iter),
+        random_state=random_state,
+    )
+
+
+def make_linear_svc_pipeline(
+    *,
+    C: float = 1.0,
+    loss: str = "squared_hinge",
+    class_weight: str | dict[int, float] | None = None,
+) -> Pipeline:
+    """Create scaled one-hot preprocessing plus a linear-SVM pipeline.
+
+    SVM geometry depends on feature scale. The numeric standardization and
+    categorical one-hot encoding therefore remain inside the pipeline, so each
+    cross-validation fold estimates preprocessing parameters from its own
+    training partition only.
+    """
+    return make_classifier_pipeline(
+        preprocessor=make_scaled_preprocessor(),
+        classifier=make_linear_svc_classifier(
+            C=C,
+            loss=loss,
+            class_weight=class_weight,
+        ),
+    )
+
+
+def make_kernel_svc_classifier(
+    *,
+    C: float = 1.0,
+    kernel: str = "rbf",
+    gamma: str | float = "scale",
+    degree: int = 3,
+    coef0: float = 0.0,
+    class_weight: str | dict[int, float] | None = None,
+    cache_size: float = 1_000.0,
+    tol: float = 1e-3,
+    random_state: int = RANDOM_STATE,
+) -> SVC:
+    """Create a kernel-capable support vector classifier.
+
+    The fitted model uses ``probability=False`` intentionally. Kernel-SVM
+    probability estimates require an additional internal fitting procedure,
+    whereas the signed values from ``decision_function`` are already suitable
+    for ROC-AUC, PR-AUC, ranking curves, and margin-score threshold diagnostics.
+
+    ``gamma`` may be ``"scale"``, ``"auto"``, or a strictly positive numeric
+    value. It controls kernel locality for RBF and polynomial kernels. ``degree``
+    and ``coef0`` are accepted for general kernel support, although they are only
+    relevant for selected kernel families.
+    """
+    valid_kernels = {"linear", "poly", "rbf", "sigmoid"}
+    if kernel not in valid_kernels:
+        raise ValueError(f"kernel must be one of {sorted(valid_kernels)}.")
+    if C <= 0:
+        raise ValueError("C must be strictly positive.")
+    if tol <= 0:
+        raise ValueError("tol must be strictly positive.")
+    if cache_size <= 0:
+        raise ValueError("cache_size must be strictly positive.")
+    if degree < 1:
+        raise ValueError("degree must be at least one.")
+
+    if isinstance(gamma, str):
+        if gamma not in {"scale", "auto"}:
+            raise ValueError("String gamma must be 'scale' or 'auto'.")
+    else:
+        gamma = float(gamma)
+        if gamma <= 0:
+            raise ValueError("Numeric gamma must be strictly positive.")
+
+    return SVC(
+        C=float(C),
+        kernel=kernel,
+        gamma=gamma,
+        degree=int(degree),
+        coef0=float(coef0),
+        class_weight=class_weight,
+        probability=False,
+        cache_size=float(cache_size),
+        tol=float(tol),
+        shrinking=True,
+        random_state=random_state,
+    )
+
+
+def make_kernel_svc_pipeline(
+    *,
+    C: float = 1.0,
+    kernel: str = "rbf",
+    gamma: str | float = "scale",
+    degree: int = 3,
+    coef0: float = 0.0,
+    class_weight: str | dict[int, float] | None = None,
+) -> Pipeline:
+    """Create scaled one-hot preprocessing plus a kernel-SVM pipeline."""
+    return make_classifier_pipeline(
+        preprocessor=make_scaled_preprocessor(),
+        classifier=make_kernel_svc_classifier(
+            C=C,
+            kernel=kernel,
+            gamma=gamma,
+            degree=degree,
+            coef0=coef0,
+            class_weight=class_weight,
+        ),
+    )
+
+
+def make_rbf_svc_pipeline(
+    *,
+    C: float = 1.0,
+    gamma: float = 0.1,
+    class_weight: str | dict[int, float] | None = None,
+) -> Pipeline:
+    """Create the scaled RBF-kernel SVC pipeline used in the SVM grid."""
+    return make_kernel_svc_pipeline(
+        C=C,
+        kernel="rbf",
+        gamma=float(gamma),
+        class_weight=class_weight,
     )
 
 

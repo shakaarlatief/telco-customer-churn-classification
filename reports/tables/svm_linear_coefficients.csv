@@ -1,0 +1,47 @@
+feature,coefficient,absolute_coefficient,direction
+tenure,-0.32226333851335787,0.32226333851335787,lower churn decision score
+InternetService_Fiber optic,0.27885526631328367,0.27885526631328367,higher churn decision score
+MonthlyCharges,-0.24449325800209398,0.24449325800209398,lower churn decision score
+InternetService_DSL,-0.23882056475702326,0.23882056475702326,lower churn decision score
+Contract_Month-to-month,0.23832193311070124,0.23832193311070124,higher churn decision score
+Contract_Two year,-0.2226967520488379,0.2226967520488379,lower churn decision score
+StreamingMovies_Yes,0.1067223418256464,0.1067223418256464,higher churn decision score
+OnlineSecurity_No internet service,-0.10568246690937076,0.10568246690937076,lower churn decision score
+OnlineBackup_No internet service,-0.10568246690937076,0.10568246690937076,lower churn decision score
+InternetService_No,-0.10568246690937076,0.10568246690937076,lower churn decision score
+DeviceProtection_No internet service,-0.10568246690937076,0.10568246690937076,lower churn decision score
+TechSupport_No internet service,-0.10568246690937076,0.10568246690937076,lower churn decision score
+StreamingMovies_No internet service,-0.10568246690937073,0.10568246690937073,lower churn decision score
+StreamingTV_No internet service,-0.10568246690937073,0.10568246690937073,lower churn decision score
+StreamingTV_Yes,0.1019850873949025,0.1019850873949025,higher churn decision score
+PaperlessBilling_No,-0.09460233693353108,0.09460233693353108,lower churn decision score
+PaymentMethod_Electronic check,0.09400500526905056,0.09400500526905056,higher churn decision score
+OnlineSecurity_No,0.08250328234371407,0.08250328234371407,higher churn decision score
+Contract_One year,-0.08127294641500842,0.08127294641500842,lower churn decision score
+Dependents_Yes,-0.07562400484678593,0.07562400484678593,lower churn decision score
+MultipleLines_No,-0.07530382946455949,0.07530382946455949,lower churn decision score
+TechSupport_No,0.06782039140448344,0.06782039140448344,higher churn decision score
+StreamingMovies_No,-0.06668764026915082,0.06668764026915082,lower churn decision score
+TotalCharges,0.06406055361816983,0.06406055361816983,higher churn decision score
+StreamingTV_No,-0.06195038583849544,0.06195038583849544,lower churn decision score
+PaymentMethod_Bank transfer (automatic),-0.061713914825641,0.061713914825641,lower churn decision score
+SeniorCitizen_0,-0.05909644576700999,0.05909644576700999,lower churn decision score
+PaymentMethod_Credit card (automatic),-0.05907922991384863,0.05907922991384863,lower churn decision score
+MultipleLines_Yes,0.05499295584687596,0.05499295584687596,higher churn decision score
+PhoneService_No,-0.045336891735478044,0.045336891735478044,lower churn decision score
+MultipleLines_No phone service,-0.045336891735478044,0.045336891735478044,lower churn decision score
+OnlineSecurity_Yes,-0.04246858078742444,0.04246858078742444,lower churn decision score
+PaymentMethod_Mailed check,-0.03885962588208714,0.03885962588208714,lower churn decision score
+gender_Female,-0.03763386887028058,0.03763386887028058,lower churn decision score
+Partner_No,-0.03692493116817866,0.03692493116817866,lower churn decision score
+DeviceProtection_Yes,0.034546805496802314,0.034546805496802314,higher churn decision score
+OnlineBackup_No,0.031389535133271945,0.031389535133271945,higher churn decision score
+PaperlessBilling_Yes,0.028954571580446023,0.028954571580446023,higher churn decision score
+Partner_Yes,-0.028722834184927756,0.028722834184927756,lower churn decision score
+gender_Male,-0.028013896482918816,0.028013896482918816,lower churn decision score
+TechSupport_Yes,-0.027785689848275688,0.027785689848275688,lower churn decision score
+PhoneService_Yes,-0.020310873617395073,0.020310873617395073,lower churn decision score
+Dependents_No,0.00997623949349383,0.00997623949349383,higher churn decision score
+OnlineBackup_Yes,0.008645166423163642,0.008645166423163642,higher churn decision score
+SeniorCitizen_1,-0.0065513195860175295,0.0065513195860175295,lower churn decision score
+DeviceProtection_No,0.005487896059490335,0.005487896059490335,higher churn decision score

@@ -53,3 +53,5 @@ Thumbs.db
 
 # Extra files to ignore
 SAVED/
+# LaTeX SyncTeX temporary busy files
+*.synctex(busy)

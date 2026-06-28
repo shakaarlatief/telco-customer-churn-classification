@@ -69,8 +69,17 @@ def save_threshold_tradeoff_plot(
     output_path: Path,
     title: str,
     metric_columns: list[str] | None = None,
+    x_label: str = "Classification threshold",
+    reference_threshold: float | None = None,
+    reference_label: str | None = None,
 ) -> None:
-    """Save threshold tradeoff curves for a probability model."""
+    """Save threshold tradeoff curves for arbitrary classifier-score thresholds.
+
+    Probability thresholds are one common use case. The same helper can also
+    display signed decision-function thresholds from margin-based classifiers,
+    such as SVMs. An optional reference threshold marks a natural operating
+    point, for example score zero for an uncalibrated binary SVM.
+    """
     if metric_columns is None:
         metric_columns = ["precision", "recall", "specificity", "f1"]
 
@@ -79,7 +88,18 @@ def save_threshold_tradeoff_plot(
     for metric in metric_columns:
         ax.plot(threshold_df["threshold"], threshold_df[metric], label=metric)
 
-    ax.set_xlabel("Classification threshold")
+    if reference_threshold is not None:
+        ax.axvline(
+            reference_threshold,
+            linestyle="--",
+            linewidth=1,
+            label=(
+                reference_label
+                or f"Reference threshold = {float(reference_threshold):g}"
+            ),
+        )
+
+    ax.set_xlabel(x_label)
     ax.set_ylabel("Metric value")
     ax.set_title(title)
     ax.set_ylim(0, 1)
