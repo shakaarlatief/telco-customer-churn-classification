@@ -67,7 +67,23 @@ the strict single-final-test-model policy
 
 ## Completed model-family inventory
 
-### 05. Linear classification and logistic regression
+### Workflow-number convention
+
+The labels below refer to repository workflow and notebook identifiers, not LaTeX report section numbers.
+
+```text
+Workflow 05:
+    notebook and knowledge-note identifier 05
+
+Workflow 11:
+    support-vector-machine workflow identifier 11
+    integrated as Section 12 in the LaTeX report because the report also contains
+    earlier data-audit, EDA, and methodology sections
+```
+
+This distinction prevents the documentation roadmap from implying that workflow numbers and report section numbers must match.
+
+### Workflow 05: Linear classification and logistic regression
 
 Core ideas:
 
@@ -97,7 +113,7 @@ L1 and L2 logistic regression are essentially tied.
 The representative L2 logistic model has PR-AUC about 0.658 and ROC-AUC about 0.846.
 ```
 
-### 06. k-nearest neighbours
+### Workflow 06: k-nearest neighbours
 
 Core ideas:
 
@@ -123,7 +139,7 @@ The selected kNN model uses k = 101, uniform weighting, and Manhattan distance.
 Its PR-AUC is about 0.628 and its ROC-AUC is about 0.836.
 ```
 
-### 07. Naive Bayes
+### Workflow 07: Naive Bayes
 
 Core ideas:
 
@@ -149,7 +165,7 @@ The selected HybridGaussianBernoulliNB has PR-AUC about 0.615 and ROC-AUC about 
 The hybrid likelihood is more coherent than treating one-hot categorical indicators as Gaussian.
 ```
 
-### 08. Decision trees
+### Workflow 08: Decision trees
 
 Core ideas:
 
@@ -178,7 +194,7 @@ The selected pre-pruned tree has PR-AUC about 0.628 and ROC-AUC about 0.824.
 The unrestricted tree overfits strongly, which demonstrates why tree regularization is necessary.
 ```
 
-### 09. Bagging and random forests
+### Workflow 09: Bagging and random forests
 
 Core ideas:
 
@@ -212,7 +228,7 @@ Selected random forest:
 
 The relevant conclusion is that both ensembles materially improve on the single tree. Their close differences do not establish that one is meaningfully superior.
 
-### 10. Boosting
+### Workflow 10: Boosting
 
 Core ideas:
 
@@ -242,7 +258,7 @@ The representative XGBoost pooled OOF diagnostic has PR-AUC about 0.670 and ROC-
 
 The top boosting point estimates are too close to support a conclusion that one boosting library is definitively best.
 
-### 11. Support vector machines
+### Workflow 11: Support vector machines
 
 Core ideas:
 
@@ -252,7 +268,7 @@ maximum-margin separation
 support vectors
 hard and soft margins
 hinge and squared-hinge loss
-C as inverse margin-violation penalty strength
+C as the penalty weight on margin violations and inverse regularization strength
 class weighting
 kernel trick
 polynomial and RBF kernels
@@ -288,9 +304,9 @@ The selected linear and RBF candidates are effectively tied within the tried gri
 
 ## Remaining model-family roadmap
 
-### 12. Multilayer perceptrons and feed-forward neural networks
+### Workflow 12: Multilayer perceptrons and feed-forward neural networks
 
-This is the immediate next model-family section.
+This is the immediate next model-family workflow. Its eventual LaTeX report section number will be determined by the report structure rather than assumed from the workflow identifier.
 
 Core topics:
 
@@ -308,7 +324,7 @@ scaling and one-hot encoded tabular inputs
 validation behaviour, calibration, and thresholds
 ```
 
-The MLP section should compare shallow and moderately deep tabular neural-network candidates while maintaining training-only preprocessing and cross-validation discipline. The purpose is not to assume that neural networks will beat boosted trees. It is to understand whether learned nonlinear representations add useful predictive signal for this relatively small mixed tabular dataset.
+The MLP workflow should compare shallow and moderately deep tabular neural-network candidates while maintaining training-only preprocessing and cross-validation discipline. The purpose is not to assume that neural networks will beat boosted trees. It is to understand whether learned nonlinear representations add useful predictive signal for this relatively small mixed tabular dataset.
 
 ## Cross-cutting modelling topics before final evaluation
 
@@ -330,7 +346,7 @@ These should not be applied indiscriminately to every model family. They should 
 
 ## Final training-only selection roadmap
 
-After the remaining model-family work, the project should transition from educational family sections to a dedicated finalist-selection stage.
+After the remaining model-family work, the project should transition from educational family workflows to a dedicated finalist-selection stage.
 
 The intended sequence is:
 
@@ -371,7 +387,7 @@ final performance
 
 ## Deliberately deferred work
 
-The following are not current modelling-section tasks:
+The following are not current modelling-workflow tasks:
 
 ```text
 using the test set to compare candidates

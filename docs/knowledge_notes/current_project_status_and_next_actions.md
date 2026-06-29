@@ -59,6 +59,19 @@ Training churn rate:     approximately 26.54%
 
 The compiled report now includes the completed SVM section and is 113 pages long.
 
+### Workflow-number convention
+
+The model labels in this status file refer to repository workflow and notebook identifiers. They are not assumed to match LaTeX report section numbers.
+
+```text
+Workflow 11:
+    support-vector-machine workflow identifier 11
+
+LaTeX report:
+    Support Vector Machines is Section 12 because the report also contains
+    data-audit, EDA, and methodology sections before the model-family sequence
+```
+
 ## Governing evaluation policy
 
 All current model-family results are development-stage estimates.
@@ -94,7 +107,7 @@ The final test set is used exactly once after the final model family, preprocess
 
 ## Completed model-family checkpoints
 
-### Section 05: linear classification and logistic regression
+### Workflow 05: linear classification and logistic regression
 
 Status:
 
@@ -119,7 +132,7 @@ L2 logistic regression remains a stable, interpretable linear benchmark.
 Class weighting shifts the default operating point toward higher recall and more false positives.
 ```
 
-### Section 06: k-nearest neighbours
+### Workflow 06: k-nearest neighbours
 
 Status:
 
@@ -146,7 +159,7 @@ A smoother, large-neighbourhood model performs better within the tried grid.
 kNN remains below the strongest linear and ensemble candidates by ranking metrics.
 ```
 
-### Section 07: Naive Bayes
+### Workflow 07: Naive Bayes
 
 Status:
 
@@ -177,7 +190,7 @@ The hybrid likelihood is more appropriate than treating one-hot categorical indi
 as Gaussian variables. Conditional independence remains a material limitation.
 ```
 
-### Section 08: decision trees
+### Workflow 08: decision trees
 
 Status:
 
@@ -207,7 +220,7 @@ A single tree is useful for interpretable nonlinear rules, but does not match th
 stronger linear and ensemble candidates.
 ```
 
-### Section 09: bagging and random forests
+### Workflow 09: bagging and random forests
 
 Status:
 
@@ -237,7 +250,7 @@ Bagging and random forests are close enough that their small observed difference
 do not establish a meaningful ordering.
 ```
 
-### Section 10: boosting
+### Workflow 10: boosting
 
 Status:
 
@@ -266,7 +279,7 @@ CatBoost, GradientBoostingClassifier, and XGBoost are too close to support a
 claim that one implementation is definitively superior.
 ```
 
-### Section 11: support vector machines
+### Workflow 11: support vector machines
 
 Status:
 
@@ -274,7 +287,9 @@ Status:
 complete and committed
 ```
 
-The SVM section includes:
+The SVM workflow is integrated as Section 12 in the compiled LaTeX report.
+
+The SVM workflow includes:
 
 ```text
 linear maximum-margin classification
@@ -393,15 +408,15 @@ Generated LaTeX temporary files:
 
 ## Immediate next actions
 
-### Next model-family stage
+### Next model-family workflow
 
-The next planned model-family section is:
+The next planned model-family workflow is:
 
 ```text
 12_multilayer_perceptrons_and_neural_networks
 ```
 
-The section should begin with a knowledge note covering:
+The workflow should begin with a knowledge note covering:
 
 ```text
 feed-forward neural-network architecture
@@ -416,7 +431,7 @@ overfitting and validation discipline
 probability outputs, calibration, and threshold behaviour
 ```
 
-Then follow the established model-section process:
+Then follow the established model-workflow process:
 
 ```text
 1. Create the MLP knowledge note.
@@ -427,12 +442,12 @@ Then follow the established model-section process:
 6. Write the report section from observed results.
 7. Compile and inspect the report.
 8. Update the live coordination documents and create a new handoff when needed.
-9. Commit only after the section is checked.
+9. Commit only after the workflow is checked.
 ```
 
 ### After remaining model-family work
 
-After the MLP section and any justified cross-cutting candidate refinements, the project should perform a dedicated final training-only selection stage:
+After the MLP workflow and any justified cross-cutting candidate refinements, the project should perform a dedicated final training-only selection stage:
 
 ```text
 1. Define a serious finalist set.
