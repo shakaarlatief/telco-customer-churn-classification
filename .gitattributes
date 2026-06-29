@@ -1,0 +1,3 @@
+# PDF files contain byte-offset cross-reference tables.
+# Never apply text or line-ending conversion.
+*.pdf -text
