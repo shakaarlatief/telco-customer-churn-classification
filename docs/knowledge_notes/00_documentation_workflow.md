@@ -374,9 +374,13 @@ For model-family sections, the preferred workflow is more specific than the gene
 This workflow separates theory, execution, observed results, and polished reporting. The assistant should not write final report claims before seeing the actual executed results. If a file may have changed locally and the assistant does not have the current version, ask the user to upload it or provide an exact copy-paste replacement rather than overwriting unknown work.
 
 
-## 11. Current documentation map
+## 11. Stable documentation directory conventions
 
-The expected documentation map is:
+This section records stable directory conventions rather than a literal inventory of every
+currently existing knowledge note, handoff, or generated model document. A literal inventory
+would become stale whenever a model family or handoff file is added.
+
+The stable documentation layout is:
 
 ```text
 docs/knowledge_notes/
@@ -386,29 +390,27 @@ docs/knowledge_notes/
     current_notebook_documentation_audit.md
 
     context_history/
-        telco_churn_chat_handoff_context_2.md
-        telco_churn_chat_handoff_context_3.md
+        telco_churn_chat_handoff_context_<number>.md
 
     methodology/
-        evaluation_foundations.md
-        cross_validation_and_model_selection.md
-        statistical_uncertainty_and_tests.md
-        final_model_comparison_plan.md
-        hyperparameter_tuning.md
+        <methodology_topic>.md
 
     models/
-        05_linear_classification_and_logistic_regression.md
-        06_knn.md
-        07_naive_bayes.md
+        <section_number>_<model_family>.md
+        figures/
 ```
 
-Additional methodology notes can be added later for:
+Use the live coordination documents for current inventory and progress:
 
 ```text
-class_imbalance_and_resampling.md
-feature_selection.md
-calibration.md
-final_test_evaluation_template.md
+completed and remaining model-family inventory:
+    01_model_inventory_and_roadmap.md
+
+immediate current work:
+    current_project_status_and_next_actions.md
+
+new-chat continuation state:
+    newest file in context_history/
 ```
 
 ## 12. Where to put "what should we do next?"

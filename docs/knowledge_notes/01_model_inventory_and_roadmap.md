@@ -4,33 +4,44 @@
 
 This document is the strategic modelling roadmap for the Telco Customer Churn classification project.
 
-The project is not only about finding the best churn model. It is also a reusable classification reference project. The goal is to apply, preserve, and explain machine-learning knowledge through a simple-to-complex modelling sequence on one coherent dataset.
-
-The polished report should read as a standalone technical report. Knowledge notes may preserve deeper theory and modelling plans, but report prose should not depend on lecture references.
-
-## Current project state at time of this update
-
-Latest confirmed GitHub commit at the time this roadmap was last updated:
+The project has two linked goals:
 
 ```text
-d91fa9bf086bdfba58e4118d371c882e71452b05
-Update project status after decision trees
+1. Build a professional, portfolio-ready churn-classification project.
+2. Preserve reusable knowledge of classification modelling, evaluation, and implementation.
 ```
 
-Important note:
+The project deliberately studies more than one strong model. A model family remains valuable even when it is not the strongest observed candidate, because it teaches a distinct modelling principle, preprocessing requirement, loss function, geometry, or error tradeoff.
+
+This roadmap is strategic rather than tactical. For immediate work, use:
 
 ```text
-The previous status-update commit was pushed after the decision-tree modelling commit, but the replacement files used there still contained stale checkpoint text in some places. This version corrects those live status and roadmap references.
+docs/knowledge_notes/current_project_status_and_next_actions.md
 ```
 
-The actual completed decision-tree modelling section was added in:
+For a new-chat continuation snapshot, use the newest file in:
 
 ```text
-08fb64873d4c8a929cfde529638d2e1ed49fcd5d
-Add decision tree modelling section
+docs/knowledge_notes/context_history/
 ```
 
-Completed and committed modelling/report stages through the current checkpoint:
+## Dataset and evaluation boundary
+
+```text
+Clean modelling dataset: 7043 observations
+Training set:            5634 observations
+Held-out test set:       1409 observations
+Positive class:          Churn_binary = 1
+Training churn rate:     approximately 26.54%
+```
+
+The test set remains untouched until one final end-to-end modelling procedure is frozen.
+
+All current model-family results are training-only, development-stage estimates. They support understanding, tuning, and candidate shortlisting. They do not establish final test performance or prove that small metric differences represent genuine population-level superiority.
+
+## Completed project foundations
+
+The following stages are complete:
 
 ```text
 01_raw_data_audit
@@ -38,546 +49,338 @@ Completed and committed modelling/report stages through the current checkpoint:
 03_training_set_eda
 04_statistical_evaluation_methodology
 04_preprocessing_and_simple_baselines
-05_linear_classification_and_logistic_regression
-06_k_nearest_neighbours
-07_naive_bayes
-08_decision_trees
 ```
 
-The next modelling stage is:
+These stages establish:
 
 ```text
-09_bagging_and_random_forests
+raw-schema inspection and deterministic TotalCharges correction
+clean train-test split discipline
+training-set-only exploratory analysis
+positive-class definition
+positive-first confusion-matrix convention
+cross-validation and pooled out-of-fold diagnostics
+threshold and calibration concepts
+baseline classifiers
+the strict single-final-test-model policy
 ```
 
-## Important data state
-
-Clean modelling dataset:
-
-```text
-7043 observations
-```
-
-Training set:
-
-```text
-5634 observations
-about 26.54% churn
-```
-
-Held-out test set:
-
-```text
-1409 observations
-about 26.54% churn
-```
-
-Target:
-
-```text
-Churn_binary
-```
-
-Positive class:
-
-```text
-Churn_binary = 1 means churn
-```
-
-The held-out test set must remain unused until final evaluation.
-
-## Feature groups
-
-Numeric features:
-
-```text
-tenure
-MonthlyCharges
-TotalCharges
-```
-
-Categorical features:
-
-```text
-SeniorCitizen
-gender
-Partner
-Dependents
-PhoneService
-PaperlessBilling
-MultipleLines
-InternetService
-OnlineSecurity
-OnlineBackup
-DeviceProtection
-TechSupport
-StreamingTV
-StreamingMovies
-Contract
-PaymentMethod
-```
-
-`customerID` is excluded from modelling because it is a unique identifier.
-
-## High-level modelling philosophy
-
-Each model section should answer:
-
-```text
-1. What kind of model is this?
-2. What mathematical function or rule does it use?
-3. What loss function, impurity criterion, likelihood, or search criterion does it use?
-4. What assumptions does it make?
-5. What preprocessing does it need?
-6. What does it output: hard classes, scores, probabilities, or rankings?
-7. How should its output be evaluated?
-8. What does it teach us on this dataset?
-9. What are its limitations?
-10. How does it compare with earlier models?
-```
-
-The project should include multiple model families even if some are not ultimately best. A weaker model can still be valuable if it teaches a different modelling principle.
-
-## Evaluation philosophy
-
-All model sections before the final stage use training-set cross-validation only.
-
-Section-level results are:
-
-```text
-development-stage cross-validated estimates
-```
-
-They are not:
-
-```text
-final performance claims
-```
-
-This matters especially when comparing close hyperparameter settings or close model families.
-
-Use language such as:
-
-```text
-selected within the development grid
-representative strong candidate
-development-stage evidence
-small differences should be interpreted cautiously
-final test evaluation is deferred
-```
-
-Final model-family comparison and final test-set evaluation are separate later stages.
-
-## Completed model-family sections
-
-### 04. Preprocessing, evaluation, and simple baselines
-
-Role:
-
-```text
-establishes evaluation language, preprocessing infrastructure, positive-first
-confusion matrix, simple dummy baselines, and the EDA-inspired rule baseline
-```
-
-Simple baselines:
-
-```text
-majority-class baseline
-prior-probability baseline
-stratified random baseline
-uniform random baseline
-EDA-inspired rule baseline
-```
-
-Main lesson:
-
-```text
-accuracy alone is misleading under churn imbalance
-the EDA rule detects many churners but creates many false positives
-learned models should improve precision/specificity while retaining useful recall
-```
+## Completed model-family inventory
 
 ### 05. Linear classification and logistic regression
 
-Role:
+Core ideas:
 
 ```text
-first learned model family and first interpretable benchmark
+linear scores and decision boundaries
+least-squares classification
+logistic probabilities and log odds
+binary cross-entropy
+L1 and L2 regularization
+class weighting
+coefficient interpretation
+probability thresholds and calibration
 ```
 
-Models:
+Project role:
 
 ```text
-RidgeClassifier as regularized least-squares classification
-L2 logistic regression
-L1 logistic regression
-class-weighted L2 logistic regression
+first learned-model family
+strong, interpretable benchmark
+reference point for whether nonlinear models add meaningful value
 ```
 
-Main development results:
+Observed development-stage position:
 
 ```text
-L1 and L2 logistic regression are effectively tied in PR-AUC and ROC-AUC
-standard logistic regression gives ROC-AUC about 0.846 and PR-AUC about 0.658
-class weighting strongly increases recall but creates many more false positives
-```
-
-Main lesson:
-
-```text
-logistic regression is a strong, stable, interpretable benchmark
-regularization strength matters mainly when it is extremely strong
-the exact best C should not be overinterpreted
+L1 and L2 logistic regression are essentially tied.
+The representative L2 logistic model has PR-AUC about 0.658 and ROC-AUC about 0.846.
 ```
 
 ### 06. k-nearest neighbours
 
-Role:
+Core ideas:
 
 ```text
-first non-parametric local similarity model
+local non-parametric prediction
+Minkowski, Manhattan, and Euclidean distance
+feature scaling
+the bias-variance role of k
+uniform versus distance weighting
+probability estimates from neighbour proportions
 ```
 
-Grid:
+Project role:
 
 ```text
-n_neighbors = [1, 3, 5, 7, 11, 15, 21, 31, 51, 75, 101]
-weights = ["uniform", "distance"]
-p = [1, 2]
+contrast global linear scores with local similarity-based prediction
 ```
 
-Selected development configuration:
+Observed development-stage position:
 
 ```text
-k = 101
-uniform weights
-Manhattan distance
-```
-
-Main development results:
-
-```text
-ROC-AUC about 0.836
-PR-AUC about 0.628
-```
-
-Main lesson:
-
-```text
-small k is too noisy
-larger smoother neighbourhoods work better
-kNN improves strongly over default k=5
-logistic regression remains stronger by ranking metrics
+The selected kNN model uses k = 101, uniform weighting, and Manhattan distance.
+Its PR-AUC is about 0.628 and its ROC-AUC is about 0.836.
 ```
 
 ### 07. Naive Bayes
 
-Role:
+Core ideas:
 
 ```text
-first explicitly generative model family
+Bayes classifier and Bayes risk
+generative modelling
+class priors and class-conditional likelihoods
+conditional independence
+Gaussian, Bernoulli, and hybrid likelihood blocks
+additive smoothing
 ```
 
-Models:
+Project role:
 
 ```text
-GaussianNB numeric only
-BernoulliNB categorical only
-Hybrid Gaussian-BernoulliNB
-GaussianNB full transformed
+introduce a probabilistic generative perspective for mixed tabular data
 ```
 
-Important source-code addition:
+Observed development-stage position:
 
 ```text
-HybridGaussianBernoulliNB in src/telco_churn/models.py
-```
-
-Selected development model:
-
-```text
-Hybrid Gaussian-BernoulliNB alpha=1
-```
-
-Main development results:
-
-```text
-ROC-AUC about 0.822
-PR-AUC about 0.615
-recall about 0.809
-```
-
-Main lesson:
-
-```text
-hybrid NB is theoretically cleaner for mixed numeric and one-hot features
-Naive Bayes has useful recall and ranking ability
-conditional independence remains a major limitation
-logistic regression remains strongest so far by PR-AUC and ROC-AUC before the tree section
+The selected HybridGaussianBernoulliNB has PR-AUC about 0.615 and ROC-AUC about 0.822.
+The hybrid likelihood is more coherent than treating one-hot categorical indicators as Gaussian.
 ```
 
 ### 08. Decision trees
 
-Role:
+Core ideas:
 
 ```text
-first nonlinear rule-based model family and foundation for later tree ensembles
-```
-
-Section commit:
-
-```text
-08fb64873d4c8a929cfde529638d2e1ed49fcd5d
-Add decision tree modelling section
-```
-
-Models and experiments:
-
-```text
-decision stump
-default unrestricted decision tree
-pre-pruned tree grid
-cost-complexity-pruned tree grid
-selected pre-pruned tree
-threshold diagnostics
-ROC and precision-recall diagnostics
+recursive partitioning
+Gini impurity and entropy
+greedy split selection
+leaf churn proportions
+tree probabilities and tied rankings
+pre-pruning
+cost-complexity pruning
 feature importance
-top-level tree-structure interpretation
 ```
 
-Selected development configuration:
+Project role:
 
 ```text
-criterion = gini
-max_depth = 6
-min_samples_split = 25
-min_samples_leaf = 10
-ccp_alpha = 0.0
+first nonlinear rule-based model
+foundation for all later tree ensembles
 ```
 
-Main development results:
+Observed development-stage position:
 
 ```text
-Selected pre-pruned tree:
-    accuracy about 0.789
-    balanced accuracy about 0.701
-    precision about 0.624
-    recall about 0.514
-    F1 about 0.564
-    ROC-AUC about 0.824
-    PR-AUC about 0.628
-
-Best cost-complexity-pruned tree:
-    ROC-AUC about 0.822
-    PR-AUC about 0.615
-
-Default unrestricted tree:
-    ROC-AUC about 0.648
-    PR-AUC about 0.371
+The selected pre-pruned tree has PR-AUC about 0.628 and ROC-AUC about 0.824.
+The unrestricted tree overfits strongly, which demonstrates why tree regularization is necessary.
 ```
-
-Main lesson:
-
-```text
-unrestricted single trees overfit strongly
-regularization is essential
-pre-pruning gave the strongest single-tree result in the tried grids
-cost-complexity pruning improved strongly over the default tree but did not beat the selected pre-pruned tree
-tree rankings are based on leaf churn proportions and can be stepwise with ties
-single trees are interpretable and useful, but they do not overtake logistic regression in this development-stage comparison
-```
-
-## Methodology knowledge module
-
-The project has these committed methodology notes:
-
-```text
-docs/knowledge_notes/methodology/evaluation_foundations.md
-docs/knowledge_notes/methodology/cross_validation_and_model_selection.md
-docs/knowledge_notes/methodology/statistical_uncertainty_and_tests.md
-docs/knowledge_notes/methodology/final_model_comparison_plan.md
-docs/knowledge_notes/methodology/hyperparameter_tuning.md
-```
-
-Together these cover:
-
-```text
-true metric versus sample metric
-sampling uncertainty
-train/validation/test discipline
-leakage
-cross-validation
-repeated CV
-nested CV
-hyperparameter tuning
-selection optimism
-fair tuning effort
-bootstrap confidence intervals for the single frozen final model
-paired model comparisons before final selection
-statistical tests
-final model comparison plan
-```
-
-## Remaining model-family roadmap
 
 ### 09. Bagging and random forests
 
-Planned next.
-
-Topics:
+Core ideas:
 
 ```text
 bootstrap aggregation
-variance reduction
-decorrelated trees
+variance reduction through averaging
+tree correlation
 feature subsampling
-out-of-bag intuition
-random forest feature importance
-single-tree instability versus ensemble stability
+out-of-bag observations
+ensemble probability scores
+feature-importance diagnostics
 ```
 
-Expected experiments:
+Project role:
 
 ```text
-bagged trees
-random forest
-small or moderate hyperparameter search
-comparison with selected single decision tree
-threshold and ranking diagnostics
-feature-importance diagnostics
-comparison against logistic regression, kNN, Naive Bayes, and single decision tree
+show how an ensemble can improve the instability of a single tree
 ```
+
+Observed development-stage position:
+
+```text
+Selected bagged trees:
+    pooled OOF PR-AUC about 0.662
+    pooled OOF ROC-AUC about 0.846
+
+Selected random forest:
+    pooled OOF PR-AUC about 0.660
+    pooled OOF ROC-AUC about 0.847
+```
+
+The relevant conclusion is that both ensembles materially improve on the single tree. Their close differences do not establish that one is meaningfully superior.
 
 ### 10. Boosting
 
-Topics:
+Core ideas:
 
 ```text
-boosting as sequential error correction
-AdaBoost
-weak learners and decision stumps
-sample weights
-gradient boosting
-learning rate
-number of estimators
-tree depth
-early stopping
+sequential additive modelling
+AdaBoost reweighting
+gradient boosting and pseudo-residuals
+learning rate, depth, and number of estimators
+histogram split construction
+first-order and second-order boosting intuition
+XGBoost, LightGBM, and CatBoost design differences
+native categorical handling
 ```
 
-Expected experiments:
+Project role:
 
 ```text
-AdaBoost
-gradient boosting
-possibly histogram gradient boosting
-possibly XGBoost or LightGBM only if added deliberately
+evaluate the strongest observed tree-based model group
 ```
+
+Observed development-stage position:
+
+```text
+CatBoost, GradientBoostingClassifier, and XGBoost form a very close leading group.
+The representative XGBoost pooled OOF diagnostic has PR-AUC about 0.670 and ROC-AUC about 0.850.
+```
+
+The top boosting point estimates are too close to support a conclusion that one boosting library is definitively best.
 
 ### 11. Support vector machines
 
-Topics:
+Core ideas:
 
 ```text
-linear margin classifiers
-hinge loss
-soft margin
-C
+linear score functions
+maximum-margin separation
+support vectors
+hard and soft margins
+hinge and squared-hinge loss
+C as inverse margin-violation penalty strength
+class weighting
 kernel trick
-RBF kernel
-gamma
-decision scores
-calibration if probabilities are needed
+polynomial and RBF kernels
+gamma and nonlinear complexity
+decision-function scores versus calibrated probabilities
 ```
 
-Expected experiments:
+Project role:
 
 ```text
-linear SVM
-RBF SVM
-scaled preprocessing
-careful tuning because SVMs are sensitive to C and gamma
+introduce margin-based linear classification and nonlinear kernel classification
 ```
 
-### 12. Multilayer perceptron
-
-Topics:
+Observed development-stage position:
 
 ```text
-feedforward network
-hidden layers
-activation functions
+Selected LinearSVC:
+    squared hinge
+    C = 0.1
+    balanced class weights
+    mean fold PR-AUC about 0.6594
+    mean fold ROC-AUC about 0.8453
+
+Selected RBF SVC:
+    C = 10
+    gamma = 0.001
+    balanced class weights
+    mean fold PR-AUC about 0.6595
+    mean fold ROC-AUC about 0.8424
+```
+
+The selected linear and RBF candidates are effectively tied within the tried grid. The RBF point estimate is only about 0.0001 higher in mean fold PR-AUC and does not justify a nonlinear-advantage claim. The linear SVM is retained as the representative SVM diagnostic model because it is faster, interpretable, and stronger on the pooled OOF diagnostic.
+
+## Remaining model-family roadmap
+
+### 12. Multilayer perceptrons and feed-forward neural networks
+
+This is the immediate next model-family section.
+
+Core topics:
+
+```text
+perceptrons and affine transformations
+hidden layers and nonlinear activation functions
+feed-forward computation
+sigmoid output for binary classification
 binary cross-entropy
-optimization
-regularization
-early stopping
-dropout or batch normalization only if justified
-train/eval mode if using PyTorch
+backpropagation
+gradient descent, mini-batches, and adaptive optimization
+learning rate, batch size, epochs, and early stopping
+weight decay, dropout, and capacity control
+scaling and one-hot encoded tabular inputs
+validation behaviour, calibration, and thresholds
 ```
 
-Expected experiments:
+The MLP section should compare shallow and moderately deep tabular neural-network candidates while maintaining training-only preprocessing and cross-validation discipline. The purpose is not to assume that neural networks will beat boosted trees. It is to understand whether learned nonlinear representations add useful predictive signal for this relatively small mixed tabular dataset.
+
+## Cross-cutting modelling topics before final evaluation
+
+The project has already introduced several cross-cutting issues, including preprocessing, imbalance, thresholds, and calibration. Before final test evaluation, the remaining serious candidates may require targeted, training-only work on the following topics where justified:
 
 ```text
-small MLP for tabular classification
-compare against classical models
-avoid overcomplicating the project
+feature engineering and transformations
+feature selection or ablation
+class weighting versus resampling
+probability calibration
+threshold policy
+business-value or cost-sensitive evaluation
+repeated cross-validation
+nested cross-validation
+paired comparisons and uncertainty analysis
 ```
 
-## Later methodology and final comparison roadmap
+These should not be applied indiscriminately to every model family. They should be introduced when they answer a specific modelling question and must remain inside the training-only development process.
 
-After the individual model-family sections, create a dedicated comparison stage.
+## Final training-only selection roadmap
 
-Topics:
+After the remaining model-family work, the project should transition from educational family sections to a dedicated finalist-selection stage.
+
+The intended sequence is:
 
 ```text
-candidate shortlist
-repeated CV for serious candidates
-possibly nested CV for tuned model-family procedures
-metric sensitivity
-threshold selection
-calibration analysis if probabilities matter
-bootstrap confidence intervals for the single frozen final model
-final test-set evaluation
-ablation studies
-interpretability
+1. Define a limited set of serious finalists.
+2. Freeze comparable candidate procedures, including preprocessing and hyperparameters.
+3. Compare candidates with training-only evidence.
+4. Use stronger stability or uncertainty methods when they add decision value.
+5. Decide whether calibration is needed for the intended decision use.
+6. Define and freeze a threshold policy from retention economics, contact capacity,
+   and false-positive versus false-negative costs.
+7. Select one final end-to-end pipeline.
+8. Fit the frozen pipeline on the complete training set.
+9. Evaluate once on the untouched test set.
+10. Report final metrics and uncertainty intervals where feasible.
 ```
 
-The final test set should be used once after all choices are fixed, and only for exactly one frozen final model.
+## Model-selection language
 
-## Methods saved for later projects
-
-Not central for this Telco tabular binary classification project:
+Use:
 
 ```text
-CNNs
-GANs
-sequence models
-transformers
-matrix factorization / recommender systems
-reinforcement learning
+selected within the tried development grid
+representative strong candidate
+development-stage cross-validated estimate
+small differences should be interpreted cautiously
+final test evaluation is deferred
 ```
 
-They can be mentioned as future-project topics but should not distract from the classification roadmap.
-
-## Immediate next stage
-
-Start bagging and random forests:
+Avoid:
 
 ```text
-1. Create or update the bagging and random forest knowledge note.
-2. Explain bootstrap aggregation, variance reduction, tree decorrelation, feature subsampling, out-of-bag intuition, and feature importance.
-3. Build notebook 09 using training-set cross-validation only.
-4. Evaluate bagged trees and random forests.
-5. Compare against the selected single decision tree and earlier model families.
-6. Save tables and figures.
-7. Write the report section after actual outputs are available.
-8. Compile and check the report.
-9. Commit the bagging/random forest section after review.
+definitively best
+uniquely optimal
+proven superior
+final performance
 ```
 
-## Strict final test-set policy clarification
+## Deliberately deferred work
 
-The final test set should be used for exactly one frozen final model.
+The following are not current modelling-section tasks:
 
-Do not use the test set to compare multiple candidate models, additional candidate models, alternative thresholds, alternative calibration methods, or alternative preprocessing decisions. All model-family comparison, repeated CV, nested CV, statistical tests, paired bootstrap differences, McNemar-style comparisons, DeLong-style comparisons, threshold selection, calibration selection, and ablation decisions should happen before final test evaluation using training-only validation evidence.
+```text
+using the test set to compare candidates
+using the test set to choose a threshold
+using the test set to decide whether calibration is useful
+claiming a final production model before the finalist-selection stage
+treating close cross-validation point estimates as proof of superiority
+```
 
-After one final model is selected and frozen, evaluate that model once on the untouched test set. Bootstrap confidence intervals may be reported for that single final model's test metrics.
+## Documentation convention
+
+The strategic inventory belongs in this roadmap. Immediate work belongs in the live status file. New-chat context belongs in the newest handoff file. Stable documentation architecture belongs in `00_documentation_workflow.md`.
