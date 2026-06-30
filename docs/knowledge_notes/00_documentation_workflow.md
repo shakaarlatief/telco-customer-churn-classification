@@ -46,6 +46,38 @@ polished portfolio report:
 
 When a file starts mixing these roles, move the content to the appropriate place instead of letting all files become informal task lists.
 
+## Collaboration and repository-write boundary
+
+The default collaboration model is deliberately local-first and user-controlled.
+
+```text
+Assistant default:
+    prepare new or revised files as downloadable artifacts in the chat;
+    explain every meaningful change and the intended destination;
+    do not directly modify the repository or Git hosting service.
+
+User default:
+    review the delivered artifacts;
+    place or replace files in the local repository;
+    run local checks and workflows;
+    inspect `git diff`;
+    stage, commit, and push changes.
+```
+
+The assistant must not create, update, delete, stage, commit, or push repository files by default. This includes direct writes through connected Git-hosting tools.
+
+The assistant may recommend a direct repository write when it would be useful, but it must first ask for explicit approval. The user may give a clear green light for a specific action, such as:
+
+```text
+Yes, update this one file on GitHub.
+Yes, commit the prepared changes.
+Yes, push this commit to main.
+```
+
+Approval for one write action does not imply standing permission for later repository writes. If the requested write scope is ambiguous, the assistant must ask before acting.
+
+Remote Git state and the user's local working tree must be treated as potentially different. Before proposing a replacement for a locally changed file, inspect the available current version or ask the user to provide it.
+
 ## 1. Roadmap and inventory documents
 
 Roadmap files describe the strategic modelling plan.
@@ -261,6 +293,48 @@ They should not contain report narrative. Technical docstrings are useful, but s
 
 Model-specific helper functions can stay in a notebook when they are one-off, experimental, or section-specific. Move them into `src/` when they become reusable, stable, or part of the project-wide toolkit.
 
+
+### Reusable implementation and smoke-test requirements
+
+Before designing a substantial new model-family notebook, first inspect the existing reusable modules and workflow tests:
+
+```text
+src/telco_churn/
+scripts/
+previous notebook source files
+```
+
+Use the following boundary:
+
+```text
+Reusable preprocessing, estimator construction, evaluation, plotting, and interpretation helpers:
+    implement or extend in src/telco_churn/
+
+One-off experiment-specific grid definitions, result narrative, and model-family interpretation:
+    keep in the notebook source
+```
+
+Do not duplicate a stable project-wide factory inside a notebook merely because a new workflow needs it. If a needed helper already exists, reuse it. If a helper is expected to be reused by smoke tests, later notebooks, or final model selection, create or extend it in `src/` first.
+
+Every new or materially changed reusable implementation must have a corresponding smoke test in `scripts/`, normally named:
+
+```text
+scripts/smoke_test_<workflow_name>.py
+```
+
+The smoke test should be small, fast, training-only, and deterministic where possible. It should validate the same shared factories and utilities used by the full notebook. Depending on the workflow, it should check the following where relevant:
+
+```text
+- import and construction of reusable factories;
+- preprocessing output shape and expected dense/sparse representation;
+- a small stratified training-only split or cross-validation run;
+- prediction or score shape, finite values, and class alignment;
+- out-of-fold helper paths and threshold/calibration primitives when used;
+- generated plot or table paths when a reusable plotting helper changed.
+```
+
+Run the smoke test successfully after the shared source changes and before executing the full notebook. A smoke test is not a substitute for the full workflow, but it prevents avoidable long-run failures and verifies that the notebook uses the intended reusable implementation.
+
 ## 8. LaTeX report
 
 The LaTeX report is the polished portfolio artifact.
@@ -373,6 +447,21 @@ For model-family sections, the preferred workflow is more specific than the gene
 
 This workflow separates theory, execution, observed results, and polished reporting. The assistant should not write final report claims before seeing the actual executed results. If a file may have changed locally and the assistant does not have the current version, ask the user to upload it or provide an exact copy-paste replacement rather than overwriting unknown work.
 
+
+### Mandatory implementation gate before full notebook execution
+
+For a new model-family workflow that adds or changes reusable preprocessing, estimator factories, evaluation helpers, visualization helpers, or scripts:
+
+```text
+1. Inspect the relevant current src/ modules, scripts/, and comparable earlier notebooks.
+2. Decide explicitly which logic is reusable and therefore belongs in src/.
+3. Implement or revise the shared source functions first.
+4. Create or revise the matching smoke test in scripts/.
+5. The user runs the smoke test locally and reviews its output.
+6. Only then run the complete notebook workflow.
+```
+
+If a notebook deliberately contains one-off helper logic instead of a src/ factory, the notebook should explain why the helper is local and why it is not intended for reuse.
 
 ## 11. Stable documentation directory conventions
 

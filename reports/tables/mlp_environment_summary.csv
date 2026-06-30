@@ -1,0 +1,10 @@
+item,value
+python_version,3.11.0
+platform,Windows-10-10.0.26200-SP0
+numpy_version,2.4.6
+pandas_version,3.0.3
+scikit_learn_version,1.8.0
+training_rows,5634
+raw_feature_count,19
+dense_transformed_feature_count,46
+dense_transformed_values_finite,True

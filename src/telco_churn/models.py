@@ -22,6 +22,12 @@ data:
 - Gaussian likelihoods for numeric features;
 - Bernoulli likelihoods for one-hot encoded categorical indicators.
 
+Section 12 introduces feed-forward multilayer perceptrons:
+
+- MLPClassifier with Adam optimization and binary probabilistic output;
+- dense, scaled preprocessing pipelines for gradient-based neural-network fitting;
+- reusable factories whose defaults match the initial training-only MLP workflow.
+
 Section 11 introduces support vector machines:
 
 - LinearSVC for scalable maximum-margin linear classification;
@@ -51,6 +57,7 @@ from sklearn.ensemble import (
     RandomForestClassifier,
 )
 from sklearn.linear_model import LogisticRegression, RidgeClassifier
+from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC, SVC
 from sklearn.tree import DecisionTreeClassifier
@@ -58,6 +65,7 @@ from sklearn.utils.validation import check_is_fitted
 
 from telco_churn.config import CATEGORICAL_FEATURES, RANDOM_STATE
 from telco_churn.preprocessing import (
+    make_dense_scaled_preprocessor,
     make_dense_unscaled_preprocessor,
     make_native_categorical_preprocessor,
     make_scaled_preprocessor,
@@ -551,6 +559,145 @@ def make_l2_logistic_regression_pipeline(
             C=C,
             class_weight=class_weight,
             max_iter=max_iter,
+            random_state=random_state,
+        ),
+    )
+
+
+def normalize_mlp_hidden_layer_sizes(
+    value: int | tuple[int, ...] | list[int],
+) -> tuple[int, ...]:
+    """Validate MLP hidden-layer widths and return an immutable tuple.
+
+    ``MLPClassifier`` accepts either one integer or a sequence of positive
+    integers. Normalizing that input in the reusable factory keeps architecture
+    handling consistent between notebook grids, smoke tests, and later finalist
+    comparisons. A boolean is rejected explicitly because ``bool`` is a subclass
+    of ``int`` in Python but is never a meaningful hidden-layer width.
+    """
+    if isinstance(value, bool):
+        raise TypeError("hidden_layer_sizes cannot be a boolean.")
+
+    if isinstance(value, int):
+        value = (value,)
+
+    try:
+        hidden_layer_sizes = tuple(int(width) for width in value)
+    except TypeError as exc:
+        raise TypeError(
+            "hidden_layer_sizes must be an integer or an iterable of integers."
+        ) from exc
+
+    if not hidden_layer_sizes or any(width <= 0 for width in hidden_layer_sizes):
+        raise ValueError("Every hidden-layer width must be strictly positive.")
+
+    return hidden_layer_sizes
+
+
+def make_mlp_classifier(
+    *,
+    hidden_layer_sizes: int | tuple[int, ...] | list[int] = (32,),
+    activation: str = "relu",
+    alpha: float = 0.001,
+    batch_size: int = 64,
+    learning_rate_init: float = 0.001,
+    max_iter: int = 500,
+    shuffle: bool = True,
+    tol: float = 1e-4,
+    early_stopping: bool = True,
+    validation_fraction: float = 0.15,
+    n_iter_no_change: int = 20,
+    random_state: int = RANDOM_STATE,
+) -> MLPClassifier:
+    """Create an Adam-trained feed-forward classifier for binary churn modelling.
+
+    The factory fixes ``solver="adam"`` for the initial MLP workflow. The goal is
+    not to expose every neural-network optimizer immediately, but to construct a
+    reproducible candidate procedure with the same optimization, regularization,
+    internal early-stopping, and random-state controls used in the notebook.
+
+    ``alpha`` is scikit-learn's L2 regularization parameter. ``early_stopping``
+    reserves a stratified internal validation subset and monitors validation
+    accuracy. That internal accuracy controls optimization stopping only; outer
+    cross-validated PR-AUC remains the project model-selection metric.
+    """
+    hidden_layer_sizes = normalize_mlp_hidden_layer_sizes(hidden_layer_sizes)
+
+    valid_activations = {"identity", "logistic", "relu", "tanh"}
+    if activation not in valid_activations:
+        raise ValueError(
+            f"activation must be one of {sorted(valid_activations)}."
+        )
+    if alpha < 0:
+        raise ValueError("alpha must be non-negative.")
+    if batch_size <= 0:
+        raise ValueError("batch_size must be strictly positive.")
+    if learning_rate_init <= 0:
+        raise ValueError("learning_rate_init must be strictly positive.")
+    if max_iter <= 0:
+        raise ValueError("max_iter must be strictly positive.")
+    if tol <= 0:
+        raise ValueError("tol must be strictly positive.")
+    if not 0 < validation_fraction < 1:
+        raise ValueError("validation_fraction must lie strictly between zero and one.")
+    if n_iter_no_change <= 0:
+        raise ValueError("n_iter_no_change must be strictly positive.")
+
+    return MLPClassifier(
+        hidden_layer_sizes=hidden_layer_sizes,
+        activation=activation,
+        solver="adam",
+        alpha=float(alpha),
+        batch_size=int(batch_size),
+        learning_rate_init=float(learning_rate_init),
+        max_iter=int(max_iter),
+        shuffle=bool(shuffle),
+        random_state=int(random_state),
+        tol=float(tol),
+        early_stopping=bool(early_stopping),
+        validation_fraction=float(validation_fraction),
+        n_iter_no_change=int(n_iter_no_change),
+        verbose=False,
+    )
+
+
+def make_mlp_pipeline(
+    *,
+    hidden_layer_sizes: int | tuple[int, ...] | list[int] = (32,),
+    activation: str = "relu",
+    alpha: float = 0.001,
+    batch_size: int = 64,
+    learning_rate_init: float = 0.001,
+    max_iter: int = 500,
+    shuffle: bool = True,
+    tol: float = 1e-4,
+    early_stopping: bool = True,
+    validation_fraction: float = 0.15,
+    n_iter_no_change: int = 20,
+    random_state: int = RANDOM_STATE,
+) -> Pipeline:
+    """Create fold-safe dense scaled preprocessing plus an Adam MLP classifier.
+
+    Dense input is intentional because ``MLPClassifier`` operates on dense numeric
+    arrays. The preprocessor performs numeric median imputation and standardization,
+    categorical mode imputation, and one-hot encoding. When the returned pipeline
+    is used in cross-validation, all preprocessing statistics are fitted from each
+    outer training fold only.
+    """
+    return make_classifier_pipeline(
+        preprocessor=make_dense_scaled_preprocessor(),
+        classifier=make_mlp_classifier(
+            hidden_layer_sizes=hidden_layer_sizes,
+            activation=activation,
+            alpha=alpha,
+            batch_size=batch_size,
+            learning_rate_init=learning_rate_init,
+            max_iter=max_iter,
+            shuffle=shuffle,
+            tol=tol,
+            early_stopping=early_stopping,
+            validation_fraction=validation_fraction,
+            n_iter_no_change=n_iter_no_change,
             random_state=random_state,
         ),
     )

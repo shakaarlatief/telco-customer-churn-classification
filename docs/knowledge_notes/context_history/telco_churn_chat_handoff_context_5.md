@@ -59,6 +59,36 @@ do not use Codex for foundational project content
 
 Codex may only be considered for narrow cleanup, formatting, or repetitive edits after the design and content are already established. In normal project work, direct authored changes are preferred.
 
+
+### Repository-write and artifact-handoff rule
+
+The assistant must work through downloadable artifacts by default:
+
+```text
+1. Prepare the requested file, replacement, or patch in the chat.
+2. State every meaningful change and its intended repository location.
+3. The user reviews the artifact, places it locally, runs checks, and controls Git.
+4. The user stages, commits, and pushes by default.
+```
+
+The assistant must not directly write to GitHub, modify repository files through a connected tool, stage changes, create commits, or push commits unless the user explicitly authorizes that particular action.
+
+The assistant may suggest a direct write and ask for a green light. Approval must be specific. It does not create ongoing permission for later writes.
+
+### Reusable source and smoke-test rule
+
+Before a substantial model-family notebook is prepared, inspect:
+
+```text
+src/telco_churn/
+scripts/
+the closest previous model-family notebook
+```
+
+Reusable preprocessing, model factories, evaluation functions, and plotting utilities belong in `src/telco_churn/`. The notebook should use those shared factories instead of maintaining a duplicate local implementation. One-off experimental settings and section-specific interpretation can remain local to the notebook.
+
+Any new or materially changed reusable workflow component requires a corresponding small training-only smoke test in `scripts/`. The smoke test must exercise the same shared factory or utility used by the full notebook and should pass before the full notebook is executed.
+
 ## Latest confirmed repository checkpoint
 
 The latest confirmed completed modelling commit before this handoff is:

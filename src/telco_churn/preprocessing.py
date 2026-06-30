@@ -130,6 +130,11 @@ def make_dense_unscaled_preprocessor() -> ColumnTransformer:
     return make_dense_preprocessor(scale_numeric=False)
 
 
+def make_dense_scaled_preprocessor() -> ColumnTransformer:
+    """Create dense scaled preprocessing for gradient-based dense estimators."""
+    return make_dense_preprocessor(scale_numeric=True)
+
+
 class NativeCategoricalPreprocessor(BaseEstimator, TransformerMixin):
     """Impute features while preserving native categorical columns.
 

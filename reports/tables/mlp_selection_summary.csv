@@ -1,0 +1,2 @@
+selected_model,selection_rule,architecture,activation,alpha,random_state,mean_outer_fold_pr_auc,std_outer_fold_pr_auc,mean_outer_fold_roc_auc,mean_outer_fold_balanced_accuracy,mean_outer_fold_f1,convergence_warning_fold_count
+MLPClassifier hidden=(16) activation=relu alpha=0.001 seed=42,"highest mean outer-fold PR-AUC, then balanced accuracy, then F1",(16),relu,0.001,42,0.6595007691916764,0.018338302089661324,0.8435691977364455,0.7108056457617469,0.5798472780884648,0
