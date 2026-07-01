@@ -1,0 +1,486 @@
+"""Initial validated candidate registry for final comparison experiments.
+
+The full final-comparison protocol deliberately contains a broad candidate universe.
+This module implements the first reusable, fully specified subset of that universe:
+
+* regularized logistic regression;
+* Extra Trees;
+* linear support vector machines; and
+* multilayer perceptrons.
+
+The registry keeps three concerns separate:
+
+1. candidate identity and score semantics;
+2. Optuna search-space suggestions; and
+3. construction of a fresh, unfitted, fold-safe pipeline.
+
+No fitted model, validation score, outer-fold result, or test-set information belongs
+in this module. Every returned estimator remains unfitted so preprocessing and model
+parameters are learned only from the correct training partition inside the later
+nested-CV workflow.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Literal, Mapping
+
+from sklearn.ensemble import ExtraTreesClassifier
+from sklearn.pipeline import Pipeline
+
+from telco_churn.config import RANDOM_STATE
+from telco_churn.models import (
+    make_classifier_pipeline,
+    make_linear_svc_classifier,
+    make_logistic_regression_classifier,
+    make_mlp_pipeline,
+)
+from telco_churn.preprocessing import (
+    make_scaled_preprocessor,
+    make_unscaled_preprocessor,
+)
+
+
+ScoreKind = Literal["probability", "margin"]
+
+
+class CandidateRegistryError(ValueError):
+    """Raised when the immutable candidate registry is inconsistent."""
+
+
+@dataclass(frozen=True)
+class CandidateDefinition:
+    """Immutable description of one candidate procedure family.
+
+    Parameters
+    ----------
+    candidate_id:
+        Stable identifier used in protocols, task keys, study names, and result
+        tables. The identifier must not be changed after a run has started.
+
+    display_name:
+        Human-readable family name for reports and progress views.
+
+    score_kind:
+        ``"probability"`` when the uncalibrated estimator exposes class-one
+        probabilities and ``"margin"`` when it exposes a continuous decision
+        function. Both score kinds are valid for average precision and ROC-AUC.
+        Only probability scores are valid for raw Brier score or log loss.
+
+    representation:
+        Human-readable description of the fold-internal input representation.
+
+    search_profile:
+        Name of the default full-run search profile. The phase-2 smoke test uses
+        the separate ``"smoke"`` profile to validate mechanics without running
+        the eventual production-scale budget.
+    """
+
+    candidate_id: str
+    display_name: str
+    score_kind: ScoreKind
+    representation: str
+    search_profile: str = "full"
+
+    def __post_init__(self) -> None:
+        if not self.candidate_id.strip():
+            raise CandidateRegistryError("candidate_id must not be empty.")
+        if not self.display_name.strip():
+            raise CandidateRegistryError("display_name must not be empty.")
+        if self.score_kind not in {"probability", "margin"}:
+            raise CandidateRegistryError(
+                "score_kind must be either 'probability' or 'margin'."
+            )
+        if not self.representation.strip():
+            raise CandidateRegistryError("representation must not be empty.")
+        if not self.search_profile.strip():
+            raise CandidateRegistryError("search_profile must not be empty.")
+
+
+CANDIDATE_LOGISTIC_REGRESSION = "C02_LOGISTIC_REGRESSION"
+CANDIDATE_EXTRA_TREES = "C09_EXTRA_TREES"
+CANDIDATE_LINEAR_SVM = "C21_LINEAR_SVM"
+CANDIDATE_MLP = "C23_MULTILAYER_PERCEPTRON"
+
+INITIAL_CANDIDATE_REGISTRY: tuple[CandidateDefinition, ...] = (
+    CandidateDefinition(
+        candidate_id=CANDIDATE_LOGISTIC_REGRESSION,
+        display_name="Regularized logistic regression",
+        score_kind="probability",
+        representation="scaled one-hot features",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_EXTRA_TREES,
+        display_name="Extra Trees classifier",
+        score_kind="probability",
+        representation="unscaled one-hot features",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_LINEAR_SVM,
+        display_name="Linear support vector machine",
+        score_kind="margin",
+        representation="scaled one-hot features",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_MLP,
+        display_name="Multilayer perceptron",
+        score_kind="probability",
+        representation="dense scaled one-hot features",
+    ),
+)
+
+
+def validate_candidate_registry(
+    registry: tuple[CandidateDefinition, ...] = INITIAL_CANDIDATE_REGISTRY,
+) -> None:
+    """Validate registry identifiers and score-output declarations.
+
+    The validation deliberately happens before an experiment run is created. A
+    duplicate or unknown candidate identifier would otherwise make task artifacts
+    ambiguous and could invalidate resume safety.
+    """
+    if not registry:
+        raise CandidateRegistryError("The candidate registry must not be empty.")
+
+    candidate_ids = [definition.candidate_id for definition in registry]
+    if len(candidate_ids) != len(set(candidate_ids)):
+        raise CandidateRegistryError("Candidate registry identifiers must be unique.")
+
+
+def get_candidate_definition(candidate_id: str) -> CandidateDefinition:
+    """Return one immutable definition or raise a clear registry error."""
+    validate_candidate_registry()
+    for definition in INITIAL_CANDIDATE_REGISTRY:
+        if definition.candidate_id == candidate_id:
+            return definition
+    raise CandidateRegistryError(f"Unknown candidate identifier: {candidate_id!r}")
+
+
+def _decode_class_weight(value: str) -> str | None:
+    """Convert a JSON-safe class-weight choice into scikit-learn input."""
+    if value == "none":
+        return None
+    if value == "balanced":
+        return "balanced"
+    if value == "balanced_subsample":
+        return "balanced_subsample"
+    raise CandidateRegistryError(f"Unknown class-weight choice: {value!r}")
+
+
+def _decode_optional_depth(value: str) -> int | None:
+    """Convert a JSON-safe optional tree-depth choice into an estimator value."""
+    if value == "none":
+        return None
+    return int(value)
+
+
+def _decode_max_features(value: str) -> str | float:
+    """Convert categorical Optuna encodings into Extra Trees max_features values."""
+    if value in {"sqrt", "log2"}:
+        return value
+    return float(value)
+
+
+def suggest_candidate_parameters(
+    trial: Any,
+    *,
+    candidate_id: str,
+    profile: str = "full",
+) -> dict[str, Any]:
+    """Suggest one JSON-compatible hyperparameter configuration.
+
+    ``trial`` is intentionally typed as ``Any`` so this reusable registry does not
+    import Optuna at module import time. That keeps ordinary notebooks usable before
+    optional HPO dependencies are installed.
+
+    Parameters
+    ----------
+    trial:
+        An Optuna-compatible trial object exposing ``suggest_*`` methods.
+
+    candidate_id:
+        Identifier from :data:`INITIAL_CANDIDATE_REGISTRY`.
+
+    profile:
+        ``"smoke"`` uses small, fast parameter ranges solely to validate persistent
+        nested-HPO mechanics. ``"full"`` is intentionally broader and will be
+        frozen in the later full candidate-registry protocol revision.
+    """
+    definition = get_candidate_definition(candidate_id)
+    if profile not in {"smoke", "full"}:
+        raise CandidateRegistryError(
+            f"Unknown search profile {profile!r} for {definition.candidate_id}."
+        )
+
+    if candidate_id == CANDIDATE_LOGISTIC_REGRESSION:
+        penalty = trial.suggest_categorical(
+            "penalty",
+            ["l1", "l2", "elasticnet"],
+        )
+        parameters: dict[str, Any] = {
+            "penalty": penalty,
+            "C": float(trial.suggest_float("C", 1e-4, 1e3, log=True)),
+            "class_weight": trial.suggest_categorical(
+                "class_weight",
+                ["none", "balanced"],
+            ),
+            "max_iter": 8_000,
+        }
+        if penalty == "elasticnet":
+            parameters["l1_ratio"] = float(trial.suggest_float("l1_ratio", 0.02, 0.98))
+        return parameters
+
+    if candidate_id == CANDIDATE_EXTRA_TREES:
+        if profile == "smoke":
+            n_estimators = int(trial.suggest_int("n_estimators", 25, 80, step=5))
+            max_depth_choices = ["none", "4", "8", "14"]
+            min_split_high = 20
+            min_leaf_high = 10
+        else:
+            n_estimators = int(trial.suggest_int("n_estimators", 300, 1_500, step=50))
+            max_depth_choices = ["none", "4", "6", "10", "16", "24", "32"]
+            min_split_high = 80
+            min_leaf_high = 40
+
+        bootstrap = bool(trial.suggest_categorical("bootstrap", [False, True]))
+        class_weight = trial.suggest_categorical(
+            "class_weight",
+            ["none", "balanced"],
+        )
+        if bootstrap:
+            bootstrap_weight_policy = trial.suggest_categorical(
+                "bootstrap_weight_policy",
+                ["inherit", "balanced_subsample"],
+            )
+            if bootstrap_weight_policy == "balanced_subsample":
+                class_weight = "balanced_subsample"
+
+        parameters = {
+            "n_estimators": n_estimators,
+            "criterion": trial.suggest_categorical(
+                "criterion",
+                ["gini", "entropy", "log_loss"],
+            ),
+            "max_depth": trial.suggest_categorical("max_depth", max_depth_choices),
+            "min_samples_split": int(
+                trial.suggest_int("min_samples_split", 2, min_split_high)
+            ),
+            "min_samples_leaf": int(
+                trial.suggest_int("min_samples_leaf", 1, min_leaf_high)
+            ),
+            "max_features": trial.suggest_categorical(
+                "max_features",
+                ["sqrt", "log2", "0.5", "0.75", "1.0"],
+            ),
+            "bootstrap": bootstrap,
+            "class_weight": class_weight,
+            "ccp_alpha": float(trial.suggest_float("ccp_alpha", 1e-8, 1e-2, log=True)),
+        }
+        if bootstrap:
+            parameters["max_samples"] = float(
+                trial.suggest_float("max_samples", 0.5, 1.0)
+            )
+        else:
+            parameters["max_samples"] = None
+        return parameters
+
+    if candidate_id == CANDIDATE_LINEAR_SVM:
+        return {
+            "C": float(trial.suggest_float("C", 1e-4, 1e3, log=True)),
+            "loss": trial.suggest_categorical("loss", ["hinge", "squared_hinge"]),
+            "class_weight": trial.suggest_categorical(
+                "class_weight",
+                ["none", "balanced"],
+            ),
+        }
+
+    if candidate_id == CANDIDATE_MLP:
+        if profile == "smoke":
+            architectures: list[tuple[int, ...]] = [(8,), (16,), (16, 8)]
+            max_iter = 100
+        else:
+            architectures = [
+                (8,),
+                (16,),
+                (32,),
+                (64,),
+                (16, 8),
+                (32, 16),
+                (64, 32),
+                (32, 16, 8),
+            ]
+            max_iter = 1_000
+
+        architecture_index = int(
+            trial.suggest_int("architecture_index", 0, len(architectures) - 1)
+        )
+        return {
+            "hidden_layer_sizes": list(architectures[architecture_index]),
+            "activation": trial.suggest_categorical(
+                "activation",
+                ["relu", "tanh"],
+            ),
+            "alpha": float(trial.suggest_float("alpha", 1e-6, 1e-1, log=True)),
+            "batch_size": int(trial.suggest_categorical("batch_size", [32, 64, 128])),
+            "learning_rate_init": float(
+                trial.suggest_float("learning_rate_init", 1e-4, 1e-2, log=True)
+            ),
+            "max_iter": max_iter,
+            "validation_fraction": 0.15,
+            "n_iter_no_change": 25,
+        }
+
+    raise CandidateRegistryError(f"No search space implemented for {candidate_id!r}.")
+
+
+
+def make_extra_trees_pipeline(
+    *,
+    n_estimators: int,
+    criterion: str,
+    max_depth: int | None,
+    min_samples_split: int,
+    min_samples_leaf: int,
+    max_features: str | float,
+    bootstrap: bool,
+    max_samples: float | None,
+    class_weight: str | None,
+    ccp_alpha: float,
+    random_state: int,
+) -> Pipeline:
+    """Create an Extra Trees procedure owned by the final-comparison registry.
+
+    Extra Trees is implemented here rather than modifying a historical workflow's
+    model-factory module. The procedure belongs to the new final-comparison system
+    and keeps its explicit single-thread policy next to the candidate definition.
+    The unscaled one-hot preprocessor and the estimator are returned as one
+    unfitted pipeline, so all preprocessing remains fold-internal.
+
+    ``max_samples`` is legal only when bootstrap sampling is enabled. The candidate
+    registry validates this before constructing the estimator, rather than relying
+    on a later scikit-learn error during a long Optuna trial.
+    """
+    valid_criteria = {"gini", "entropy", "log_loss"}
+    if criterion not in valid_criteria:
+        raise CandidateRegistryError(
+            f"Extra Trees criterion must be one of {sorted(valid_criteria)}."
+        )
+    if n_estimators < 1:
+        raise CandidateRegistryError("Extra Trees n_estimators must be positive.")
+    if min_samples_split < 2:
+        raise CandidateRegistryError(
+            "Extra Trees min_samples_split must be at least two."
+        )
+    if min_samples_leaf < 1:
+        raise CandidateRegistryError(
+            "Extra Trees min_samples_leaf must be at least one."
+        )
+    if ccp_alpha < 0:
+        raise CandidateRegistryError("Extra Trees ccp_alpha must be non-negative.")
+    if max_samples is not None and not bootstrap:
+        raise CandidateRegistryError(
+            "Extra Trees max_samples is allowed only when bootstrap is enabled."
+        )
+
+    estimator_kwargs: dict[str, Any] = {
+        "n_estimators": int(n_estimators),
+        "criterion": criterion,
+        "max_depth": max_depth,
+        "min_samples_split": int(min_samples_split),
+        "min_samples_leaf": int(min_samples_leaf),
+        "max_features": max_features,
+        "bootstrap": bool(bootstrap),
+        "class_weight": class_weight,
+        "ccp_alpha": float(ccp_alpha),
+        "n_jobs": 1,
+        "random_state": int(random_state),
+    }
+    if bootstrap:
+        estimator_kwargs["max_samples"] = max_samples
+
+    return make_classifier_pipeline(
+        preprocessor=make_unscaled_preprocessor(),
+        classifier=ExtraTreesClassifier(**estimator_kwargs),
+    )
+
+
+def build_candidate_pipeline(
+    candidate_id: str,
+    parameters: Mapping[str, Any],
+    *,
+    random_state: int = RANDOM_STATE,
+) -> Pipeline:
+    """Build one fresh unfitted, fold-safe candidate pipeline.
+
+    Parameters are expected to come from :func:`suggest_candidate_parameters` or
+    from a previously persisted JSON result. Values are decoded explicitly rather
+    than relying on implicit pandas or JSON conversions.
+    """
+    get_candidate_definition(candidate_id)
+    parameters = dict(parameters)
+
+    if candidate_id == CANDIDATE_LOGISTIC_REGRESSION:
+        class_weight = _decode_class_weight(str(parameters["class_weight"]))
+        classifier = make_logistic_regression_classifier(
+            penalty=str(parameters["penalty"]),
+            C=float(parameters["C"]),
+            class_weight=class_weight,
+            l1_ratio=(
+                None
+                if parameters.get("l1_ratio") is None
+                else float(parameters["l1_ratio"])
+            ),
+            max_iter=int(parameters.get("max_iter", 8_000)),
+            random_state=int(random_state),
+        )
+        return make_classifier_pipeline(
+            preprocessor=make_scaled_preprocessor(),
+            classifier=classifier,
+        )
+
+    if candidate_id == CANDIDATE_EXTRA_TREES:
+        return make_extra_trees_pipeline(
+            n_estimators=int(parameters["n_estimators"]),
+            criterion=str(parameters["criterion"]),
+            max_depth=_decode_optional_depth(str(parameters["max_depth"])),
+            min_samples_split=int(parameters["min_samples_split"]),
+            min_samples_leaf=int(parameters["min_samples_leaf"]),
+            max_features=_decode_max_features(str(parameters["max_features"])),
+            bootstrap=bool(parameters["bootstrap"]),
+            max_samples=(
+                None
+                if parameters.get("max_samples") is None
+                else float(parameters["max_samples"])
+            ),
+            class_weight=_decode_class_weight(str(parameters["class_weight"])),
+            ccp_alpha=float(parameters["ccp_alpha"]),
+            random_state=int(random_state),
+        )
+
+    if candidate_id == CANDIDATE_LINEAR_SVM:
+        classifier = make_linear_svc_classifier(
+            C=float(parameters["C"]),
+            loss=str(parameters["loss"]),
+            class_weight=_decode_class_weight(str(parameters["class_weight"])),
+            random_state=int(random_state),
+        )
+        return make_classifier_pipeline(
+            preprocessor=make_scaled_preprocessor(),
+            classifier=classifier,
+        )
+
+    if candidate_id == CANDIDATE_MLP:
+        return make_mlp_pipeline(
+            hidden_layer_sizes=tuple(int(width) for width in parameters["hidden_layer_sizes"]),
+            activation=str(parameters["activation"]),
+            alpha=float(parameters["alpha"]),
+            batch_size=int(parameters["batch_size"]),
+            learning_rate_init=float(parameters["learning_rate_init"]),
+            max_iter=int(parameters["max_iter"]),
+            early_stopping=True,
+            validation_fraction=float(parameters["validation_fraction"]),
+            n_iter_no_change=int(parameters["n_iter_no_change"]),
+            random_state=int(random_state),
+        )
+
+    raise CandidateRegistryError(f"No pipeline builder implemented for {candidate_id!r}.")

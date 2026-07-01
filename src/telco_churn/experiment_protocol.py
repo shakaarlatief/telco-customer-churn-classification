@@ -118,13 +118,16 @@ class ExperimentProtocol:
             raise ProtocolValidationError("primary_metric must not be empty.")
         for field_name, value in (
             ("outer_n_splits", self.outer_n_splits),
-            ("outer_n_repeats", self.outer_n_repeats),
             ("inner_n_splits", self.inner_n_splits),
         ):
             if value < 2:
                 raise ProtocolValidationError(
                     f"{field_name} must be at least two for stratified cross-validation."
                 )
+        if self.outer_n_repeats < 1:
+            raise ProtocolValidationError(
+                "outer_n_repeats must be at least one for repeated cross-validation."
+            )
         if not isinstance(self.random_state, int):
             raise ProtocolValidationError("random_state must be an integer.")
 
