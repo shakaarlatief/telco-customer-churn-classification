@@ -55,3 +55,6 @@ Thumbs.db
 SAVED/
 # LaTeX SyncTeX temporary busy files
 *.synctex(busy)
+
+# Resumable final-comparison run state
+artifacts/final_comparison/
