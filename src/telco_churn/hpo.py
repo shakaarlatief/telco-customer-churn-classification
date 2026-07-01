@@ -32,6 +32,7 @@ from sklearn.model_selection import StratifiedKFold
 from telco_churn.candidates import (
     CandidateRegistryError,
     build_candidate_pipeline,
+    candidate_procedure_contract_fingerprint,
     suggest_candidate_parameters,
 )
 from telco_churn.experiment_splits import derive_seed
@@ -233,11 +234,20 @@ def make_study_contract_fingerprint(
     stage_b_n_splits: int,
     confirmation_top_k: int,
 ) -> str:
-    """Fingerprint all ingredients that define one inner HPO objective."""
+    """Fingerprint all ingredients that define one inner HPO objective.
+
+    The candidate routing fingerprint binds feature-policy and feature-selection
+    compatibility to persistent Optuna resume safety.  A study created under an older
+    candidate-procedure contract is rejected instead of silently reusing trials that
+    searched a different representation or selector universe.
+    """
     return _sha256_payload(
         {
-            "schema_version": "inner_hpo_objective_v1",
+            "schema_version": "inner_hpo_objective_v2",
             "candidate_id": candidate_id,
+            "candidate_procedure_contract_fingerprint": (
+                candidate_procedure_contract_fingerprint(candidate_id)
+            ),
             "task_key": task_key,
             "split_hash": split_hash,
             "primary_metric": primary_metric,

@@ -16,7 +16,7 @@ original raw table.
 
 from __future__ import annotations
 
-from typing import Final, Literal
+from typing import Final, Literal, Mapping
 
 import numpy as np
 import pandas as pd
@@ -27,6 +27,12 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.utils.validation import check_is_fitted
 
+from telco_churn.feature_selection import (
+    FEATURE_SELECTION_NONE,
+    FeatureSelectionPolicyId,
+    make_feature_selector,
+    validate_feature_selection_policy_id,
+)
 from telco_churn.feature_policies import (
     FEATURE_POLICY_RAW,
     FeaturePolicyId,
@@ -275,15 +281,26 @@ def make_feature_policy_classifier_pipeline(
     policy_id: FeaturePolicyId = FEATURE_POLICY_RAW,
     representation: FeatureRepresentation,
     classifier,
+    feature_selection_policy: FeatureSelectionPolicyId = FEATURE_SELECTION_NONE,
+    feature_selection_parameters: Mapping[str, object] | None = None,
+    random_state: int = 42,
 ) -> Pipeline:
-    """Combine a feature policy, representation adapter, and unfitted classifier.
+    """Combine feature policy, representation, optional selector, and classifier.
 
-    All three steps are in one cloneable pipeline.  This is crucial for nested CV:
-    the feature-policy fallback values, representation-level imputation and scaling,
-    category vocabulary, and estimator parameters are fitted only from each relevant
-    training partition.
+    The steps are deliberately ordered as:
+
+    ``raw rows -> feature policy -> representation preprocessor -> selector -> model``.
+
+    Both selectors operate on the represented matrix, after fold-local imputation,
+    scaling, and one-hot encoding have been fitted from the active training partition.
+    Native-categorical DataFrame representations are intentionally compatible only with
+    ``S0_NONE`` in this phase; applying generic one-hot matrix selectors would break
+    their categorical-column contract.
     """
     policy_id = validate_feature_policy_id(policy_id)
+    feature_selection_policy = validate_feature_selection_policy_id(
+        feature_selection_policy
+    )
 
     if representation == REPRESENTATION_SPARSE_SCALED:
         preprocessor = make_feature_policy_one_hot_preprocessor(
@@ -302,10 +319,18 @@ def make_feature_policy_classifier_pipeline(
             policy_id, scale_numeric=False, dense=True
         )
     elif representation == REPRESENTATION_NATIVE_CATEGORICAL_DTYPE:
+        if feature_selection_policy != FEATURE_SELECTION_NONE:
+            raise FeaturePolicyPipelineError(
+                "Native categorical representations are compatible only with S0_NONE."
+            )
         preprocessor = make_feature_policy_native_categorical_preprocessor(
             policy_id, categorical_dtype=True
         )
     elif representation == REPRESENTATION_NATIVE_CATEGORICAL_STRING:
+        if feature_selection_policy != FEATURE_SELECTION_NONE:
+            raise FeaturePolicyPipelineError(
+                "Native categorical representations are compatible only with S0_NONE."
+            )
         preprocessor = make_feature_policy_native_categorical_preprocessor(
             policy_id, categorical_dtype=False
         )
@@ -314,10 +339,18 @@ def make_feature_policy_classifier_pipeline(
             f"Unknown feature representation {representation!r}."
         )
 
+    selector = make_feature_selector(
+        feature_selection_policy,
+        n_numeric_features=len(feature_policy_numeric_features(policy_id)),
+        parameters=feature_selection_parameters,
+        random_state=int(random_state),
+    )
+
     return Pipeline(
         steps=[
             ("feature_policy", FeaturePolicyTransformer(policy_id=policy_id)),
             ("preprocessor", preprocessor),
+            ("feature_selection", selector),
             ("classifier", classifier),
         ]
     )

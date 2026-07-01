@@ -21,12 +21,21 @@ nested-CV workflow.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
+import json
 from typing import Any, Literal, Mapping
 
 from sklearn.ensemble import ExtraTreesClassifier
 from sklearn.pipeline import Pipeline
 
 from telco_churn.config import RANDOM_STATE
+from telco_churn.feature_selection import (
+    FEATURE_SELECTION_L1_LOGISTIC,
+    FEATURE_SELECTION_NONE,
+    FEATURE_SELECTION_VARIANCE_MUTUAL_INFO,
+    FeatureSelectionPolicyId,
+    validate_feature_selection_policy_id,
+)
 from telco_churn.feature_policies import (
     FEATURE_POLICY_DOMAIN,
     FEATURE_POLICY_LINEAR_EXPANDED,
@@ -156,6 +165,44 @@ FEATURE_POLICIES_BY_CANDIDATE: dict[str, tuple[FeaturePolicyId, ...]] = {
     CANDIDATE_MLP: FEATURE_POLICIES_GENERAL,
 }
 
+FEATURE_SELECTION_POLICIES_NONE: tuple[FeatureSelectionPolicyId, ...] = (
+    FEATURE_SELECTION_NONE,
+)
+FEATURE_SELECTION_POLICIES_MUTUAL_INFO: tuple[FeatureSelectionPolicyId, ...] = (
+    FEATURE_SELECTION_NONE,
+    FEATURE_SELECTION_VARIANCE_MUTUAL_INFO,
+)
+FEATURE_SELECTION_POLICIES_REGULARIZED_LINEAR: tuple[FeatureSelectionPolicyId, ...] = (
+    FEATURE_SELECTION_NONE,
+    FEATURE_SELECTION_VARIANCE_MUTUAL_INFO,
+    FEATURE_SELECTION_L1_LOGISTIC,
+)
+
+# Selection is evaluated only for families with a coherent rationale.  Trees and native
+# categorical boosting retain their full representation because their own split or
+# representation-learning mechanisms already select nonlinear evidence internally.
+FEATURE_SELECTION_POLICIES_BY_CANDIDATE: dict[
+    str, tuple[FeatureSelectionPolicyId, ...]
+] = {
+    CANDIDATE_RIDGE_CLASSIFIER: FEATURE_SELECTION_POLICIES_REGULARIZED_LINEAR,
+    CANDIDATE_LOGISTIC_REGRESSION: FEATURE_SELECTION_POLICIES_REGULARIZED_LINEAR,
+    CANDIDATE_LINEAR_SVM: FEATURE_SELECTION_POLICIES_REGULARIZED_LINEAR,
+    CANDIDATE_KNN: FEATURE_SELECTION_POLICIES_MUTUAL_INFO,
+    CANDIDATE_RBF_SVM: FEATURE_SELECTION_POLICIES_MUTUAL_INFO,
+    CANDIDATE_MLP: FEATURE_SELECTION_POLICIES_MUTUAL_INFO,
+    CANDIDATE_HYBRID_NAIVE_BAYES: FEATURE_SELECTION_POLICIES_NONE,
+    CANDIDATE_DECISION_TREE: FEATURE_SELECTION_POLICIES_NONE,
+    CANDIDATE_EXTRA_TREES: FEATURE_SELECTION_POLICIES_NONE,
+    CANDIDATE_BAGGING: FEATURE_SELECTION_POLICIES_NONE,
+    CANDIDATE_RANDOM_FOREST: FEATURE_SELECTION_POLICIES_NONE,
+    CANDIDATE_ADABOOST: FEATURE_SELECTION_POLICIES_NONE,
+    CANDIDATE_GRADIENT_BOOSTING: FEATURE_SELECTION_POLICIES_NONE,
+    CANDIDATE_HIST_GRADIENT_BOOSTING: FEATURE_SELECTION_POLICIES_NONE,
+    CANDIDATE_XGBOOST: FEATURE_SELECTION_POLICIES_NONE,
+    CANDIDATE_LIGHTGBM: FEATURE_SELECTION_POLICIES_NONE,
+    CANDIDATE_CATBOOST: FEATURE_SELECTION_POLICIES_NONE,
+}
+
 
 def supported_feature_policies(candidate_id: str) -> tuple[FeaturePolicyId, ...]:
     """Return the predeclared representations compatible with one candidate.
@@ -181,16 +228,120 @@ def validate_candidate_feature_policy(candidate_id: str, policy_id: str) -> Feat
     return policy_id
 
 
+def supported_feature_selection_policies(
+    candidate_id: str,
+    feature_policy: str,
+) -> tuple[FeatureSelectionPolicyId, ...]:
+    """Return selection policies declared for one candidate-policy route."""
+    validate_candidate_feature_policy(candidate_id, feature_policy)
+    try:
+        return FEATURE_SELECTION_POLICIES_BY_CANDIDATE[candidate_id]
+    except KeyError as exc:
+        raise CandidateRegistryError(
+            f"No feature-selection policy route is declared for candidate {candidate_id!r}."
+        ) from exc
+
+
+def validate_candidate_feature_selection(
+    candidate_id: str,
+    feature_policy: str,
+    selection_policy: str,
+) -> FeatureSelectionPolicyId:
+    """Validate that a selection policy is compatible with a candidate-policy route."""
+    selection_policy = validate_feature_selection_policy_id(selection_policy)
+    if selection_policy not in supported_feature_selection_policies(
+        candidate_id,
+        feature_policy,
+    ):
+        raise CandidateRegistryError(
+            f"Feature-selection policy {selection_policy!r} is not declared for "
+            f"candidate {candidate_id!r} with {feature_policy!r}."
+        )
+    return selection_policy
+
+
+def candidate_procedure_contract(candidate_id: str) -> dict[str, object]:
+    """Return the routing contract that must bind a persistent inner HPO study."""
+    feature_policies = supported_feature_policies(candidate_id)
+    return {
+        "candidate_id": candidate_id,
+        "feature_policies": list(feature_policies),
+        "feature_selection_policies": {
+            policy_id: list(supported_feature_selection_policies(candidate_id, policy_id))
+            for policy_id in feature_policies
+        },
+    }
+
+
+def candidate_procedure_contract_fingerprint(candidate_id: str) -> str:
+    """Return a deterministic hash of one candidate's routing contract."""
+    payload = json.dumps(
+        candidate_procedure_contract(candidate_id),
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _selection_parameter_suggestions(
+    trial: Any,
+    *,
+    selection_policy: FeatureSelectionPolicyId,
+    profile: str,
+) -> dict[str, Any]:
+    """Suggest JSON-safe parameters only for the selected policy branch."""
+    if selection_policy == FEATURE_SELECTION_NONE:
+        return {}
+    if selection_policy == FEATURE_SELECTION_VARIANCE_MUTUAL_INFO:
+        k_choices = [12, 24] if profile == "smoke" else [12, 24, 36, 48, 64, 96]
+        return {
+            "selection_k": int(
+                trial.suggest_categorical("selection_k", k_choices)
+            )
+        }
+    if selection_policy == FEATURE_SELECTION_L1_LOGISTIC:
+        return {
+            "selection_l1_C": float(
+                trial.suggest_float(
+                    "selection_l1_C",
+                    1e-4 if profile == "smoke" else 1e-5,
+                    10.0 if profile == "smoke" else 100.0,
+                    log=True,
+                )
+            ),
+            "selection_l1_threshold": trial.suggest_categorical(
+                "selection_l1_threshold",
+                ["mean", "median"],
+            ),
+        }
+    raise RuntimeError(f"Unexpected validated selection policy {selection_policy!r}.")
+
+
 def _with_feature_policy(
     trial: Any,
     *,
     candidate_id: str,
     parameters: Mapping[str, Any],
+    profile: str,
 ) -> dict[str, Any]:
-    """Append an inner-CV-selected, JSON-safe feature-policy choice."""
+    """Append compatible feature and feature-selection policy choices for inner HPO."""
     result = dict(parameters)
-    result["feature_policy"] = trial.suggest_categorical(
+    feature_policy = trial.suggest_categorical(
         "feature_policy", list(supported_feature_policies(candidate_id))
+    )
+    result["feature_policy"] = feature_policy
+    selection_policy = trial.suggest_categorical(
+        "feature_selection_policy",
+        list(supported_feature_selection_policies(candidate_id, feature_policy)),
+    )
+    result["feature_selection_policy"] = selection_policy
+    result.update(
+        _selection_parameter_suggestions(
+            trial,
+            selection_policy=selection_policy,
+            profile=profile,
+        )
     )
     return result
 
@@ -361,6 +512,22 @@ def validate_candidate_registry(
             )
         for policy_id in policy_ids:
             validate_feature_policy_id(policy_id)
+            selection_policy_ids = supported_feature_selection_policies(
+                candidate_id,
+                policy_id,
+            )
+            if not selection_policy_ids:
+                raise CandidateRegistryError(
+                    f"Candidate {candidate_id!r} with {policy_id!r} must declare "
+                    "at least one feature-selection policy."
+                )
+            if len(selection_policy_ids) != len(set(selection_policy_ids)):
+                raise CandidateRegistryError(
+                    f"Candidate {candidate_id!r} with {policy_id!r} has duplicate "
+                    "feature-selection policy identifiers."
+                )
+            for selection_policy_id in selection_policy_ids:
+                validate_feature_selection_policy_id(selection_policy_id)
 
 
 def get_candidate_definition(candidate_id: str) -> CandidateDefinition:
@@ -445,7 +612,7 @@ def suggest_candidate_parameters(
         if penalty == "elasticnet":
             parameters["l1_ratio"] = float(trial.suggest_float("l1_ratio", 0.02, 0.98))
         return _with_feature_policy(
-            trial, candidate_id=candidate_id, parameters=parameters
+            trial, candidate_id=candidate_id, parameters=parameters, profile=profile
         )
 
     if candidate_id == CANDIDATE_EXTRA_TREES:
@@ -501,7 +668,7 @@ def suggest_candidate_parameters(
         else:
             parameters["max_samples"] = None
         return _with_feature_policy(
-            trial, candidate_id=candidate_id, parameters=parameters
+            trial, candidate_id=candidate_id, parameters=parameters, profile=profile
         )
 
     if candidate_id == CANDIDATE_LINEAR_SVM:
@@ -516,6 +683,7 @@ def suggest_candidate_parameters(
                     ["none", "balanced"],
                 ),
             },
+            profile=profile,
         )
 
     if candidate_id == CANDIDATE_MLP:
@@ -556,6 +724,7 @@ def suggest_candidate_parameters(
                 "validation_fraction": 0.15,
                 "n_iter_no_change": 25,
             },
+            profile=profile,
         )
 
     from telco_churn.core_candidate_builders import suggest_core_candidate_parameters
@@ -568,6 +737,7 @@ def suggest_candidate_parameters(
             candidate_id=candidate_id,
             profile=profile,
         ),
+        profile=profile,
     )
 
 
@@ -586,6 +756,8 @@ def make_extra_trees_pipeline(
     ccp_alpha: float,
     random_state: int,
     feature_policy: FeaturePolicyId = FEATURE_POLICY_RAW,
+    feature_selection_policy: FeatureSelectionPolicyId = FEATURE_SELECTION_NONE,
+    feature_selection_parameters: Mapping[str, object] | None = None,
 ) -> Pipeline:
     """Create an Extra Trees procedure owned by the final-comparison registry.
 
@@ -641,6 +813,9 @@ def make_extra_trees_pipeline(
         policy_id=feature_policy,
         representation=REPRESENTATION_SPARSE_UNSCALED,
         classifier=ExtraTreesClassifier(**estimator_kwargs),
+        feature_selection_policy=feature_selection_policy,
+        feature_selection_parameters=feature_selection_parameters,
+        random_state=int(random_state),
     )
 
 
@@ -661,6 +836,20 @@ def build_candidate_pipeline(
     feature_policy = validate_candidate_feature_policy(
         candidate_id, parameters.pop("feature_policy", FEATURE_POLICY_RAW)
     )
+    feature_selection_policy = validate_candidate_feature_selection(
+        candidate_id,
+        feature_policy,
+        parameters.pop("feature_selection_policy", FEATURE_SELECTION_NONE),
+    )
+    feature_selection_parameters = {
+        name: parameters.pop(name)
+        for name in (
+            "selection_k",
+            "selection_l1_C",
+            "selection_l1_threshold",
+        )
+        if name in parameters
+    }
 
     if candidate_id == CANDIDATE_LOGISTIC_REGRESSION:
         class_weight = _decode_class_weight(str(parameters["class_weight"]))
@@ -680,6 +869,9 @@ def build_candidate_pipeline(
             policy_id=feature_policy,
             representation=REPRESENTATION_SPARSE_SCALED,
             classifier=classifier,
+            feature_selection_policy=feature_selection_policy,
+            feature_selection_parameters=feature_selection_parameters,
+            random_state=int(random_state),
         )
 
     if candidate_id == CANDIDATE_EXTRA_TREES:
@@ -700,6 +892,8 @@ def build_candidate_pipeline(
             ccp_alpha=float(parameters["ccp_alpha"]),
             random_state=int(random_state),
             feature_policy=feature_policy,
+            feature_selection_policy=feature_selection_policy,
+            feature_selection_parameters=feature_selection_parameters,
         )
 
     if candidate_id == CANDIDATE_LINEAR_SVM:
@@ -713,6 +907,9 @@ def build_candidate_pipeline(
             policy_id=feature_policy,
             representation=REPRESENTATION_SPARSE_SCALED,
             classifier=classifier,
+            feature_selection_policy=feature_selection_policy,
+            feature_selection_parameters=feature_selection_parameters,
+            random_state=int(random_state),
         )
 
     if candidate_id == CANDIDATE_MLP:
@@ -732,6 +929,9 @@ def build_candidate_pipeline(
             policy_id=feature_policy,
             representation=REPRESENTATION_DENSE_SCALED,
             classifier=classifier,
+            feature_selection_policy=feature_selection_policy,
+            feature_selection_parameters=feature_selection_parameters,
+            random_state=int(random_state),
         )
 
     from telco_churn.core_candidate_builders import build_core_candidate_pipeline
@@ -741,4 +941,6 @@ def build_candidate_pipeline(
         parameters,
         random_state=int(random_state),
         feature_policy=feature_policy,
+        feature_selection_policy=feature_selection_policy,
+        feature_selection_parameters=feature_selection_parameters,
     )

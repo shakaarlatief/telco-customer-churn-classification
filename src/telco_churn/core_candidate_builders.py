@@ -16,6 +16,7 @@ referenced anywhere in this module.
 
 from __future__ import annotations
 
+from functools import partial
 from typing import Any, Mapping
 
 from sklearn.ensemble import (
@@ -45,6 +46,10 @@ from telco_churn.candidates import (
     CANDIDATE_RBF_SVM,
     CANDIDATE_RIDGE_CLASSIFIER,
     CANDIDATE_XGBOOST,
+)
+from telco_churn.feature_selection import (
+    FEATURE_SELECTION_NONE,
+    FeatureSelectionPolicyId,
 )
 from telco_churn.feature_policies import (
     FEATURE_POLICY_RAW,
@@ -508,6 +513,8 @@ def build_core_candidate_pipeline(
     *,
     random_state: int,
     feature_policy: FeaturePolicyId = FEATURE_POLICY_RAW,
+    feature_selection_policy: FeatureSelectionPolicyId = FEATURE_SELECTION_NONE,
+    feature_selection_parameters: Mapping[str, object] | None = None,
 ) -> Pipeline:
     """Build one fresh single-threaded core-candidate pipeline.
 
@@ -520,9 +527,16 @@ def build_core_candidate_pipeline(
     if candidate_id not in CORE_EXTENSION_CANDIDATE_IDS:
         raise CoreCandidateBuilderError(f"Unknown core extension candidate: {candidate_id!r}")
     parameters = dict(parameters)
+    make_routed_pipeline = partial(
+        make_feature_policy_classifier_pipeline,
+        policy_id=feature_policy,
+        feature_selection_policy=feature_selection_policy,
+        feature_selection_parameters=feature_selection_parameters,
+        random_state=int(random_state),
+    )
 
     if candidate_id == CANDIDATE_RIDGE_CLASSIFIER:
-        return make_feature_policy_classifier_pipeline(
+        return make_routed_pipeline(
             policy_id=feature_policy,
             representation=REPRESENTATION_SPARSE_SCALED,
             classifier=RidgeClassifier(
@@ -533,7 +547,7 @@ def build_core_candidate_pipeline(
         )
 
     if candidate_id == CANDIDATE_KNN:
-        return make_feature_policy_classifier_pipeline(
+        return make_routed_pipeline(
             policy_id=feature_policy,
             representation=REPRESENTATION_SPARSE_SCALED,
             classifier=KNeighborsClassifier(
@@ -546,7 +560,7 @@ def build_core_candidate_pipeline(
         )
 
     if candidate_id == CANDIDATE_HYBRID_NAIVE_BAYES:
-        return make_feature_policy_classifier_pipeline(
+        return make_routed_pipeline(
             policy_id=feature_policy,
             representation=REPRESENTATION_SPARSE_UNSCALED,
             classifier=HybridGaussianBernoulliNB(
@@ -557,7 +571,7 @@ def build_core_candidate_pipeline(
         )
 
     if candidate_id == CANDIDATE_DECISION_TREE:
-        return make_feature_policy_classifier_pipeline(
+        return make_routed_pipeline(
             policy_id=feature_policy,
             representation=REPRESENTATION_SPARSE_UNSCALED,
             classifier=DecisionTreeClassifier(
@@ -576,7 +590,7 @@ def build_core_candidate_pipeline(
         )
 
     if candidate_id == CANDIDATE_BAGGING:
-        return make_feature_policy_classifier_pipeline(
+        return make_routed_pipeline(
             policy_id=feature_policy,
             representation=REPRESENTATION_SPARSE_UNSCALED,
             classifier=_make_bagging_classifier(
@@ -593,7 +607,7 @@ def build_core_candidate_pipeline(
         )
 
     if candidate_id == CANDIDATE_RANDOM_FOREST:
-        return make_feature_policy_classifier_pipeline(
+        return make_routed_pipeline(
             policy_id=feature_policy,
             representation=REPRESENTATION_SPARSE_UNSCALED,
             classifier=RandomForestClassifier(
@@ -615,7 +629,7 @@ def build_core_candidate_pipeline(
         )
 
     if candidate_id == CANDIDATE_ADABOOST:
-        return make_feature_policy_classifier_pipeline(
+        return make_routed_pipeline(
             policy_id=feature_policy,
             representation=REPRESENTATION_DENSE_UNSCALED,
             classifier=_make_adaboost_classifier(
@@ -627,7 +641,7 @@ def build_core_candidate_pipeline(
         )
 
     if candidate_id == CANDIDATE_GRADIENT_BOOSTING:
-        return make_feature_policy_classifier_pipeline(
+        return make_routed_pipeline(
             policy_id=feature_policy,
             representation=REPRESENTATION_DENSE_UNSCALED,
             classifier=GradientBoostingClassifier(
@@ -642,7 +656,7 @@ def build_core_candidate_pipeline(
         )
 
     if candidate_id == CANDIDATE_HIST_GRADIENT_BOOSTING:
-        return make_feature_policy_classifier_pipeline(
+        return make_routed_pipeline(
             policy_id=feature_policy,
             representation=REPRESENTATION_DENSE_UNSCALED,
             classifier=HistGradientBoostingClassifier(
@@ -658,21 +672,21 @@ def build_core_candidate_pipeline(
         )
 
     if candidate_id == CANDIDATE_XGBOOST:
-        return make_feature_policy_classifier_pipeline(
+        return make_routed_pipeline(
             policy_id=feature_policy,
             representation=REPRESENTATION_DENSE_UNSCALED,
             classifier=_make_xgboost_classifier(parameters, random_state=random_state),
         )
 
     if candidate_id == CANDIDATE_LIGHTGBM:
-        return make_feature_policy_classifier_pipeline(
+        return make_routed_pipeline(
             policy_id=feature_policy,
             representation=REPRESENTATION_NATIVE_CATEGORICAL_DTYPE,
             classifier=_make_lightgbm_classifier(parameters, random_state=random_state),
         )
 
     if candidate_id == CANDIDATE_CATBOOST:
-        return make_feature_policy_classifier_pipeline(
+        return make_routed_pipeline(
             policy_id=feature_policy,
             representation=REPRESENTATION_NATIVE_CATEGORICAL_STRING,
             classifier=CloneSafeFeaturePolicyCatBoostClassifier(
@@ -689,7 +703,7 @@ def build_core_candidate_pipeline(
         )
 
     if candidate_id == CANDIDATE_RBF_SVM:
-        return make_feature_policy_classifier_pipeline(
+        return make_routed_pipeline(
             policy_id=feature_policy,
             representation=REPRESENTATION_SPARSE_SCALED,
             classifier=make_kernel_svc_classifier(
