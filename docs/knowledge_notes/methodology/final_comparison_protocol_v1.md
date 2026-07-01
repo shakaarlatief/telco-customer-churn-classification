@@ -498,29 +498,31 @@ All preprocessing remains inside the fitted pipeline or inner task. No imputatio
 
 ## 5.3 Deterministic feature-engineering variants
 
-The master registry contains two deterministic feature policies:
+The master registry contains three deterministic feature policies:
 
 ```text
 F0: raw cleaned feature set
 
 F1: domain-enriched feature set
+
+F2: systematic regularized-linear expansion
 ```
 
-F1 will include only predeclared transformations that are available at prediction time and do not use the target. Candidate transformations will be implemented as a fold-safe reusable transformer and documented individually.
+F1 contains only predeclared transformations that are available at prediction time and do not use the target. It includes service aggregates, a safe charge-to-tenure summary with zero-tenure handling, selected nonlinear tenure summaries, selected charge-by-contract and charge-by-service interactions, and a `Contract × PaymentMethod` categorical interaction.
 
-Planned Telco feature candidates include:
+F2 is not a universal feature expansion. It is available only to Ridge classifier and regularized logistic regression. It contains the F1 structural features, numeric squares, pairwise numeric products, and numeric-by-nonreference-category interactions. It intentionally excludes a blanket categorical-by-categorical expansion and does not duplicate F1's curated numeric interactions. The purpose is to offer regularized linear procedures a controlled basis for nonlinear and interaction effects that tree, boosting, kernel, and neural procedures can learn through their own model structure.
+
+The exact output columns, categorical reference-level convention, and zero-tenure rule are declared in the reusable feature-policy contract. A policy is selected within the relevant inner CV search only from candidate-compatible predeclared options:
 
 ```text
-number of subscribed internet / streaming / support services
-number of protection and support services
-indicator for no internet service
-indicator for month-to-month contract
-tenure bins or nonlinear tenure representation
-safe charge-to-tenure summaries with zero-tenure handling
-selected contract-by-charge and service-by-charge interactions
+Ridge classifier and logistic regression:
+    F0, F1, F2
+
+all other implemented core candidates:
+    F0, F1
 ```
 
-F1 is not a free-form manual feature-creation playground. The exact output columns must be declared in the protocol before running the master comparison.
+Neither F1 nor F2 is a free-form manual feature-creation playground. The exact output columns must be frozen before running the master comparison.
 
 ## 5.4 Feature-selection policies
 

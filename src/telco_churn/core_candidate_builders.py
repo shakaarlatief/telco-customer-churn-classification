@@ -7,10 +7,11 @@ versions of parallel tree and boosting estimators instead of reusing historical
 notebook factories whose ``n_jobs=-1`` defaults would create nested parallelism
 inside the outer process pool.
 
-Every function returns an unfitted pipeline. Preprocessing remains inside the
-pipeline so that imputation, scaling, one-hot encoding, and native-categorical
-conversion are fitted only on the appropriate inner or outer training partition.
-The held-out test data is not referenced anywhere in this module.
+Every function returns an unfitted pipeline. A declared feature policy is the first
+step, followed by representation-specific imputation, scaling, one-hot encoding, or
+native-categorical conversion. All learned transformations are fitted only on the
+appropriate inner or outer training partition. The held-out test data is not
+referenced anywhere in this module.
 """
 
 from __future__ import annotations
@@ -45,19 +46,22 @@ from telco_churn.candidates import (
     CANDIDATE_RIDGE_CLASSIFIER,
     CANDIDATE_XGBOOST,
 )
-from telco_churn.config import NUMERIC_FEATURES
-from telco_churn.models import (
-    CloneSafeCatBoostClassifier,
-    HybridGaussianBernoulliNB,
-    make_classifier_pipeline,
-    make_kernel_svc_classifier,
+from telco_churn.feature_policies import (
+    FEATURE_POLICY_RAW,
+    FeaturePolicyId,
+    feature_policy_categorical_features,
+    feature_policy_numeric_features,
 )
-from telco_churn.preprocessing import (
-    make_dense_unscaled_preprocessor,
-    make_native_categorical_preprocessor,
-    make_scaled_preprocessor,
-    make_unscaled_preprocessor,
+from telco_churn.feature_policy_pipelines import (
+    CloneSafeFeaturePolicyCatBoostClassifier,
+    REPRESENTATION_DENSE_UNSCALED,
+    REPRESENTATION_NATIVE_CATEGORICAL_DTYPE,
+    REPRESENTATION_NATIVE_CATEGORICAL_STRING,
+    REPRESENTATION_SPARSE_SCALED,
+    REPRESENTATION_SPARSE_UNSCALED,
+    make_feature_policy_classifier_pipeline,
 )
+from telco_churn.models import HybridGaussianBernoulliNB, make_kernel_svc_classifier
 
 
 class CoreCandidateBuilderError(ValueError):
@@ -503,21 +507,24 @@ def build_core_candidate_pipeline(
     parameters: Mapping[str, Any],
     *,
     random_state: int,
+    feature_policy: FeaturePolicyId = FEATURE_POLICY_RAW,
 ) -> Pipeline:
     """Build one fresh single-threaded core-candidate pipeline.
 
-    This function receives only persisted JSON-compatible parameter values. It decodes
-    every optional integer, class-weight policy, and maximum-feature policy explicitly
-    before constructing the estimator, preventing silent differences between a live
-    Optuna trial and a resumed task.
+    This function receives only persisted JSON-compatible parameter values and a
+    prevalidated feature-policy identifier. It decodes every optional integer,
+    class-weight policy, and maximum-feature policy explicitly before constructing the
+    estimator, preventing silent differences between a live Optuna trial and a resumed
+    task.
     """
     if candidate_id not in CORE_EXTENSION_CANDIDATE_IDS:
         raise CoreCandidateBuilderError(f"Unknown core extension candidate: {candidate_id!r}")
     parameters = dict(parameters)
 
     if candidate_id == CANDIDATE_RIDGE_CLASSIFIER:
-        return make_classifier_pipeline(
-            preprocessor=make_scaled_preprocessor(),
+        return make_feature_policy_classifier_pipeline(
+            policy_id=feature_policy,
+            representation=REPRESENTATION_SPARSE_SCALED,
             classifier=RidgeClassifier(
                 alpha=float(parameters["alpha"]),
                 class_weight=_decode_class_weight(parameters["class_weight"]),
@@ -526,8 +533,9 @@ def build_core_candidate_pipeline(
         )
 
     if candidate_id == CANDIDATE_KNN:
-        return make_classifier_pipeline(
-            preprocessor=make_scaled_preprocessor(),
+        return make_feature_policy_classifier_pipeline(
+            policy_id=feature_policy,
+            representation=REPRESENTATION_SPARSE_SCALED,
             classifier=KNeighborsClassifier(
                 n_neighbors=int(parameters["n_neighbors"]),
                 weights=str(parameters["weights"]),
@@ -538,18 +546,20 @@ def build_core_candidate_pipeline(
         )
 
     if candidate_id == CANDIDATE_HYBRID_NAIVE_BAYES:
-        return make_classifier_pipeline(
-            preprocessor=make_unscaled_preprocessor(),
+        return make_feature_policy_classifier_pipeline(
+            policy_id=feature_policy,
+            representation=REPRESENTATION_SPARSE_UNSCALED,
             classifier=HybridGaussianBernoulliNB(
-                n_numeric_features=len(NUMERIC_FEATURES),
+                n_numeric_features=len(feature_policy_numeric_features(feature_policy)),
                 alpha=float(parameters["alpha"]),
                 var_smoothing=float(parameters["var_smoothing"]),
             ),
         )
 
     if candidate_id == CANDIDATE_DECISION_TREE:
-        return make_classifier_pipeline(
-            preprocessor=make_unscaled_preprocessor(),
+        return make_feature_policy_classifier_pipeline(
+            policy_id=feature_policy,
+            representation=REPRESENTATION_SPARSE_UNSCALED,
             classifier=DecisionTreeClassifier(
                 criterion=str(parameters["criterion"]),
                 max_depth=_decode_optional_positive_int(
@@ -566,8 +576,9 @@ def build_core_candidate_pipeline(
         )
 
     if candidate_id == CANDIDATE_BAGGING:
-        return make_classifier_pipeline(
-            preprocessor=make_unscaled_preprocessor(),
+        return make_feature_policy_classifier_pipeline(
+            policy_id=feature_policy,
+            representation=REPRESENTATION_SPARSE_UNSCALED,
             classifier=_make_bagging_classifier(
                 n_estimators=int(parameters["n_estimators"]),
                 max_samples=float(parameters["max_samples"]),
@@ -582,8 +593,9 @@ def build_core_candidate_pipeline(
         )
 
     if candidate_id == CANDIDATE_RANDOM_FOREST:
-        return make_classifier_pipeline(
-            preprocessor=make_unscaled_preprocessor(),
+        return make_feature_policy_classifier_pipeline(
+            policy_id=feature_policy,
+            representation=REPRESENTATION_SPARSE_UNSCALED,
             classifier=RandomForestClassifier(
                 n_estimators=int(parameters["n_estimators"]),
                 criterion=str(parameters["criterion"]),
@@ -603,8 +615,9 @@ def build_core_candidate_pipeline(
         )
 
     if candidate_id == CANDIDATE_ADABOOST:
-        return make_classifier_pipeline(
-            preprocessor=make_dense_unscaled_preprocessor(),
+        return make_feature_policy_classifier_pipeline(
+            policy_id=feature_policy,
+            representation=REPRESENTATION_DENSE_UNSCALED,
             classifier=_make_adaboost_classifier(
                 base_depth=int(parameters["base_depth"]),
                 n_estimators=int(parameters["n_estimators"]),
@@ -614,8 +627,9 @@ def build_core_candidate_pipeline(
         )
 
     if candidate_id == CANDIDATE_GRADIENT_BOOSTING:
-        return make_classifier_pipeline(
-            preprocessor=make_dense_unscaled_preprocessor(),
+        return make_feature_policy_classifier_pipeline(
+            policy_id=feature_policy,
+            representation=REPRESENTATION_DENSE_UNSCALED,
             classifier=GradientBoostingClassifier(
                 loss="log_loss",
                 n_estimators=int(parameters["n_estimators"]),
@@ -628,8 +642,9 @@ def build_core_candidate_pipeline(
         )
 
     if candidate_id == CANDIDATE_HIST_GRADIENT_BOOSTING:
-        return make_classifier_pipeline(
-            preprocessor=make_dense_unscaled_preprocessor(),
+        return make_feature_policy_classifier_pipeline(
+            policy_id=feature_policy,
+            representation=REPRESENTATION_DENSE_UNSCALED,
             classifier=HistGradientBoostingClassifier(
                 loss="log_loss",
                 max_iter=int(parameters["max_iter"]),
@@ -643,33 +658,40 @@ def build_core_candidate_pipeline(
         )
 
     if candidate_id == CANDIDATE_XGBOOST:
-        return make_classifier_pipeline(
-            preprocessor=make_dense_unscaled_preprocessor(),
+        return make_feature_policy_classifier_pipeline(
+            policy_id=feature_policy,
+            representation=REPRESENTATION_DENSE_UNSCALED,
             classifier=_make_xgboost_classifier(parameters, random_state=random_state),
         )
 
     if candidate_id == CANDIDATE_LIGHTGBM:
-        return make_classifier_pipeline(
-            preprocessor=make_native_categorical_preprocessor(categorical_dtype=True),
+        return make_feature_policy_classifier_pipeline(
+            policy_id=feature_policy,
+            representation=REPRESENTATION_NATIVE_CATEGORICAL_DTYPE,
             classifier=_make_lightgbm_classifier(parameters, random_state=random_state),
         )
 
     if candidate_id == CANDIDATE_CATBOOST:
-        return make_classifier_pipeline(
-            preprocessor=make_native_categorical_preprocessor(categorical_dtype=False),
-            classifier=CloneSafeCatBoostClassifier(
+        return make_feature_policy_classifier_pipeline(
+            policy_id=feature_policy,
+            representation=REPRESENTATION_NATIVE_CATEGORICAL_STRING,
+            classifier=CloneSafeFeaturePolicyCatBoostClassifier(
                 iterations=int(parameters["iterations"]),
                 learning_rate=float(parameters["learning_rate"]),
                 depth=int(parameters["depth"]),
                 l2_leaf_reg=float(parameters["l2_leaf_reg"]),
+                categorical_features=tuple(
+                    feature_policy_categorical_features(feature_policy)
+                ),
                 random_state=int(random_state),
                 thread_count=1,
             ),
         )
 
     if candidate_id == CANDIDATE_RBF_SVM:
-        return make_classifier_pipeline(
-            preprocessor=make_scaled_preprocessor(),
+        return make_feature_policy_classifier_pipeline(
+            policy_id=feature_policy,
+            representation=REPRESENTATION_SPARSE_SCALED,
             classifier=make_kernel_svc_classifier(
                 C=float(parameters["C"]),
                 kernel="rbf",

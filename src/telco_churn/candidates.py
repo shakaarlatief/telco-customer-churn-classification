@@ -2,9 +2,9 @@
 
 The final-comparison protocol evaluates complete candidate procedures rather than
 bare estimator names. This registry provides the stable identifiers, continuous-score
-semantics, fold-internal representations, Optuna search-space suggestions, and fresh
-unfitted pipeline builders for the core classical, tree, bagging, boosting, SVM, and
-neural-network library.
+semantics, predeclared fold-internal feature policies, Optuna search-space
+suggestions, and fresh unfitted pipeline builders for the core classical, tree,
+bagging, boosting, SVM, and neural-network library.
 
 The registry keeps three concerns separate:
 
@@ -27,15 +27,23 @@ from sklearn.ensemble import ExtraTreesClassifier
 from sklearn.pipeline import Pipeline
 
 from telco_churn.config import RANDOM_STATE
+from telco_churn.feature_policies import (
+    FEATURE_POLICY_DOMAIN,
+    FEATURE_POLICY_LINEAR_EXPANDED,
+    FEATURE_POLICY_RAW,
+    FeaturePolicyId,
+    validate_feature_policy_id,
+)
+from telco_churn.feature_policy_pipelines import (
+    REPRESENTATION_DENSE_SCALED,
+    REPRESENTATION_SPARSE_SCALED,
+    REPRESENTATION_SPARSE_UNSCALED,
+    make_feature_policy_classifier_pipeline,
+)
 from telco_churn.models import (
-    make_classifier_pipeline,
     make_linear_svc_classifier,
     make_logistic_regression_classifier,
-    make_mlp_pipeline,
-)
-from telco_churn.preprocessing import (
-    make_scaled_preprocessor,
-    make_unscaled_preprocessor,
+    make_mlp_classifier,
 )
 
 
@@ -112,6 +120,79 @@ CANDIDATE_CATBOOST = "C19_CATBOOST"
 CANDIDATE_LINEAR_SVM = "C21_LINEAR_SVM"
 CANDIDATE_RBF_SVM = "C22_RBF_SVM"
 CANDIDATE_MLP = "C23_MULTILAYER_PERCEPTRON"
+
+
+FEATURE_POLICIES_GENERAL: tuple[FeaturePolicyId, ...] = (
+    FEATURE_POLICY_RAW,
+    FEATURE_POLICY_DOMAIN,
+)
+FEATURE_POLICIES_REGULARIZED_LINEAR: tuple[FeaturePolicyId, ...] = (
+    FEATURE_POLICY_RAW,
+    FEATURE_POLICY_DOMAIN,
+    FEATURE_POLICY_LINEAR_EXPANDED,
+)
+
+# This map is part of the immutable candidate-procedure contract.  F2 is deliberately
+# restricted to regularized linear procedures.  Nonlinear learners either model
+# interactions internally or would receive an unnecessarily high-dimensional input
+# representation from the systematic expansion.
+FEATURE_POLICIES_BY_CANDIDATE: dict[str, tuple[FeaturePolicyId, ...]] = {
+    CANDIDATE_RIDGE_CLASSIFIER: FEATURE_POLICIES_REGULARIZED_LINEAR,
+    CANDIDATE_LOGISTIC_REGRESSION: FEATURE_POLICIES_REGULARIZED_LINEAR,
+    CANDIDATE_KNN: FEATURE_POLICIES_GENERAL,
+    CANDIDATE_HYBRID_NAIVE_BAYES: FEATURE_POLICIES_GENERAL,
+    CANDIDATE_DECISION_TREE: FEATURE_POLICIES_GENERAL,
+    CANDIDATE_EXTRA_TREES: FEATURE_POLICIES_GENERAL,
+    CANDIDATE_BAGGING: FEATURE_POLICIES_GENERAL,
+    CANDIDATE_RANDOM_FOREST: FEATURE_POLICIES_GENERAL,
+    CANDIDATE_ADABOOST: FEATURE_POLICIES_GENERAL,
+    CANDIDATE_GRADIENT_BOOSTING: FEATURE_POLICIES_GENERAL,
+    CANDIDATE_HIST_GRADIENT_BOOSTING: FEATURE_POLICIES_GENERAL,
+    CANDIDATE_XGBOOST: FEATURE_POLICIES_GENERAL,
+    CANDIDATE_LIGHTGBM: FEATURE_POLICIES_GENERAL,
+    CANDIDATE_CATBOOST: FEATURE_POLICIES_GENERAL,
+    CANDIDATE_LINEAR_SVM: FEATURE_POLICIES_GENERAL,
+    CANDIDATE_RBF_SVM: FEATURE_POLICIES_GENERAL,
+    CANDIDATE_MLP: FEATURE_POLICIES_GENERAL,
+}
+
+
+def supported_feature_policies(candidate_id: str) -> tuple[FeaturePolicyId, ...]:
+    """Return the predeclared representations compatible with one candidate.
+
+    A feature policy is selected only inside the inner HPO loop.  It is not chosen
+    from outer-validation or held-out test results.
+    """
+    try:
+        return FEATURE_POLICIES_BY_CANDIDATE[candidate_id]
+    except KeyError as exc:
+        raise CandidateRegistryError(
+            f"No feature-policy route is declared for candidate {candidate_id!r}."
+        ) from exc
+
+
+def validate_candidate_feature_policy(candidate_id: str, policy_id: str) -> FeaturePolicyId:
+    """Validate that a persisted feature-policy choice is candidate-compatible."""
+    policy_id = validate_feature_policy_id(policy_id)
+    if policy_id not in supported_feature_policies(candidate_id):
+        raise CandidateRegistryError(
+            f"Feature policy {policy_id!r} is not declared for candidate {candidate_id!r}."
+        )
+    return policy_id
+
+
+def _with_feature_policy(
+    trial: Any,
+    *,
+    candidate_id: str,
+    parameters: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Append an inner-CV-selected, JSON-safe feature-policy choice."""
+    result = dict(parameters)
+    result["feature_policy"] = trial.suggest_categorical(
+        "feature_policy", list(supported_feature_policies(candidate_id))
+    )
+    return result
 
 INITIAL_CANDIDATE_REGISTRY: tuple[CandidateDefinition, ...] = (
     CandidateDefinition(
@@ -268,6 +349,19 @@ def validate_candidate_registry(
     if len(candidate_ids) != len(set(candidate_ids)):
         raise CandidateRegistryError("Candidate registry identifiers must be unique.")
 
+    for candidate_id in candidate_ids:
+        policy_ids = supported_feature_policies(candidate_id)
+        if not policy_ids:
+            raise CandidateRegistryError(
+                f"Candidate {candidate_id!r} must declare at least one feature policy."
+            )
+        if len(policy_ids) != len(set(policy_ids)):
+            raise CandidateRegistryError(
+                f"Candidate {candidate_id!r} has duplicate feature-policy identifiers."
+            )
+        for policy_id in policy_ids:
+            validate_feature_policy_id(policy_id)
+
 
 def get_candidate_definition(candidate_id: str) -> CandidateDefinition:
     """Return one immutable definition or raise a clear registry error."""
@@ -350,7 +444,9 @@ def suggest_candidate_parameters(
         }
         if penalty == "elasticnet":
             parameters["l1_ratio"] = float(trial.suggest_float("l1_ratio", 0.02, 0.98))
-        return parameters
+        return _with_feature_policy(
+            trial, candidate_id=candidate_id, parameters=parameters
+        )
 
     if candidate_id == CANDIDATE_EXTRA_TREES:
         if profile == "smoke":
@@ -404,17 +500,23 @@ def suggest_candidate_parameters(
             )
         else:
             parameters["max_samples"] = None
-        return parameters
+        return _with_feature_policy(
+            trial, candidate_id=candidate_id, parameters=parameters
+        )
 
     if candidate_id == CANDIDATE_LINEAR_SVM:
-        return {
-            "C": float(trial.suggest_float("C", 1e-4, 1e3, log=True)),
-            "loss": trial.suggest_categorical("loss", ["hinge", "squared_hinge"]),
-            "class_weight": trial.suggest_categorical(
-                "class_weight",
-                ["none", "balanced"],
-            ),
-        }
+        return _with_feature_policy(
+            trial,
+            candidate_id=candidate_id,
+            parameters={
+                "C": float(trial.suggest_float("C", 1e-4, 1e3, log=True)),
+                "loss": trial.suggest_categorical("loss", ["hinge", "squared_hinge"]),
+                "class_weight": trial.suggest_categorical(
+                    "class_weight",
+                    ["none", "balanced"],
+                ),
+            },
+        )
 
     if candidate_id == CANDIDATE_MLP:
         if profile == "smoke":
@@ -436,30 +538,37 @@ def suggest_candidate_parameters(
         architecture_index = int(
             trial.suggest_int("architecture_index", 0, len(architectures) - 1)
         )
-        return {
-            "hidden_layer_sizes": list(architectures[architecture_index]),
-            "activation": trial.suggest_categorical(
-                "activation",
-                ["relu", "tanh"],
-            ),
-            "alpha": float(trial.suggest_float("alpha", 1e-6, 1e-1, log=True)),
-            "batch_size": int(trial.suggest_categorical("batch_size", [32, 64, 128])),
-            "learning_rate_init": float(
-                trial.suggest_float("learning_rate_init", 1e-4, 1e-2, log=True)
-            ),
-            "max_iter": max_iter,
-            "validation_fraction": 0.15,
-            "n_iter_no_change": 25,
-        }
+        return _with_feature_policy(
+            trial,
+            candidate_id=candidate_id,
+            parameters={
+                "hidden_layer_sizes": list(architectures[architecture_index]),
+                "activation": trial.suggest_categorical(
+                    "activation",
+                    ["relu", "tanh"],
+                ),
+                "alpha": float(trial.suggest_float("alpha", 1e-6, 1e-1, log=True)),
+                "batch_size": int(trial.suggest_categorical("batch_size", [32, 64, 128])),
+                "learning_rate_init": float(
+                    trial.suggest_float("learning_rate_init", 1e-4, 1e-2, log=True)
+                ),
+                "max_iter": max_iter,
+                "validation_fraction": 0.15,
+                "n_iter_no_change": 25,
+            },
+        )
 
     from telco_churn.core_candidate_builders import suggest_core_candidate_parameters
 
-    return suggest_core_candidate_parameters(
+    return _with_feature_policy(
         trial,
         candidate_id=candidate_id,
-        profile=profile,
+        parameters=suggest_core_candidate_parameters(
+            trial,
+            candidate_id=candidate_id,
+            profile=profile,
+        ),
     )
-    raise CandidateRegistryError(f"No search space implemented for {candidate_id!r}.")
 
 
 
@@ -476,6 +585,7 @@ def make_extra_trees_pipeline(
     class_weight: str | None,
     ccp_alpha: float,
     random_state: int,
+    feature_policy: FeaturePolicyId = FEATURE_POLICY_RAW,
 ) -> Pipeline:
     """Create an Extra Trees procedure owned by the final-comparison registry.
 
@@ -527,8 +637,9 @@ def make_extra_trees_pipeline(
     if bootstrap:
         estimator_kwargs["max_samples"] = max_samples
 
-    return make_classifier_pipeline(
-        preprocessor=make_unscaled_preprocessor(),
+    return make_feature_policy_classifier_pipeline(
+        policy_id=feature_policy,
+        representation=REPRESENTATION_SPARSE_UNSCALED,
         classifier=ExtraTreesClassifier(**estimator_kwargs),
     )
 
@@ -547,6 +658,9 @@ def build_candidate_pipeline(
     """
     get_candidate_definition(candidate_id)
     parameters = dict(parameters)
+    feature_policy = validate_candidate_feature_policy(
+        candidate_id, parameters.pop("feature_policy", FEATURE_POLICY_RAW)
+    )
 
     if candidate_id == CANDIDATE_LOGISTIC_REGRESSION:
         class_weight = _decode_class_weight(str(parameters["class_weight"]))
@@ -562,8 +676,9 @@ def build_candidate_pipeline(
             max_iter=int(parameters.get("max_iter", 8_000)),
             random_state=int(random_state),
         )
-        return make_classifier_pipeline(
-            preprocessor=make_scaled_preprocessor(),
+        return make_feature_policy_classifier_pipeline(
+            policy_id=feature_policy,
+            representation=REPRESENTATION_SPARSE_SCALED,
             classifier=classifier,
         )
 
@@ -584,6 +699,7 @@ def build_candidate_pipeline(
             class_weight=_decode_class_weight(str(parameters["class_weight"])),
             ccp_alpha=float(parameters["ccp_alpha"]),
             random_state=int(random_state),
+            feature_policy=feature_policy,
         )
 
     if candidate_id == CANDIDATE_LINEAR_SVM:
@@ -593,13 +709,14 @@ def build_candidate_pipeline(
             class_weight=_decode_class_weight(str(parameters["class_weight"])),
             random_state=int(random_state),
         )
-        return make_classifier_pipeline(
-            preprocessor=make_scaled_preprocessor(),
+        return make_feature_policy_classifier_pipeline(
+            policy_id=feature_policy,
+            representation=REPRESENTATION_SPARSE_SCALED,
             classifier=classifier,
         )
 
     if candidate_id == CANDIDATE_MLP:
-        return make_mlp_pipeline(
+        classifier = make_mlp_classifier(
             hidden_layer_sizes=tuple(int(width) for width in parameters["hidden_layer_sizes"]),
             activation=str(parameters["activation"]),
             alpha=float(parameters["alpha"]),
@@ -611,6 +728,11 @@ def build_candidate_pipeline(
             n_iter_no_change=int(parameters["n_iter_no_change"]),
             random_state=int(random_state),
         )
+        return make_feature_policy_classifier_pipeline(
+            policy_id=feature_policy,
+            representation=REPRESENTATION_DENSE_SCALED,
+            classifier=classifier,
+        )
 
     from telco_churn.core_candidate_builders import build_core_candidate_pipeline
 
@@ -618,5 +740,5 @@ def build_candidate_pipeline(
         candidate_id,
         parameters,
         random_state=int(random_state),
+        feature_policy=feature_policy,
     )
-    raise CandidateRegistryError(f"No pipeline builder implemented for {candidate_id!r}.")
