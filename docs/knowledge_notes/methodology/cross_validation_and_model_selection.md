@@ -1,10 +1,19 @@
 # Cross-validation, model selection, and hyperparameter tuning
 
-This note explains how validation, cross-validation, repeated cross-validation, nested cross-validation, and hyperparameter search fit together.
+This note explains how validation, cross-validation, repeated cross-validation, nested cross-validation, and hyperparameter search fit together. It provides the core definitions used throughout the project.
 
 The central idea is:
 
 > Cross-validation is not one single method with one single interpretation. It can estimate the performance of a fixed modelling setup, guide hyperparameter tuning, compare model families, or evaluate a complete model-selection procedure. The interpretation depends on how it is used.
+
+For a deeper comparison of final-model-selection designs, broad candidate libraries, bias-corrected alternatives, practical-equivalence rules, and statistical comparison methods, see:
+
+```text
+docs/knowledge_notes/methodology/
+    final_model_selection_designs_and_candidate_comparison.md
+```
+
+This note remains focused on the foundational mechanics of validation and tuning. The later project-specific protocol is deliberately not frozen here. That protocol belongs in `final_model_comparison_plan.md` only after the credible alternatives have been reviewed and the rules are fixed before final comparison results are examined.
 
 This note is part of the evaluation methodology module for the Telco Customer Churn classification project.
 
@@ -158,6 +167,32 @@ For this fixed setup, 5-fold CV estimates how well the setup performs when train
 
 This is useful, but it is not the same as final test performance.
 
+### 4.1 Name the object being evaluated
+
+The phrase "model performance" can be ambiguous. A rigorous workflow should state which object the cross-validation result refers to:
+
+```text
+Fitted model:
+    one estimator trained on one particular training sample.
+
+Fixed configuration:
+    a fully specified pipeline, including preprocessing, feature choices,
+    model family, hyperparameters, random-state policy, and any fixed
+    threshold or calibration rule.
+
+Tuned model-family procedure:
+    a rule that receives a training sample, tunes a specified model family
+    within a predefined search space, refits the selected configuration, and
+    predicts new observations.
+
+Candidate procedure:
+    a complete final-comparison option, including the model family, the
+    preprocessing pipeline, optional feature engineering or resampling, the
+    search strategy and budget, the selection metric, and reproducibility rules.
+```
+
+Ordinary or repeated CV can evaluate a fixed configuration. Per-family nested CV evaluates a tuned model-family procedure. The distinction matters because a nested procedure may select different hyperparameters when its outer-training sample changes. That is expected and does not make nested CV invalid.
+
 ---
 
 ## 5. Cross-validation for hyperparameter tuning
@@ -193,6 +228,30 @@ Then select the hyperparameter combination with the best mean validation score.
 This is normal and valid as a model-development procedure.
 
 However, the interpretation changes. The selected score is no longer just the score of one fixed model. It is the best score among several tried configurations.
+
+### 5.1 A grid point is not automatically a final candidate
+
+A hyperparameter grid contains configurations inside a model family. Those grid points should not normally be presented as a long list of separate final models. For example:
+
+```text
+XGBoost family:
+    configuration 1
+    configuration 2
+    configuration 3
+    ...
+```
+
+is usually one candidate procedure in a final family comparison, provided that all configurations are explored by one fixed, documented search rule. The final comparison should distinguish:
+
+```text
+within-family selection:
+    Which configuration does this family select under its search procedure?
+
+between-family selection:
+    Which model family or candidate procedure should be selected for the final pipeline?
+```
+
+Feature engineering, feature selection, resampling, class weighting, calibration, and a threshold policy can also be tuning choices. If they are allowed to vary, they must be placed inside the relevant validation procedure rather than being chosen after looking at an evaluation score.
 
 ---
 
@@ -316,6 +375,28 @@ Nested CV:
     evaluates a tuning or model-selection procedure more honestly.
 ```
 
+### 9.1 Flat repeated-CV selection across a candidate library
+
+A common final-selection design is often called flat repeated CV. The development data are repeatedly split in the same way for every candidate configuration. For each family, the procedure searches its predefined configurations. The globally strongest observed repeated-CV result is then selected.
+
+```text
+For every candidate family:
+    evaluate all predefined configurations with the same repeated CV splits;
+    select the strongest configuration within that family.
+
+Across families:
+    compare each family’s selected repeated-CV result;
+    choose one family and its selected configuration.
+
+After selection:
+    refit that exact selected pipeline on all development observations;
+    evaluate it once on the untouched test set after every other decision is frozen.
+```
+
+This design directly selects both a model family and an exact configuration. It does not require a second tuning run merely because the final model will be fitted on all development data. The final fit uses the configuration already selected from the repeated-CV search.
+
+Its limitation is interpretive rather than procedural. The reported score for the overall winner is the maximum among many noisy repeated-CV estimates. Repetition reduces split sensitivity, but it does not remove selection optimism from searching configurations and then choosing the strongest family. Flat repeated CV is therefore a valid selection method, but its winning score should not be described as an unbiased estimate of the complete tune-and-select process.
+
 ---
 
 ## 10. When repeated CV is worth using
@@ -343,9 +424,23 @@ the model is computationally expensive and early-stage
 
 For this project, ordinary stratified 5-fold CV is reasonable for model-family learning sections. Later, repeated CV can be used for serious candidate models before final selection.
 
+When flat repeated CV is used for a final candidate-library comparison, the following rules should be frozen before interpreting the results:
+
+```text
+candidate procedures and their search spaces
+primary selection metric
+secondary descriptive metrics
+repeated-CV splitter, including all random seeds
+search budget and stopping rule for each family
+tie or practical-equivalence rule
+rules for calibration and threshold selection
+```
+
+This preserves reproducibility and prevents the procedure from drifting after early scores become visible.
+
 ---
 
-## 11. Nested cross-validation
+## 11. Nested cross-validation and per-family comparison
 
 Nested cross-validation separates hyperparameter tuning from performance estimation.
 
@@ -376,6 +471,30 @@ For each outer fold:
 The outer-validation fold is not used for tuning. It only evaluates the result of the tuning procedure.
 
 The final nested-CV estimate is the average of the outer validation scores.
+
+### 11.1 Per-family nested CV for selecting a final family
+
+The most relevant nested design for this project is per-family nested comparison. Every candidate family is tuned independently inside each outer-training split and then evaluated on the same outer-validation data.
+
+```text
+For outer fold k:
+
+    Random forest:
+        inner CV chooses forest hyperparameters on outer-training data;
+        selected forest predicts outer-validation data.
+
+    XGBoost:
+        inner CV chooses boosting hyperparameters on outer-training data;
+        selected XGBoost model predicts the same outer-validation data.
+
+    Other candidate families:
+        follow their own predefined inner tuning procedure;
+        predict that same outer-validation data.
+```
+
+After all outer folds, each family has a collection of paired outer-fold scores. The project can compare the mean outer performance, stability, calibration-related diagnostics, and paired differences between families. It then selects a family using the predeclared primary metric and tie rules.
+
+This design does choose a final family. What it does not directly provide is one final deployment configuration, because different outer-training samples can legitimately select different hyperparameters. The exact deployment configuration is selected later, after the family has been chosen, by tuning only that winning family on the full development set.
 
 ---
 
@@ -450,6 +569,32 @@ It does not directly answer:
 
 For final deployment, hyperparameters are usually selected using a tuning procedure on the full training set, then the final model is fitted on the full training set.
 
+### 13.1 From nested family comparison to one deployable model
+
+Per-family nested CV and final tuning have different roles:
+
+```text
+1. Define the candidate library, search spaces, primary metric, and tie rule.
+
+2. Use per-family nested CV to compare tuned family procedures without using
+   the held-out test set.
+
+3. Select one family, or identify a practical tie group and resolve it using
+   predeclared secondary criteria such as calibration, stability, runtime,
+   interpretability, or implementation simplicity.
+
+4. Tune the selected winning family on all development data using the frozen
+   search space. Repeated CV can be used here when stable final configuration
+   selection is desired.
+
+5. Fit the exact chosen end-to-end configuration on all development data.
+
+6. Freeze calibration and threshold policy, then evaluate once on the untouched
+   test set.
+```
+
+The final full-development-data tuning step is not a contradiction of nested CV. Nested CV estimates and compares family procedures. The later tuning step uses all available development information to select one configuration inside the family that won the comparison.
+
 ---
 
 ## 14. Nested CV versus final train/test evaluation
@@ -479,6 +624,22 @@ Final stage:
     train final model on full training data
     evaluate once on the untouched test set
 ```
+
+### 14.1 Repeated nested CV
+
+Repeated nested CV repeats the outer partitioning process. It gives more outer-fold evaluations and a richer picture of how model-family rankings change across splits.
+
+```text
+single nested CV:
+    one outer K-fold partition
+
+repeated nested CV:
+    several outer K-fold partitions generated with different random seeds
+```
+
+Repeated nested CV can be useful when differences between tuned families are very close, split sensitivity is important, and computation is feasible. It is substantially more expensive than one nested run because every outer split repeats every family’s inner search. It still does not directly choose final hyperparameters. After a winning family is chosen, the project still performs one final full-development-data tuning run for that family.
+
+This note does not choose between flat repeated CV, per-family nested CV, repeated nested CV, or a bias-corrected flat-CV alternative. The central final-selection-design note compares those options, and the later project-specific plan will record the selected protocol before final results are inspected.
 
 ---
 
@@ -525,6 +686,24 @@ pooled_oof_roc_auc
 
 This project can add that later when building the rigorous comparison stage.
 
+### 15.1 Repeated-CV prediction bookkeeping
+
+For one K-fold repetition, each observation receives one out-of-fold prediction. With repeated CV, the same observation receives one out-of-fold prediction per repetition. Therefore, the project should not silently concatenate all repeated-CV predictions and describe the result as though it were one conventional pooled OOF vector with exactly one prediction per row.
+
+A rigorous comparison workflow should retain an explicit prediction ledger containing at least:
+
+```text
+observation identifier
+repeat identifier
+fold identifier
+candidate procedure identifier
+selected inner configuration when relevant
+true label
+predicted score or probability
+```
+
+The primary selection summary should be predefined, for example a mean fold metric or mean outer-fold metric. Prediction-level diagnostics such as PR curves, calibration curves, threshold curves, and paired bootstrap analyses must state which cross-fitted prediction construction they use and must preserve pairing between candidate models.
+
 ---
 
 ## 16. Hyperparameter search strategies
@@ -543,6 +722,23 @@ Optuna-style adaptive search
 ```
 
 Each has different strengths and weaknesses.
+
+### 16.1 Search strategy is not an evaluation design
+
+Grid search, random search, Bayesian optimization, successive halving, and Optuna-style optimization decide which configurations a model family will try. They do not by themselves determine whether the resulting estimate is flat-CV, nested-CV, or final-test evidence.
+
+```text
+Flat repeated CV:
+    the search procedure operates directly on the repeated-CV development splits.
+
+Per-family nested CV:
+    the entire search procedure operates only inside each outer-training split.
+
+Final tuning after nested comparison:
+    the chosen family’s frozen search procedure operates on all development data.
+```
+
+For adaptive search methods, every adaptive decision, trial budget, pruning rule, and random-state policy must remain inside the applicable training portion. Outer validation folds and the held-out test set may not guide extra trials or search-space expansion.
 
 ---
 
@@ -683,6 +879,24 @@ adds another layer of randomness and procedure choice
 
 For this project, Optuna is useful later for serious candidate models, but it is not necessary for every educational model-family section.
 
+### 20.1 Adaptive search inside nested CV
+
+An adaptive search method is compatible with nested CV only when it is fully contained inside the inner loop. The outer-validation fold must remain invisible while the search decides which configurations to try, which trials to prune, or whether to stop early.
+
+For comparability, record:
+
+```text
+search-space definitions
+trial or time budget
+sampler and pruning policy
+random seeds
+early-stopping protocol
+primary objective
+selected configuration per outer fold
+```
+
+This documentation is part of the candidate procedure. A later final comparison should not grant one preferred family an open-ended adaptive search while restricting other families to minimal default tuning.
+
 ---
 
 ## 21. Fair tuning effort across model families
@@ -716,6 +930,26 @@ prefer automatic search for final comparison if manual effort would be unfair
 
 This does not mean every model must receive exactly identical compute. Some models have more important hyperparameters than others. But the report should be transparent about tuning effort.
 
+### 21.1 Candidate-procedure registry
+
+Before a large final comparison, create a candidate-procedure registry. This is a compact table or machine-readable manifest that records every option before its final comparison score is examined.
+
+```text
+candidate identifier
+model family
+preprocessing and feature representation
+feature-selection or resampling policy
+hyperparameter search space
+search method and budget
+selection metric
+cross-validation splitter and seeds
+probability output and calibration policy
+threshold policy, if threshold-dependent metrics are compared
+runtime and resource constraints
+```
+
+The registry makes a broad all-model comparison auditable. It also prevents a model family from receiving hidden extra experimentation after it appears promising.
+
 ---
 
 ## 22. Simplicity versus performance
@@ -743,6 +977,24 @@ Practical rule:
 > When performance differences are small, prefer the simpler or more stable modelling choice unless there is a clear reason not to.
 
 This is especially important for portfolio work because the goal is not only to maximize a leaderboard score. The goal is to demonstrate sound modelling judgement.
+
+### 22.1 Practical ties are legitimate outcomes
+
+The model with the numerically largest mean metric need not be treated as uniquely superior. When estimated differences are small relative to split, training, and selection uncertainty, a final protocol can declare a practical tie and use transparent secondary criteria.
+
+```text
+primary criterion:
+    predeclared PR-AUC comparison
+
+secondary criteria for a practical tie:
+    calibration quality
+    stability across splits and random seeds
+    threshold behaviour under a stated policy
+    runtime and implementation complexity
+    interpretability and maintainability
+```
+
+The detailed treatment of practical equivalence, regions of practical equivalence, and statistical comparison belongs in `statistical_uncertainty_and_tests.md` and `final_model_selection_designs_and_candidate_comparison.md`. This note establishes only the important principle: the largest point estimate alone is not a complete decision rule.
 
 ---
 

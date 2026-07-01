@@ -13,6 +13,26 @@ evaluation_foundations.md
 cross_validation_and_model_selection.md
 ```
 
+The companion note
+`final_model_selection_designs_and_candidate_comparison.md` gives the broader
+framework for candidate procedures, flat repeated cross-validation, per-family
+nested cross-validation, repeated nested cross-validation, bias-corrected
+cross-validation, and the final single-test-set protocol. This note has the
+narrower role of explaining how uncertainty should be represented and how
+candidate differences should and should not be tested within those evaluation
+designs.
+
+In particular, this note distinguishes three questions that are often conflated:
+
+```text
+1. Is an observed metric estimate uncertain?
+2. Is the observed difference between two candidate procedures meaningful?
+3. Does a chosen final frozen model have uncertain test-set performance?
+```
+
+The appropriate resampling unit, comparison method, and interpretation depend
+on which of these questions is being asked.
+
 ---
 
 ## 1. Why uncertainty matters
@@ -120,6 +140,43 @@ This does not necessarily mean the method is unstable in a bad way. It may mean 
 When many model families are compared, the selected family may depend on validation noise.
 
 This is why small differences between tuned families should be interpreted cautiously and why nested CV, repeated CV, paired validation comparisons, or paired bootstrap differences before final selection can be useful.
+
+### 2.6 Procedure-selection uncertainty and the estimand
+
+The uncertainty discussion must specify the object being evaluated. These are
+not interchangeable:
+
+```text
+Fixed configuration:
+    one fully specified pipeline with fixed preprocessing, hyperparameters,
+    calibration rule, threshold rule, and random-seed policy.
+
+Tuned family procedure:
+    a rule that receives training data, searches a predefined configuration
+    space using an inner validation procedure, fits the selected configuration,
+    and produces predictions.
+
+Family-selection procedure:
+    a rule that compares several tuned family procedures and selects one of
+    them according to a predefined decision rule.
+
+Frozen final pipeline:
+    the one model, hyperparameter configuration, calibration rule, and decision
+    policy selected before test evaluation and then fitted on all development
+    data.
+```
+
+For example, a nested-CV outer-fold result can estimate the performance of a
+tuned XGBoost procedure. It does not automatically estimate the performance of
+one globally fixed XGBoost hyperparameter vector. Conversely, a bootstrap
+confidence interval around a final test PR-AUC describes uncertainty in the
+frozen final pipeline's test performance. It does not retrospectively quantify
+every earlier model-family and hyperparameter choice.
+
+This distinction prevents a common overstatement: a narrow interval around one
+final metric does not prove that the entire preceding search and selection path
+was free from uncertainty. The larger selection question must be handled using
+the training-only comparison protocol.
 
 ---
 
@@ -521,6 +578,52 @@ If the interval is wide:
 
 This is one of the most useful pre-final candidate-comparison tools for this project. It should be applied to validation, repeated-CV, nested-CV, or other training-only evaluation outputs before the one final model is frozen.
 
+### 9.1 What a paired prediction bootstrap does and does not capture
+
+For one set of paired out-of-sample predictions, the paired bootstrap preserves
+the dependence that matters for a model comparison: both candidate scores are
+evaluated on the same resampled customer rows. It is therefore appropriate for
+estimating uncertainty in a difference such as
+
+$$
+\Delta_{\mathrm{PR}}
+=
+\mathrm{PR\text{-}AUC}_{A}
+-
+\mathrm{PR\text{-}AUC}_{B},
+$$
+
+conditional on the observed predictions.
+
+It does not automatically reproduce every layer of uncertainty that generated
+those predictions. In particular, an ordinary row-level bootstrap of already
+stored predictions does not refit models, redo hyperparameter selection, redraw
+CV splits, or recreate stochastic optimizer trajectories. It therefore answers
+a narrower question than a full repeated nested-CV experiment.
+
+This distinction is especially important for repeated CV. Under repeated CV,
+one customer can have multiple out-of-fold predictions, one from each repeat.
+Those repeated records are not independent customer observations. The project
+must not concatenate them and bootstrap them as though they were unrelated rows.
+Instead, use one of the following explicitly documented designs:
+
+```text
+Single outer-CV pass:
+    retain one paired outer-fold prediction per customer and bootstrap customers.
+
+Repeated-CV aggregate:
+    aggregate each customer's repeated out-of-fold scores within each candidate,
+    then bootstrap customers while preserving candidate pairing.
+
+Resampling-level comparison:
+    compare paired fold or repeat summaries with a method that models their
+    correlation, such as a corrected resampling or Bayesian correlated method.
+```
+
+The first two designs are prediction-level analyses. The third operates on
+resampling-level summaries. They answer related but non-identical questions and
+should be reported as complementary evidence rather than interchangeable tests.
+
 ---
 
 ## 10. Bootstrap for threshold uncertainty
@@ -783,7 +886,14 @@ ranking quality
 
 It also depends on a chosen threshold. If the threshold changes, the hard predictions and test result can change.
 
-For this project, McNemar's test can be a useful supplementary final test for hard classification accuracy differences, but paired bootstrap differences are more flexible for the metrics we care about.
+For this project, McNemar's test may be used only as a supplementary
+training-only comparison of two already fixed hard-decision rules on paired
+validation predictions. It must not be used to compare candidate models on the
+held-out test set. Using the test set to judge which of several alternatives is
+better would turn the test set into another model-selection dataset and violate
+the single-frozen-model policy. Even before final selection, paired bootstrap
+differences remain more flexible because PR-AUC, calibration, and operational
+threshold metrics matter more than hard-classification accuracy alone.
 
 ---
 
@@ -948,6 +1058,183 @@ number of folds where A beats B
 This is useful descriptively, but formal inference remains delicate because folds are dependent.
 
 In this project, paired fold comparisons can be useful in the later model-comparison stage as a robustness diagnostic, especially with repeated CV.
+
+### 21.1 Why a naive t-test on CV fold scores is not valid
+
+It is tempting to create one difference per fold,
+
+$$
+d_j
+=
+M_{A,j}
+-
+M_{B,j},
+$$
+
+and apply an ordinary one-sample or paired t-test to the resulting values. That
+test treats the differences as independent replicates. Standard cross-validation
+does not satisfy that assumption.
+
+In ordinary $K$-fold CV, the fitted models share most of their training rows.
+For example, two models trained in different folds of 5-fold CV overlap in much
+of their training data. In repeated CV, the same customer can also appear in
+multiple validation folds across repeats. This induces dependence among the
+fold-level differences and can make a naive t-test estimate an unrealistically
+small standard error. A small p-value from that calculation may therefore reflect
+an invalid independence assumption rather than compelling evidence of a real
+procedure-level advantage.
+
+Thus the following distinction is mandatory:
+
+```text
+mean ± standard deviation across folds:
+    useful descriptive stability summary
+
+naive t-test across folds:
+    not a primary inferential method for this project
+```
+
+### 21.2 Corrected resampling tests
+
+Corrected resampling methods attempt to account for the dependence created by
+overlapping training sets. Let $r$ be the number of repeats, $k$ the number of
+folds per repeat, and $d_1,\ldots,d_{rk}$ the paired metric differences. One
+commonly used Nadeau--Bengio-style variance correction has the schematic form
+
+$$
+\widehat{\operatorname{Var}}(\bar d)
+\approx
+\left(
+\frac{1}{rk}
++
+\frac{n_{\mathrm{validation}}}{n_{\mathrm{training}}}
+\right)
++s_d^2,
+$$
+
+where $s_d^2$ is the empirical variance of the paired differences. Relative to
+the naive variance $s_d^2/(rk)$, the additional term inflates the uncertainty to
+recognize training-set overlap.
+
+This correction is useful as a sensitivity analysis, not as an unquestionable
+ground truth. Its quality depends on the resampling design and modelling
+assumptions. In particular, it should not be used to manufacture a binary
+"significant versus not significant" ranking for a long model library.
+
+For this project, a corrected resampling comparison may be reported for a small
+set of predeclared pairwise comparisons after the candidate library has been
+evaluated. It should accompany effect sizes, practical-equivalence conclusions,
+and prediction-level bootstrap intervals.
+
+### 21.3 The 5x2-CV test as a specialized alternative
+
+The 5x2-CV test repeats a 50/50 split five times and swaps the training and
+validation halves inside each repeat. It was proposed partly to avoid the naive
+independence assumption in ordinary $K$-fold comparisons.
+
+Its strengths are a classical, explicitly paired design and a long history in
+algorithm-comparison literature. Its main trade-off is that every fitted model
+uses only half of the development data in each training run. That estimates a
+different training-sample regime from the final model, which will be fitted on
+all available development data. It is therefore valuable to document and may be
+used as an optional robustness check for a focused pairwise comparison, but it
+is not automatically the primary comparison design for this project.
+
+### 21.4 Bayesian correlated comparison and practical equivalence
+
+Frequentist hypothesis tests often focus on whether an exact null difference of
+zero can be rejected. For model selection, the more useful question is usually
+whether a difference is large enough to matter.
+
+A Bayesian correlated comparison models paired resampling differences while
+acknowledging their dependence. It can summarize posterior probability in three
+regions:
+
+```text
+P(Delta < -epsilon):
+    candidate B is meaningfully better than candidate A
+
+P(-epsilon <= Delta <= +epsilon):
+    the candidates are practically equivalent
+
+P(Delta > +epsilon):
+    candidate A is meaningfully better than candidate B
+```
+
+Here $\epsilon$ is a region of practical equivalence, often abbreviated ROPE.
+For a PR-AUC comparison, it is a prespecified tolerance representing a difference
+too small to justify greater model complexity, less stable training, weaker
+calibration, or higher computational cost. The value of $\epsilon$ is a decision
+parameter, not a universal statistical constant, and must be justified before
+inspecting final candidate-comparison results.
+
+This is particularly well aligned with the project objective. A result such as
+``XGBoost has a 0.58 posterior probability of a materially higher PR-AUC, a
+0.38 probability of practical equivalence, and a 0.04 probability that CatBoost
+is materially higher'' is more decision-relevant than a p-value alone. It also
+makes it legitimate to report an evidence-based tie rather than forcing a tiny
+point-estimate difference into an artificial winner.
+
+The Bayesian method is not magic. Its result depends on the likelihood model,
+dependence approximation, prior specification, and chosen ROPE. These choices
+must be recorded. It should therefore be treated as a transparent decision aid,
+not an automatic oracle.
+
+### 21.5 Multiple comparisons and the candidate library
+
+With $m$ candidate procedures, there are $m(m-1)/2$ pairwise comparisons. A
+large all-model library can therefore produce many p-values or intervals. Running
+every possible test and highlighting whichever happens to look strongest creates
+another selection problem.
+
+The project should separate its outputs into three layers:
+
+```text
+Full candidate table:
+    descriptive ranking, uncertainty summaries, and transparency for every
+    predeclared candidate procedure.
+
+Primary comparisons:
+    a small predeclared set of scientifically or practically important pairwise
+    contrasts, such as the leading boosted-tree procedure versus logistic
+    regression or the two strongest practically competitive procedures.
+
+Exploratory follow-up comparisons:
+    clearly labelled as exploratory rather than used alone to justify final
+    selection.
+```
+
+When a family of frequentist hypothesis tests is reported as formal evidence,
+use a multiplicity adjustment such as Holm's step-down procedure. This controls
+the family-wise error rate more efficiently than a simple Bonferroni correction.
+Multiplicity adjustment does not replace sound design, effect-size reporting, or
+practical-equivalence reasoning. It only addresses one source of false-positive
+claims among many comparisons.
+
+### 21.6 Recommended evidence hierarchy for this project
+
+For the later candidate-comparison stage, no single test should decide the final
+model. The preferred evidence hierarchy is:
+
+```text
+1. Predefined primary metric and candidate-procedure registry.
+2. Same outer splits and paired outer-fold performance summaries for all
+   candidate procedures.
+3. Effect sizes and practical-equivalence assessment.
+4. Prediction-level paired bootstrap intervals where one paired out-of-sample
+   prediction per customer, or a documented customer-level aggregate, is
+   available.
+5. Corrected resampling and/or Bayesian correlated analysis for a limited set
+   of central pairwise comparisons.
+6. Calibration, threshold behaviour, seed stability, runtime, interpretability,
+   and implementation complexity as explicit tie-breakers.
+7. One final frozen model evaluated once on the held-out test set with bootstrap
+   confidence intervals for its own metrics.
+```
+
+This hierarchy avoids two opposite mistakes: declaring a winner from a tiny
+point-estimate gap, or refusing to make a justified decision simply because no
+single p-value is decisive.
 
 ---
 

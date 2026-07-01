@@ -8,6 +8,7 @@ The previous methodology notes explain the underlying theory:
 evaluation_foundations.md
 cross_validation_and_model_selection.md
 statistical_uncertainty_and_tests.md
+final_model_selection_designs_and_candidate_comparison.md
 ```
 
 This note answers a practical question:
@@ -24,40 +25,42 @@ All candidate comparison, statistical testing, repeated cross-validation, nested
 
 ## 1. Current stage of the project
 
-The project is currently in the model-family learning stage.
+The project has completed the broad model-family learning stage and is now entering the
+methodology-design stage for final candidate comparison. The completed sections are not a
+final ranking. Each section established a technically meaningful implementation, explored
+a development-stage search region, and produced evidence that will inform a later
+training-only comparison.
 
-Each model-family section has three purposes:
-
-```text
-1. explain the model mathematically;
-2. implement the model on the Telco churn data;
-3. study development-stage behaviour using training-set cross-validation.
-```
-
-Examples already completed:
+Completed modelling coverage includes:
 
 ```text
-simple baseline classifiers
-linear classification and logistic regression
+baseline classifiers
+regularized logistic regression
 k-nearest neighbours
-Naive Bayes
+Naive Bayes variants
+decision trees
+bagging and random forests
+boosting methods, including gradient boosting, XGBoost, and CatBoost
+linear and RBF-kernel support vector machines
+multilayer perceptrons
 ```
 
-Planned later model families include:
+The next stage is deliberately different from an ordinary model-family notebook. It will
+not introduce another unrelated learner. It will define a reproducible candidate library,
+a fair comparison protocol, a method for selecting one final model, and a strict route to
+a single final test-set evaluation.
+
+The individual model sections remain important because they provide:
 
 ```text
-decision trees
-bagging
-random forests
-boosting
-support vector machines
-multilayer perceptrons
-possibly calibration and resampling variants
+mathematical understanding of each family
+development-stage evidence about useful search regions
+diagnostics for underfitting, overfitting, calibration, and threshold behaviour
+initial evidence about stability, complexity, and interpretability
 ```
 
-In these sections, ordinary stratified cross-validation is appropriate because the goal is not final statistical proof. The goal is to learn, compare broad behaviour, understand model assumptions, and build candidate models.
-
----
+They do not by themselves establish a final winner. The later comparison stage must make
+the family-selection and final-hyperparameter-selection process explicit.
 
 ## 2. What section-level CV results mean
 
@@ -127,340 +130,441 @@ This keeps the interpretation honest while still allowing clear project progress
 
 ## 4. What should happen after all model-family sections
 
-After all relevant model families have been studied, the project should add a dedicated stage:
+After all relevant model families have been studied, the project should add a dedicated
+stage:
 
 ```text
 Candidate comparison, uncertainty, and final selection
 ```
 
-This stage should not introduce a new model family. It should compare the strongest candidate models from the earlier sections using training-only evidence.
+This stage should compare a broad, predefined candidate library using training-only
+evidence. It should not silently reduce the evidence to only the strongest score from
+each earlier notebook, because those results arose from different search scopes, random
+seeds, fold structures, and modelling purposes.
 
 The purpose is to answer:
 
 ```text
-Which candidate models remain competitive under a more rigorous training-only comparison?
-Which model should be selected as the single final model?
+Which complete candidate procedures are included in the final comparison?
+Which procedures have the strongest and most stable training-only evidence?
+Are apparent performance gaps practically meaningful?
+Which family should be selected?
+How should exact final hyperparameters be selected?
 Which threshold should be selected for the final decision rule?
 Should probability calibration be used?
 How uncertain are the candidate comparisons?
 ```
 
-This stage must not use the held-out test set.
+This stage must not use the held-out test set. It is where broad learning-stage evidence
+is turned into one pre-specified, reproducible final-selection protocol.
 
----
+## 5. Candidate library and candidate-procedure registry
 
-## 5. Candidate shortlist construction
+The project is not restricted to a small finalist shortlist. Its purpose is to compare
+the full set of relevant classification families in a disciplined way. The final
+comparison should therefore begin with a broad candidate library that includes the
+completed baseline, linear, probabilistic, tree, ensemble, kernel, and neural-network
+approaches.
 
-The first step is to construct a candidate shortlist.
-
-A candidate is not every hyperparameter setting ever tried. A candidate should be a reasonable representative of a model family or modelling strategy.
-
-Possible shortlist examples:
+A library-level inventory is:
 
 ```text
-best regularized logistic regression candidate
-best kNN candidate
-best Naive Bayes candidate
-best shallow decision tree candidate
-best pruned decision tree candidate
-best random forest candidate
-best gradient boosting candidate
-best SVM candidate
-best MLP candidate
+regularized logistic regression
+k-nearest neighbours
+Naive Bayes
+single decision tree
+bagged trees
+random forest
+gradient boosting
+XGBoost
+CatBoost
+linear SVM
+RBF SVM
+multilayer perceptron
 ```
 
-The shortlist should include:
+The exact registry may contain multiple conceptually meaningful procedures within a
+family, for example class-weighted versus unweighted estimation, or a calibrated versus
+uncalibrated probability workflow. Such variants should be included only when they
+represent a defensible modelling choice rather than cosmetic duplication.
+
+A candidate is not one already fitted model, and it is not every individual grid point.
+The correct object is a **candidate procedure**:
 
 ```text
-strong performers
-interpretable baselines
-models with different error profiles
-models with different complexity levels
+candidate procedure =
+    preprocessing recipe
+    feature-engineering and feature-selection policy
+    imbalance-treatment policy
+    model family
+    hyperparameter search space and search method
+    validation design inside tuning
+    seed and compute-budget policy
+    primary scoring metric
+    prediction-score rule
 ```
 
-The shortlist should not include dozens of nearly identical hyperparameter settings unless the goal is explicitly to study hyperparameter stability.
+For threshold-dependent or probability-dependent deployment decisions, the registry must
+also state whether calibration and threshold selection are outside the family comparison
+or are part of the candidate procedure. That choice changes what the comparison
+evaluates.
 
-The shortlist should be created using only training-set development evidence.
-
----
-
-## 6. Candidate selection criteria
-
-The candidate shortlist should not be based only on one metric.
-
-Important criteria:
+Before any new comparison result is examined, create a candidate-procedure registry with
+one row per procedure. It should document:
 
 ```text
-PR-AUC:
+candidate identifier
+model family and implementation
+preprocessing and feature policy
+resampling or class-weighting policy
+search strategy and full search space
+search budget, early-stopping rule, and failure handling
+random-seed policy
+primary and secondary evaluation metrics
+calibration and threshold-treatment policy
+reason for inclusion
+```
+
+This registry turns the comparison into a reproducible experiment. It prevents
+unrecorded adaptive changes, such as expanding only the currently favoured model's search
+space after observing intermediate results.
+
+## 6. Comparison and selection criteria
+
+The full candidate library should be evaluated using a hierarchy of criteria, rather
+than selecting a final model solely because it has the largest displayed point estimate.
+
+Important criteria include:
+
+```text
+PR-AUC / average precision:
     positive-class retrieval under class imbalance
 
 ROC-AUC:
     overall ranking ability
 
-recall:
-    ability to detect churners
-
-precision:
-    fraction of flagged customers who actually churn
-
-specificity:
-    ability to avoid unnecessary false alarms
-
-F1:
-    fixed-threshold balance between precision and recall
-
-balanced accuracy:
-    average of recall and specificity
-
-predicted positive rate:
-    operational size of the intervention group
+score stability:
+    sensitivity to validation partitioning, random seeds, and tuning variation
 
 calibration:
-    reliability of probabilities, if probabilities are used as risks
+    reliability of predicted probabilities, if probabilities are interpreted as risks
 
-simplicity:
-    ease of explanation and robustness
+threshold behaviour:
+    precision, recall, specificity, F1, balanced accuracy, and intervention volume
+    at relevant operating points
+
+predicted positive rate:
+    operational size of the retention-intervention group
+
+complexity and runtime:
+    fitting cost, prediction cost, implementation burden, and reproducibility
 
 interpretability:
-    usefulness for understanding churn drivers
-
-computational cost:
-    fitting and prediction time
-
-stability:
-    sensitivity to fold splits, random seeds, and hyperparameters
+    usefulness for understanding churn drivers and communicating the decision rule
 ```
 
-PR-AUC can remain the primary development ranking metric, but final selection should consider tradeoffs.
+PR-AUC can remain the primary development ranking metric because churn is the minority
+positive class and positive-class retrieval matters. However, before the final comparison
+is run, the project must verify the precise implementation and terminology used for this
+quantity. In particular, if scikit-learn's `average_precision_score` is used, the report
+should call it average precision or explain the relationship to the broader PR-curve
+area terminology precisely.
 
----
+A small observed primary-metric advantage does not automatically determine the final
+choice. The final protocol should predefine how practical ties are handled. For example,
+if two procedures are practically indistinguishable within a justified margin, the
+decision rule may prefer the simpler, more stable, better-calibrated, or easier-to-explain
+procedure.
 
-## 7. Repeated CV for stable tuning of serious candidates
+The practical-equivalence margin must be justified before final comparison results are
+used for selection. It must not be chosen after seeing which value favours a preferred
+model.
 
-Before the final model is chosen, repeated cross-validation can be used for serious candidate models.
+## 7. Flat repeated cross-validation across the full candidate library
 
-Example:
+Flat repeated cross-validation is one valid route for choosing the final model. Under
+this design, every candidate procedure is tuned and compared using the same repeated
+cross-validation design:
 
 ```text
-RepeatedStratifiedKFold:
-    n_splits = 5
-    n_repeats = 5 or 10
+For each candidate procedure:
+    run the predefined hyperparameter search using repeated CV;
+    select the configuration with the best repeated-CV primary metric;
+    store fold-level metrics, out-of-fold predictions, selected configuration,
+    secondary metrics, and stability summaries.
+
+Across candidate procedures:
+    compare the selected repeated-CV results;
+    apply the predefined practical-tie and secondary-criteria rule;
+    choose one final family and one final configuration.
 ```
 
-Repeated CV is useful because it reduces dependence on one particular fold split.
+This route directly produces both the selected family and the selected hyperparameter
+configuration. The winning configuration is then fitted once on all development data.
 
-For each candidate family, repeated CV can help answer:
+Its advantages are efficiency, directness, and a transparent final training route. Its
+limitation is selection optimism: the displayed winning score has benefited from
+searching over configurations and from selecting the highest-looking family among many
+estimated scores. Repetition reduces sensitivity to one fold partition, but it does not
+eliminate that selection effect.
+
+The complete candidate library can be compared this way. The critical requirements are
+that all candidate procedures, search spaces, search budgets, seeds, and decision rules
+are frozen before the new results are examined.
+
+## 8. Per-family nested cross-validation across the full candidate library
+
+Per-family nested CV is the main alternative when the project prioritizes a cleaner
+comparison of tuned model-family procedures.
+
+For each outer fold and each candidate procedure:
 
 ```text
-Is the model's performance stable across splits?
-Does the selected hyperparameter region remain similar?
-Are small metric differences consistent or fragile?
+1. Hold out one outer-validation partition.
+2. Tune that procedure using only the outer-training data.
+3. Fit the selected configuration on all outer-training data.
+4. Evaluate it once on the outer-validation data.
 ```
 
-Repeated CV is especially useful for:
+After all outer folds, the outer-fold evidence compares the tuned procedures under the
+same held-out outer observations.
+
+This answers:
+
+> If each family is allowed to tune itself fairly using only its available training data,
+> which tuned family procedure generalizes better within the development data?
+
+Nested CV therefore supports a more protected **family-selection** decision. It does not
+directly provide one final deployable hyperparameter configuration, because different
+outer folds can select different configurations. After choosing the winning family, rerun
+that family's frozen tuning procedure on all development data, select one final
+configuration, and fit it on all development data.
+
+A nested design can also evaluate a complete automated rule that tunes every family and
+selects an inner-CV winner separately in each outer fold. That estimates the performance
+of the automated selection policy itself. It does not directly yield the final tuned
+XGBoost, random forest, or other deployed model. It is a different estimand and is not
+the core route for this project's final family and hyperparameter choice.
+
+## 9. Choosing and freezing the final comparison design
+
+Flat repeated CV and per-family nested CV are both defensible. The project must choose
+one primary design before comprehensive candidate-comparison results are viewed.
+
+Flat repeated CV is especially reasonable when:
 
 ```text
-models with close performance
-models with random training procedures
-models with flexible hyperparameters
-models being considered for final selection
+the project prioritizes a direct joint choice of family and exact configuration
+the full candidate library makes nested computation prohibitively expensive
+the protocol includes strong stability summaries and practical-tie safeguards
+the final report clearly acknowledges selection optimism in the winner's CV score
 ```
 
-Repeated CV should not necessarily be used for every early educational experiment because it increases computation and report complexity.
-
-Repeated CV improves stability, but it does not eliminate selection optimism. If many configurations are tried and the best repeated-CV score is selected, the selected score is still the winner among several estimates.
-
----
-
-## 8. Nested CV for comparing tuned procedures
-
-Nested cross-validation can be used to compare tuned model-family procedures before the final model is selected.
-
-The evaluated object is not a single fixed fitted model. It is a procedure:
+Per-family nested CV is especially reasonable when:
 
 ```text
-Given training data:
-    tune hyperparameters using inner CV;
-    fit the selected model on the available training data;
-    produce predictions.
+the project prioritizes a cleaner comparison of tuned model-family procedures
+many families have flexible searches and close training-only scores
+the extra computation is manageable
+the project can include a separate all-development-data tuning run for the winning family
 ```
 
-For each outer fold:
+Repeated nested CV can offer more stable procedure-level evidence but may be expensive
+for a broad library containing ensembles, kernel methods, and neural networks. Other
+documented alternatives, including a fixed internal holdout, Monte Carlo
+cross-validation, bias-corrected flat CV, and bootstrap-based correction methods, are
+useful reference designs. They should not be added merely because they are more
+complicated.
+
+Before the final comparison is executed, freeze:
 
 ```text
-1. Hold out one outer validation fold.
-2. Tune each model family using only the outer-training data.
-3. Fit each selected model on the full outer-training data.
-4. Evaluate each selected model on the outer-validation fold.
+candidate-procedure registry
+primary metric and secondary metrics
+validation design and fold or seed-generation rules
+search spaces and budgets
+early-stopping and convergence rules
+handling of failed fits
+random-seed policy
+practical-equivalence margin and tie-breaking rule
+calibration and threshold-treatment policy
+planned statistical comparison summaries
 ```
 
-This gives outer-fold scores for each tuned family.
+After results are observed, changes may be made only as clearly labelled follow-up
+experiments. They must not silently replace the original planned comparison.
 
-Nested CV can answer:
+## 10. Statistical comparison and uncertainty before final selection
 
-> If each model family is allowed to tune itself fairly using only training data, which model-family procedure generalizes best within the development data?
+Statistical analysis should support model selection, not create an illusion that a large
+number of p-values can mechanically identify a single true winner.
 
-Nested CV is most useful when the project wants a more statistically careful model-family comparison before touching the test set.
-
----
-
-## 9. Whether nested CV should be used in this project
-
-Nested CV is useful but computationally heavier and more complex to explain.
-
-A balanced plan is:
+The comparison stage should preserve paired structure. Candidates should be evaluated on
+the same validation observations whenever possible, and the workflow should retain:
 
 ```text
-Use ordinary CV in individual model-family sections.
-Use repeated CV for stable final tuning of serious candidates.
-Use nested CV if the top model families are close or if final model-family comparison needs stronger support.
-Always keep the untouched test set for one final frozen model only.
+fold-level metrics for every candidate
+out-of-fold scores with observation and repeat identifiers
+selected hyperparameters for every tuning run
+fit failures, runtime, and convergence information
 ```
 
-Nested CV should be considered especially if:
+The following distinction is essential:
 
 ```text
-several tuned families have very similar PR-AUC or ROC-AUC
-the final selected model is much more complex than a simpler alternative
-the report wants stronger evidence about tuned-family comparison
-the tuning search spaces are large and selection optimism may matter
+outer-fold or repeated-CV metric differences:
+    describe performance variation across resampling partitions
+
+paired bootstrap on fixed validation or OOF prediction rows:
+    describes conditional uncertainty in the metric difference for those predictions
+
+a full resampling-and-retuning experiment:
+    additionally reflects tuning and refitting variability, but is much more expensive
 ```
 
-Nested CV may be skipped if:
+Therefore, a paired bootstrap on repeated-CV OOF predictions is valuable supplementary
+evidence, but it should not be described as a complete sampling distribution of the full
+tune-and-select pipeline.
+
+Naive ordinary t-tests over repeated-CV fold scores should not be treated as valid
+default inference. Fold scores are dependent because validation observations and training
+sets are reused. Suitable analyses may include:
 
 ```text
-one model is clearly stronger across metrics using training-only evidence
-the computational cost is too high
-the final comparison would become too complex for the project narrative
-the project prioritizes a readable model-family learning workflow
+descriptive paired metric-difference distributions
+corrected repeated-CV tests as a frequentist sensitivity analysis
+5x2 CV tests for focused two-model comparisons
+Bayesian correlated comparisons with a practical-equivalence region
+paired bootstrap intervals for PR-AUC / average-precision differences
+Holm adjustment if a family of frequentist pairwise tests is reported
 ```
 
-If nested CV is skipped, the report should say so explicitly and explain the alternative:
+For a broad candidate library, formal pairwise testing should be selective and
+pre-specified. The project should not calculate every possible pairwise test simply
+because it can. A sensible structure is:
 
 ```text
-The project uses training-set cross-validation for model development and
-a final held-out test set for the single frozen final model. Nested CV is
-discussed as a stricter procedure-level evaluation method but is not used
-because the training-only comparison was sufficient for final selection and
-the project prioritizes a readable model-family learning workflow.
+all candidates:
+    descriptive comparison tables, uncertainty summaries, rank/stability summaries
+
+leading candidates after the predefined rule:
+    focused paired comparisons and practical-equivalence analysis
+
+final chosen candidate:
+    no test-set comparison against alternatives
 ```
 
----
+McNemar's test and DeLong-style ROC-AUC comparisons may be used only as training-only
+supplementary analyses on fixed paired predictions. They must never be used to compare
+candidate models on the final test set. PR-AUC / average-precision comparison should rely
+on approaches applicable to that metric, such as paired bootstrap differences.
 
-## 10. Statistical tests and paired comparisons before final selection
-
-Statistical comparison tools should be used before the final test set.
-
-Possible tools:
-
-```text
-paired bootstrap differences on validation or cross-validation predictions
-paired fold comparisons from repeated CV
-nested-CV outer-fold comparisons
-McNemar-style tests on validation hard predictions
-DeLong-style tests for validation ROC-AUC
-permutation tests for predictive signal
-```
-
-These methods can help choose the one final model.
-
-They should not be used after running several models on the held-out test set, because that would make the test set part of model selection.
-
----
+The final decision should combine primary-metric evidence, practical equivalence,
+calibration and threshold behaviour where relevant, stability, complexity, runtime, and
+interpretability. A non-significant p-value does not prove equality. A statistically
+detectable difference does not prove operational importance.
 
 ## 11. Fair tuning effort in the final comparison
 
-The final comparison stage must avoid giving one model family much more tuning attention than others.
+The final comparison must avoid giving one model family substantially more opportunity to
+win merely because it receives more informal tuning attention.
 
 For example, this would be unfair:
 
 ```text
 logistic regression:
-    default C only
+    only default C = 1
 
 boosting:
-    500 Optuna trials over many parameters
+    500 adaptive trials across many parameters
 ```
 
-A fairer strategy:
+A fairer strategy is:
 
 ```text
-define reasonable search spaces for each serious candidate
-use comparable search budgets where feasible
+define reasonable search spaces for every candidate procedure
 use the same primary tuning metric
-use the same CV splitter or repeated-CV design
-document search spaces and search budgets
+use the same outer validation partitions across procedures
+use comparable search budgets where feasible
+record all search spaces, budgets, seeds, and early-stopping rules
+avoid manually expanding only the currently favoured model after results are viewed
 ```
 
-Search effort does not need to be identical in a literal sense. Some models have more sensitive hyperparameters than others. But the comparison should be transparent.
+Search effort does not have to be literally identical. Different families have different
+numbers of consequential hyperparameters and different fitting costs. Fairness means
+that the unequal effort is principled, pre-specified, and documented, rather than driven
+by a desire to make a preferred family win.
 
----
+A search strategy is not an evaluation design. Grid search, random search, successive
+halving, and Bayesian optimization may all be used inside flat repeated CV or inside the
+inner loop of nested CV. The final protocol should state both layers separately.
 
-## 12. Suggested final candidate search strategy
+## 12. Protocol-design checklist before the final comparison
 
-A practical final search strategy could be:
+The final comparison should not be coded immediately after this note is updated. First,
+the project should make a written protocol decision based on the central methodological
+reference and the candidate registry.
+
+The protocol must state:
 
 ```text
-1. Use previous sections to identify reasonable hyperparameter ranges.
-2. For each serious candidate family, define a compact but fair search space.
-3. Use repeated stratified CV for tuning, if computation allows.
-4. Use PR-AUC as the primary tuning metric.
-5. Store secondary metrics for interpretation.
-6. Inspect whether selected configurations are stable.
-7. Shortlist the final candidate models for threshold and calibration analysis.
-8. Select exactly one final model using training-only evidence.
+1. Complete candidate library and exact candidate-procedure definitions.
+2. Primary metric, secondary metrics, and the precise PR-AUC / average-precision
+   implementation used.
+3. Whether the primary route is flat repeated CV or per-family nested CV.
+4. The number of folds, repeats if applicable, seed policy, and stratification policy.
+5. The preprocessing, feature-engineering, feature-selection, and imbalance-treatment
+   policy inside each validation split.
+6. Search spaces, search methods, compute budgets, early stopping, and failure handling.
+7. The practical-equivalence margin and the rule for resolving ties.
+8. The statistical summaries and focused comparison methods.
+9. Whether calibration and threshold selection are outside the family comparison or part
+   of each candidate procedure.
+10. The exact final full-development-data fitting route.
+11. The final test-set report and bootstrap confidence-interval plan.
 ```
 
-If using Optuna or Bayesian optimization:
-
-```text
-use a fixed trial budget per serious model family
-fix random seeds
-record the search space
-record the selected configuration
-do not keep expanding the search only for the favourite model
-do not use the final test set to guide additional search
-```
-
----
+Only after this protocol is frozen should the project run the comprehensive final
+candidate-comparison workflow. The notebook and reusable source code should implement
+the frozen protocol rather than inventing modelling choices while results are being
+viewed.
 
 ## 13. Metric hierarchy for final model selection
 
 The project should define a metric hierarchy before final selection.
 
-A possible hierarchy:
-
 ```text
 Primary development metric:
-    PR-AUC
+    PR-AUC / average precision, with the exact implementation verified
 
 Secondary ranking metric:
     ROC-AUC
 
 Threshold-dependent metrics:
-    recall, precision, specificity, F1, balanced accuracy
+    recall, precision, specificity, F1, and balanced accuracy
 
 Operational metric:
-    predicted positive rate
+    predicted positive rate or intervention capacity
 
 Business metric if costs are defined:
     expected cost or expected utility
 
-Probability metric if probabilities are used:
-    Brier score, calibration curve, calibration slope/intercept
+Probability metrics if probabilities are used:
+    Brier score, calibration curve, calibration slope, and calibration intercept
 ```
 
-Why PR-AUC as primary?
+PR-AUC can remain the primary development ranking metric because churn is the minority
+positive class and positive-class retrieval matters. However, before the final comparison
+is run, the project must verify the precise implementation and terminology used for this
+quantity. In particular, if scikit-learn's `average_precision_score` is used, the report
+should call it average precision or explain the relationship to broader PR-curve area
+terminology precisely.
 
-```text
-churn is the positive minority class
-positive-class retrieval matters
-ROC-AUC can look strong even when precision is weak under imbalance
-```
-
-But PR-AUC alone is not enough. A model with high PR-AUC may still have an undesirable operating threshold, poor calibration, or excessive complexity.
-
----
+PR-AUC alone is not enough. A model with high ranking performance can still have an
+undesirable operating threshold, poor calibration, unstable behaviour, or excessive
+complexity. The final selection rule should therefore combine the primary metric with
+practical equivalence, stability, threshold behaviour, calibration where relevant,
+runtime, complexity, and interpretability.
 
 ## 14. Threshold-selection plan
 
@@ -542,17 +646,44 @@ For this project, calibration can be a later dedicated section after major model
 
 ## 16. Final model fitting
 
-After final model family, hyperparameters, threshold, and optional calibration are chosen using training data only, the project freezes exactly one final modelling pipeline.
+The final-fitting route depends on the chosen comparison design, but both routes preserve
+the same test-set discipline.
 
-Then:
+### 16.1 If the project uses flat repeated CV
 
 ```text
-1. Fit the final pipeline on the full training set.
-2. Apply the fitted pipeline to the untouched test set.
-3. Compute final metrics once for that one final model.
+1. Tune every candidate procedure with the frozen repeated-CV design.
+2. Select the final family and exact configuration using the frozen decision rule.
+3. Freeze preprocessing, feature policy, imbalance treatment, calibration policy, and
+   threshold rule.
+4. Fit that complete pipeline once on all development data.
+5. Evaluate it once on the untouched test set.
 ```
 
-The final pipeline should include all preprocessing steps:
+No additional tuning run is required solely because the selected configuration is later
+fitted on all development observations. The repeated-CV tuning already used the complete
+development dataset across its resampling partitions.
+
+### 16.2 If the project uses per-family nested CV
+
+```text
+1. Compare tuned candidate procedures using the frozen outer-fold evidence.
+2. Select the final family using the frozen decision rule.
+3. Rerun only the winning family's frozen tuning procedure on all development data.
+4. Select one exact final configuration from that all-development-data tuning run.
+5. Freeze preprocessing, feature policy, imbalance treatment, calibration policy, and
+   threshold rule.
+6. Fit that complete pipeline once on all development data.
+7. Evaluate it once on the untouched test set.
+```
+
+The later tuning run is necessary because nested CV evaluates a family-level tuning
+procedure. Its outer folds can select different hyperparameters and do not themselves
+define one final deployable configuration.
+
+### 16.3 Definition of the frozen final pipeline
+
+The final pipeline must include every step that learns from data:
 
 ```text
 imputation
@@ -566,9 +697,9 @@ calibration if used
 threshold rule
 ```
 
-Everything that learns from data must be fitted only on the training data.
-
----
+Everything that learns from data must be fitted only on development data before the test
+set is evaluated. If a practical tie is resolved in favour of a simpler or more
+interpretable candidate, that decision must occur before the test set is touched.
 
 ## 17. Final test-set evaluation
 
@@ -772,53 +903,28 @@ If test-set results cause model changes, the test set has become validation data
 
 ## 23. How to revise earlier report sections
 
-Earlier model sections should be revised with careful wording.
+Earlier model sections should use development-stage language consistently. They may identify
+a representative strong configuration or a useful hyperparameter region, but they should
+not claim final population superiority.
 
-### 23.1 Logistic regression
-
-Add language such as:
-
-```text
-The regularization comparison is a development-stage tuning analysis.
-Differences between neighbouring C values should be interpreted as evidence
-about a useful regularization region, not as proof of a uniquely optimal C.
-```
-
-### 23.2 kNN
-
-Add language such as:
+For every completed family, use wording such as:
 
 ```text
-The kNN grid is used to understand the effect of neighbourhood size and
-distance weighting. Several neighbouring settings perform similarly, so the
-selected configuration should be interpreted as a representative strong kNN
-candidate rather than a statistically final optimum.
+Within the development-stage cross-validation grid, this configuration achieved the
+strongest observed primary metric.
+
+The result identifies a promising representative candidate or a useful hyperparameter
+region. It does not prove that the configuration is uniquely optimal or that the model
+family is finally superior to all other families.
 ```
 
-### 23.3 Naive Bayes
+This applies to logistic regression, kNN, Naive Bayes, decision trees, bagging and random
+forests, boosting, SVMs, and MLPs. Differences among neighbouring configurations should
+be interpreted in light of evaluation uncertainty, hyperparameter-selection noise,
+random-training variation where applicable, and the later all-model comparison stage.
 
-Add language such as:
-
-```text
-The hybrid Naive Bayes model is selected within the development comparison
-because it has the strongest PR-AUC and the most coherent mixed-feature
-likelihood specification. The observed gap relative to other Naive Bayes
-variants is useful development evidence, but final model-family claims are
-deferred to the later comparison stage.
-```
-
-### 23.4 Future tree and ensemble sections
-
-Use the same pattern:
-
-```text
-select representative models within each section
-describe close hyperparameter results cautiously
-avoid final superiority claims
-reserve final claims for the final comparison and test evaluation
-```
-
----
+The later candidate-comparison chapter should make the final selection claim. The final
+test chapter should report performance only for the already frozen selected pipeline.
 
 ## 24. Suggested structure for the later report
 
@@ -827,7 +933,7 @@ A later report structure could be:
 ```text
 1. Introduction
 2. Data and problem framing
-3. Methodology: splitting, metrics, and evaluation discipline
+3. Methodology: splitting, metrics, evaluation discipline, and selection protocol
 4. Exploratory data analysis
 5. Preprocessing and feature engineering
 6. Baseline classifiers
@@ -840,130 +946,133 @@ A later report structure could be:
        SVM
        MLP
 8. Candidate comparison, uncertainty, and final selection
-       candidate shortlist
-       repeated CV / nested CV if used
-       candidate comparison
-       threshold selection
-       calibration if used
+       candidate-procedure registry
+       flat repeated CV or per-family nested CV
+       stability and uncertainty summaries
+       focused practical-equivalence comparisons
+       calibration and threshold selection
        ablations if used
-       final frozen model definition
+       frozen final pipeline definition
 9. Final test-set evaluation
        one final model only
        final metrics
-       confidence intervals
+       bootstrap confidence intervals
        final confusion matrix
        practical interpretation
 10. Conclusion
 ```
 
-The current report already has some of these sections. The main future addition is a dedicated section for candidate comparison and final selection before the final test section.
-
----
+The current report already has several of these components. The main future addition is a
+dedicated candidate-comparison and final-selection chapter before the final test section.
 
 ## 25. Suggested implementation additions later
 
-Later code additions may include:
+Before implementation begins, inspect the existing reusable modules, scripts, and
+comparable notebooks. Reusable final-selection logic should live in `src/telco_churn/`,
+with a matching training-only smoke test in `scripts/`.
+
+Likely reusable additions include:
 
 ```text
-evaluation.py:
+evaluation.py or equivalent:
+    candidate-procedure registry validation
     fold-level metric storage
-    repeated-CV evaluation utilities
+    repeated-CV and nested-CV orchestration helpers
     pooled OOF versus fold-mean metric summaries
-    bootstrap confidence intervals
-    paired bootstrap metric differences for pre-final validation comparisons
+    paired bootstrap metric differences
+    corrected-comparison and practical-equivalence summaries
     threshold-selection utilities
     calibration evaluation utilities
+    final-test bootstrap confidence intervals
 
-models.py:
-    final model factories for selected candidate families
-
-notebooks:
-    model-comparison notebook
-    final-test-evaluation notebook for one frozen model only
-    calibration notebook, if needed
-    ablation notebook, if needed
+models.py or equivalent:
+    candidate factories with fully documented search spaces
+    reproducible seed handling
+    final frozen-pipeline factory
 ```
 
-The project does not need these utilities immediately before decision trees, but the evaluation plan should guide future development.
+Likely executable workflows include:
 
----
+```text
+candidate-comparison notebook:
+    runs the frozen all-model protocol and saves comparison artifacts
+
+threshold-and-calibration notebook:
+    uses training-only data to select the operating rule, if required
+
+final-test notebook:
+    evaluates exactly one frozen final model and produces final report artifacts
+```
+
+No reusable code should be written until the protocol design in Section 12 is frozen.
 
 ## 26. Proposed later notebooks
 
-Possible later notebooks:
+The precise numbering should follow the existing notebook sequence. The conceptual stages
+are more important than the numbers:
 
 ```text
-08_decision_trees.py
-09_ensemble_methods.py
-10_support_vector_machines.py
-11_multilayer_perceptron.py
-12_candidate_comparison_and_selection.py
-13_calibration_and_threshold_selection.py
-14_final_test_evaluation.py
-15_ablation_and_interpretability.py
+candidate_comparison_and_selection
+calibration_and_threshold_selection
+final_test_evaluation
+ablation_and_interpretability
 ```
 
-Exact numbering can change depending on the final project structure.
+Candidate comparison, threshold/calibration selection, and final test evaluation should
+remain separate from the model-family learning notebooks. The final test evaluation
+workflow must evaluate exactly one frozen final model.
 
-The important point is that candidate comparison, threshold/calibration selection, and final test evaluation should be separate from model-family learning notebooks. The final test evaluation notebook should evaluate exactly one frozen final model.
+## 27. Decision rule for choosing the final comparison design
 
----
+Before implementing the final comparison stage, decide whether the primary selection route
+will be flat repeated CV or per-family nested CV. This is a methodology decision, not a
+result-driven decision to be made after seeing which method favours a particular model.
 
-## 27. Decision rule for whether to use nested CV
-
-Before implementing the final comparison stage, decide whether nested CV is worth the cost.
-
-Use nested CV if:
+Flat repeated CV is especially reasonable when:
 
 ```text
-top model families are close
-the final report wants stronger evidence about tuned-family comparison
-compute cost is manageable
-the tuning procedures can be clearly defined
+the project prioritizes a direct joint choice of family and exact configuration
+the full candidate library makes nested computation prohibitively expensive
+the protocol includes strong stability summaries and practical-tie safeguards
+the final report clearly acknowledges selection optimism in the winner's CV score
 ```
 
-Skip nested CV and rely on repeated CV plus training-only candidate comparison if:
+Per-family nested CV is especially reasonable when:
 
 ```text
-the top model is clearly stronger across metrics
-the final comparison would become too computationally heavy
-the project narrative benefits from simplicity
-the training-only evidence is already sufficient for choosing one final model
+the project prioritizes a cleaner comparison of tuned model-family procedures
+many families have flexible searches and close training-only scores
+the extra computation is manageable
+the final project can include a separate all-development-data tuning run for the winning family
 ```
 
-If nested CV is skipped, say so explicitly and explain the alternative:
+Repeated nested CV, bias-corrected flat CV, or a holdout-reference analysis may be
+included as supplementary evidence only when their additional cost and interpretation are
+justified in the frozen protocol.
 
-```text
-The project uses training-set cross-validation for model development and
-training-only candidate comparison for final selection. Nested CV is discussed
-as a stricter procedure-level evaluation method but is not used because the
-training-only evidence is sufficient and the project prioritizes a readable
-model-family learning workflow.
-```
-
----
+Whichever primary route is chosen, the test set remains untouched until one final pipeline
+has been defined.
 
 ## 28. Final selection checklist
 
 Before touching the test set, confirm:
 
 ```text
-candidate comparisons completed using training data only
-one final model selected
-model family selected
-hyperparameters fixed
-preprocessing fixed
-feature set fixed
-resampling or class weighting fixed
+candidate-procedure registry frozen
+primary comparison design frozen
+primary and secondary metrics frozen
+all candidate comparisons completed using training data only
+practical-equivalence and tie-breaking rule applied
+one final model family selected
+final hyperparameters fixed
+preprocessing and feature set fixed
+resampling or class-weighting policy fixed
 calibration decision fixed
-threshold fixed or threshold-selection rule fixed
-primary and secondary metrics fixed
-bootstrap confidence interval procedure fixed
+threshold or threshold-selection rule fixed
+final test metrics and bootstrap confidence-interval procedure fixed
 ```
 
 Only after this checklist is complete should the test set be evaluated.
-
----
 
 ## 29. Final test evaluation checklist
 
@@ -1043,24 +1152,28 @@ The project should proceed in layers:
 
 ```text
 Layer 1:
-    individual model-family learning sections using ordinary stratified CV
+    completed model-family learning sections using ordinary stratified CV
 
 Layer 2:
-    later rigorous candidate comparison using repeated CV, nested CV, and
-    paired validation comparisons if useful
+    protocol design for a broad candidate-procedure library, including fair search
+    budgets, validation design, uncertainty summaries, and practical-tie rules
 
 Layer 3:
-    final model, threshold, and calibration selection using training data only
+    comprehensive training-only candidate comparison using the frozen primary route
 
 Layer 4:
-    final untouched test-set evaluation for exactly one frozen final model
+    final family, hyperparameter, calibration, and threshold selection using only
+    development data
 
 Layer 5:
-    bootstrap uncertainty for the selected final model's test metrics
+    one untouched-test evaluation of exactly one frozen final pipeline, with bootstrap
+    uncertainty reporting for its test metrics
 
 Layer 6:
-    ablation and interpretability analysis, using training-only evidence if
-    those analyses affect the selected pipeline
+    ablation and interpretability analysis, using training-only evidence whenever the
+    analysis could affect the selected pipeline
 ```
 
-This structure preserves the educational purpose of the project while also making the final evaluation statistically careful and clean.
+This structure preserves the educational purpose of the project while making the final
+selection process, final test evaluation, and uncertainty claims statistically careful
+and reproducible.
