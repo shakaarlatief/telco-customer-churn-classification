@@ -1,12 +1,10 @@
-"""Initial validated candidate registry for final comparison experiments.
+"""Core candidate registry for resumable final-comparison experiments.
 
-The full final-comparison protocol deliberately contains a broad candidate universe.
-This module implements the first reusable, fully specified subset of that universe:
-
-* regularized logistic regression;
-* Extra Trees;
-* linear support vector machines; and
-* multilayer perceptrons.
+The final-comparison protocol evaluates complete candidate procedures rather than
+bare estimator names. This registry provides the stable identifiers, continuous-score
+semantics, fold-internal representations, Optuna search-space suggestions, and fresh
+unfitted pipeline builders for the core classical, tree, bagging, boosting, SVM, and
+neural-network library.
 
 The registry keeps three concerns separate:
 
@@ -97,9 +95,22 @@ class CandidateDefinition:
             raise CandidateRegistryError("search_profile must not be empty.")
 
 
+CANDIDATE_RIDGE_CLASSIFIER = "C01_RIDGE_CLASSIFIER"
 CANDIDATE_LOGISTIC_REGRESSION = "C02_LOGISTIC_REGRESSION"
+CANDIDATE_KNN = "C06_K_NEAREST_NEIGHBOURS"
+CANDIDATE_HYBRID_NAIVE_BAYES = "C07_HYBRID_NAIVE_BAYES"
+CANDIDATE_DECISION_TREE = "C08_DECISION_TREE"
 CANDIDATE_EXTRA_TREES = "C09_EXTRA_TREES"
+CANDIDATE_BAGGING = "C10_BAGGING"
+CANDIDATE_RANDOM_FOREST = "C11_RANDOM_FOREST"
+CANDIDATE_ADABOOST = "C13_ADABOOST"
+CANDIDATE_GRADIENT_BOOSTING = "C15_GRADIENT_BOOSTING"
+CANDIDATE_HIST_GRADIENT_BOOSTING = "C16_HIST_GRADIENT_BOOSTING"
+CANDIDATE_XGBOOST = "C17_XGBOOST"
+CANDIDATE_LIGHTGBM = "C18_LIGHTGBM"
+CANDIDATE_CATBOOST = "C19_CATBOOST"
 CANDIDATE_LINEAR_SVM = "C21_LINEAR_SVM"
+CANDIDATE_RBF_SVM = "C22_RBF_SVM"
 CANDIDATE_MLP = "C23_MULTILAYER_PERCEPTRON"
 
 INITIAL_CANDIDATE_REGISTRY: tuple[CandidateDefinition, ...] = (
@@ -130,6 +141,117 @@ INITIAL_CANDIDATE_REGISTRY: tuple[CandidateDefinition, ...] = (
 )
 
 
+# Preserve the exact Phase-2 smoke subset for reproducibility documentation.
+PHASE2_SMOKE_CANDIDATE_REGISTRY = INITIAL_CANDIDATE_REGISTRY
+
+CORE_CANDIDATE_REGISTRY: tuple[CandidateDefinition, ...] = (
+    CandidateDefinition(
+        candidate_id=CANDIDATE_RIDGE_CLASSIFIER,
+        display_name="Ridge classifier",
+        score_kind="margin",
+        representation="scaled one-hot features",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_LOGISTIC_REGRESSION,
+        display_name="Regularized logistic regression",
+        score_kind="probability",
+        representation="scaled one-hot features",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_KNN,
+        display_name="k-nearest neighbours",
+        score_kind="probability",
+        representation="scaled one-hot features",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_HYBRID_NAIVE_BAYES,
+        display_name="Hybrid Gaussian-Bernoulli Naive Bayes",
+        score_kind="probability",
+        representation="numeric-first unscaled one-hot features",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_DECISION_TREE,
+        display_name="Decision tree",
+        score_kind="probability",
+        representation="unscaled one-hot features",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_EXTRA_TREES,
+        display_name="Extra Trees classifier",
+        score_kind="probability",
+        representation="unscaled one-hot features",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_BAGGING,
+        display_name="Bagged decision trees",
+        score_kind="probability",
+        representation="unscaled one-hot features",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_RANDOM_FOREST,
+        display_name="Random forest",
+        score_kind="probability",
+        representation="unscaled one-hot features",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_ADABOOST,
+        display_name="AdaBoost",
+        score_kind="probability",
+        representation="dense unscaled one-hot features",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_GRADIENT_BOOSTING,
+        display_name="Classical gradient boosting",
+        score_kind="probability",
+        representation="dense unscaled one-hot features",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_HIST_GRADIENT_BOOSTING,
+        display_name="Histogram gradient boosting",
+        score_kind="probability",
+        representation="dense unscaled one-hot features",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_XGBOOST,
+        display_name="XGBoost",
+        score_kind="probability",
+        representation="dense unscaled one-hot features",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_LIGHTGBM,
+        display_name="LightGBM",
+        score_kind="probability",
+        representation="native categorical columns",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_CATBOOST,
+        display_name="CatBoost",
+        score_kind="probability",
+        representation="native categorical columns",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_LINEAR_SVM,
+        display_name="Linear support vector machine",
+        score_kind="margin",
+        representation="scaled one-hot features",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_RBF_SVM,
+        display_name="RBF support vector machine",
+        score_kind="margin",
+        representation="scaled one-hot features",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_MLP,
+        display_name="Multilayer perceptron",
+        score_kind="probability",
+        representation="dense scaled one-hot features",
+    ),
+)
+
+# Phase-2 public imports continue to work, but the default registry now names the
+# complete core library. The fixed Phase-2 smoke task list remains explicit.
+INITIAL_CANDIDATE_REGISTRY = CORE_CANDIDATE_REGISTRY
 def validate_candidate_registry(
     registry: tuple[CandidateDefinition, ...] = INITIAL_CANDIDATE_REGISTRY,
 ) -> None:
@@ -330,6 +452,13 @@ def suggest_candidate_parameters(
             "n_iter_no_change": 25,
         }
 
+    from telco_churn.core_candidate_builders import suggest_core_candidate_parameters
+
+    return suggest_core_candidate_parameters(
+        trial,
+        candidate_id=candidate_id,
+        profile=profile,
+    )
     raise CandidateRegistryError(f"No search space implemented for {candidate_id!r}.")
 
 
@@ -483,4 +612,11 @@ def build_candidate_pipeline(
             random_state=int(random_state),
         )
 
+    from telco_churn.core_candidate_builders import build_core_candidate_pipeline
+
+    return build_core_candidate_pipeline(
+        candidate_id,
+        parameters,
+        random_state=int(random_state),
+    )
     raise CandidateRegistryError(f"No pipeline builder implemented for {candidate_id!r}.")
