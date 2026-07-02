@@ -103,7 +103,11 @@ from telco_churn.experiment_protocol import (  # noqa: E402
     make_dataframe_fingerprint,
     make_environment_fingerprint,
 )
-from telco_churn.experiment_runner import execute_registered_tasks  # noqa: E402
+from telco_churn.experiment_runner import execute_monitored_registered_tasks  # noqa: E402
+from telco_churn.experiment_progress import (  # noqa: E402
+    clear_graceful_stop_request,
+    format_duration,
+)
 from telco_churn.experiment_splits import (  # noqa: E402
     derive_seed,
     make_repeated_stratified_outer_splits,
@@ -128,7 +132,7 @@ STAGE_B_N_SPLITS = 3
 STAGE_A_N_TRIALS = 12
 CONFIRMATION_TOP_K = 3
 SEARCH_PROFILE = "full"
-DEFAULT_RUN_ID = "pilot_pruned_f2_v1_full_development"
+DEFAULT_RUN_ID = "pilot_pruned_f2_v2_monitorable"
 ARTIFACTS_ROOT = PROJECT_ROOT / "artifacts" / "final_comparison"
 
 
@@ -223,7 +227,7 @@ def _make_tasks(
         for split in outer_splits:
             task_seed = derive_seed(
                 RANDOM_STATE,
-                "pruned_f2_pilot_v1",
+                "pruned_f2_pilot_v2",
                 candidate_id,
                 split.repeat_index,
                 split.fold_index,
@@ -240,6 +244,7 @@ def _make_tasks(
             )
             payload = {
                 "task_kind": "nested_hpo_outer_v1",
+                "run_directory": str(run_directory),
                 "protocol_fingerprint": protocol_fingerprint,
                 "sample_positions": [int(value) for value in full_training_positions],
                 "outer_train_indices": [int(value) for value in split.train_indices],
@@ -309,7 +314,7 @@ def _make_protocol(source_provenance: dict[str, object]) -> ExperimentProtocol:
     """Return the immutable, explicitly non-master pilot protocol."""
     return ExperimentProtocol(
         protocol_id="telco_final_comparison_pilot_pruned_f2",
-        version="v1",
+        version="v2",
         candidate_ids=PILOT_CANDIDATE_IDS,
         primary_metric="average_precision",
         outer_n_splits=OUTER_N_SPLITS,
@@ -318,7 +323,7 @@ def _make_protocol(source_provenance: dict[str, object]) -> ExperimentProtocol:
         random_state=RANDOM_STATE,
         metadata={
             "purpose": (
-                "operational persistent nested-CV pilot after the pruned F2 policy; "
+                "monitorable operational persistent nested-CV pilot after the pruned F2 policy; "
                 "not a final ranking or procedure-selection run"
             ),
             "development_data_scope": "all rows in data/processed/train.csv only",
@@ -329,6 +334,7 @@ def _make_protocol(source_provenance: dict[str, object]) -> ExperimentProtocol:
             "stage_a_n_trials": STAGE_A_N_TRIALS,
             "confirmation_top_k": CONFIRMATION_TOP_K,
             "feature_policy_contract": "F2 pruned after target-free structural audit",
+            "monitoring_contract": "task progress sidecars, read-only status command, and clean pause control",
             "held_out_test_set_policy": "not loaded or referenced",
             "source_provenance": dict(source_provenance),
         },
@@ -380,7 +386,64 @@ def _print_plan(
     print("Candidate IDs:", flush=True)
     for candidate_id in protocol.candidate_ids:
         print(f"  {candidate_id}", flush=True)
+    if not dry_run:
+        print(
+            "Monitor from a second terminal with: "
+            f"python scripts/final_comparison_status.py --run-id {run_id} --watch",
+            flush=True,
+        )
 
+
+def _pilot_event(
+    event_name: str,
+    task,
+    details: dict[str, object],
+) -> None:
+    """Print concise coordinator-owned operational events without ranking candidates."""
+    timestamp = __import__("datetime").datetime.now().strftime("%H:%M:%S")
+    task_label = (
+        f"{task.candidate_id} r{task.repeat_index:02d}f{task.fold_index:02d}"
+        if task is not None
+        else None
+    )
+    if event_name == "task_started":
+        print(
+            f"[{timestamp}] START {task_label} "
+            f"(active={details.get('active_tasks')}/{details.get('worker_capacity', 1)})",
+            flush=True,
+        )
+    elif event_name == "task_completed":
+        print(
+            f"[{timestamp}] COMPLETE {task_label} "
+            f"elapsed={format_duration(details.get('elapsed_seconds'))}",
+            flush=True,
+        )
+    elif event_name == "task_failed":
+        print(
+            f"[{timestamp}] FAILED {task_label} "
+            f"elapsed={format_duration(details.get('elapsed_seconds'))}",
+            flush=True,
+        )
+    elif event_name == "task_interrupted":
+        print(
+            f"[{timestamp}] INTERRUPTED {task_label}: {details.get('reason', '-')}",
+            flush=True,
+        )
+    elif event_name == "active_snapshot":
+        elapsed_by_task = details.get("elapsed_seconds", {})
+        active_items = []
+        for task_key in details.get("active_task_keys", []):
+            elapsed = None
+            if isinstance(elapsed_by_task, dict):
+                elapsed = elapsed_by_task.get(task_key)
+            active_items.append(f"{task_key} ({format_duration(elapsed)})")
+        print(f"[{timestamp}] ACTIVE {', '.join(active_items) or '-'}", flush=True)
+    elif event_name == "graceful_stop_requested":
+        print(f"[{timestamp}] PAUSE REQUESTED: {details.get('message', '')}", flush=True)
+    elif event_name == "hard_stop_requested":
+        print(f"[{timestamp}] EMERGENCY STOP REQUESTED", flush=True)
+    elif event_name == "intentional_pause":
+        print(f"[{timestamp}] INTENTIONAL PAUSE AFTER COMPLETED TASK", flush=True)
 
 def _open_store(
     *,
@@ -475,25 +538,29 @@ def main() -> None:
         environment_fingerprint=environment_fingerprint,
     )
     try:
+        clear_graceful_stop_request(store.run_directory)
         tasks = _make_tasks(
             run_directory=store.run_directory,
             y=y_all,
             full_training_positions=full_training_positions,
             protocol_fingerprint=protocol.fingerprint,
         )
-        summary = execute_registered_tasks(
+        summary = execute_monitored_registered_tasks(
             store=store,
             tasks=tasks,
             worker=run_nested_hpo_outer_task,
             max_workers=arguments.max_workers,
             retry_failed=bool(arguments.retry_failed),
             stop_after_completed=arguments.stop_after_completed,
+            event_callback=_pilot_event,
+            stop_control_run_directory=store.run_directory,
+            progress_directory=store.run_directory / "progress",
         )
         task_status = store.task_summary()
         store.validate_completed_artifacts()
 
         print("Execution summary:", flush=True)
-        for key in ("submitted", "completed", "skipped", "failed", "paused"):
+        for key in ("submitted", "completed", "skipped", "failed", "interrupted", "paused"):
             print(f"  {key}: {summary[key]}", flush=True)
         print("Persistent task states:", flush=True)
         for status, count in sorted(task_status.items()):
@@ -507,8 +574,8 @@ def main() -> None:
             )
         if summary["paused"]:
             print(
-                "Pilot paused intentionally. Resume the same run with --resume after the "
-                "pause condition has been removed.",
+                "Pilot paused. Inspect it with scripts/final_comparison_status.py, then "
+                "resume the same compatible run with --resume when ready.",
                 flush=True,
             )
     finally:

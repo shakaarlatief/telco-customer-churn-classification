@@ -455,6 +455,29 @@ class ExperimentStore:
                 f"Cannot fail task {task_key!r}; it is not in running state."
             )
 
+    def interrupt_task(self, task_key: str, error_text: str) -> None:
+        """Mark an active task interrupted without discarding durable study progress.
+
+        An interrupted state differs from ``failed``: it indicates a controlled stop or
+        coordinator recovery path. A compatible future resume may claim it without the
+        explicit ``retry_failed`` switch, whereas an actual failed task remains visible
+        until a user deliberately requests a retry.
+        """
+        result = self._connection.execute(
+            """
+            UPDATE tasks
+            SET status = ?,
+                error_text = ?,
+                heartbeat_at = ?
+            WHERE task_key = ? AND status = ?
+            """,
+            (TASK_INTERRUPTED, error_text, _utc_now(), task_key, TASK_RUNNING),
+        )
+        if result.rowcount != 1:
+            raise TaskStateError(
+                f"Cannot interrupt task {task_key!r}; it is not in running state."
+            )
+
     def recover_interrupted_tasks(self) -> int:
         """Mark tasks left running by an earlier coordinator as resumable.
 

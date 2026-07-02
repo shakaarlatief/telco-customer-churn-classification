@@ -21,7 +21,7 @@ from pathlib import Path
 import pickle
 import tempfile
 import warnings
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 import numpy as np
 import pandas as pd
@@ -35,6 +35,7 @@ from telco_churn.candidates import (
     candidate_procedure_contract_fingerprint,
     suggest_candidate_parameters,
 )
+from telco_churn.experiment_progress import GracefulStopRequested
 from telco_churn.experiment_splits import derive_seed
 
 
@@ -486,16 +487,23 @@ def evaluate_candidate_cv(
     }
 
 
-def _terminal_trial_count(study) -> int:
-    """Count trials with a terminal Optuna state."""
+def _completed_trial_count(study) -> int:
+    """Count valid Stage-A evaluations that can enter Stage-B confirmation."""
     optuna = _require_optuna()
-    terminal_states = {
-        optuna.trial.TrialState.COMPLETE,
+    return sum(
+        trial.state == optuna.trial.TrialState.COMPLETE and trial.value is not None
+        for trial in study.trials
+    )
+
+
+def _failed_trial_count(study) -> int:
+    """Count terminal non-successful trial states for a bounded retry policy."""
+    optuna = _require_optuna()
+    failure_states = {
         optuna.trial.TrialState.FAIL,
         optuna.trial.TrialState.PRUNED,
     }
-    return sum(trial.state in terminal_states for trial in study.trials)
-
+    return sum(trial.state in failure_states for trial in study.trials)
 
 def run_stage_a_optuna_search(
     *,
@@ -505,26 +513,31 @@ def run_stage_a_optuna_search(
     stage_a_cv: StratifiedKFold,
     n_trials_target: int,
     search_profile: str,
+    should_stop: Callable[[], bool] | None = None,
+    on_trial_terminal: Callable[[Mapping[str, Any]], None] | None = None,
+    max_failed_trials: int | None = None,
 ) -> Any:
-    """Run or resume Stage-A TPE exploration until a total trial target is reached.
+    """Run or resume Stage A until it has the requested number of valid trials.
 
-    The returned study remains open after a successful call because Stage B needs its
-    trial history. The caller must invoke :func:`release_persistent_study_resources`
-    once it has finished all reads and writes for that task. Exceptions occurring
-    during Stage A release task-local SQLite resources here before propagating.
+    A stale or failed Optuna trial is persisted for auditability, but it is not a valid
+    configuration for Stage-B confirmation and therefore does not consume the requested
+    successful-trial budget. The bounded failure allowance prevents a systematically
+    invalid search space from looping indefinitely while allowing a normal interruption
+    or an isolated numerical failure to resume with the intended search effort.
     """
     if n_trials_target < 1:
         raise ValueError("n_trials_target must be positive.")
+    if max_failed_trials is not None and max_failed_trials < 0:
+        raise ValueError("max_failed_trials must be non-negative when provided.")
 
-    optuna = _require_optuna()
     study = create_or_resume_study(config)
+    allowed_failures = (
+        int(max_failed_trials)
+        if max_failed_trials is not None
+        else max(3, int(n_trials_target))
+    )
 
     try:
-        remaining_trials = max(0, int(n_trials_target) - _terminal_trial_count(study))
-
-        if remaining_trials == 0:
-            return study
-
         def objective(trial) -> float:
             parameters = suggest_candidate_parameters(
                 trial,
@@ -564,16 +577,40 @@ def run_stage_a_optuna_search(
             )
             return float(result["mean_average_precision"])
 
-        study.optimize(
-            objective,
-            n_trials=remaining_trials,
-            callbacks=[_PersistStudyComponents(config)],
-            gc_after_trial=True,
-        )
+        def persist_after_trial(study_instance, trial) -> None:
+            _PersistStudyComponents(config)(study_instance, trial)
+            if on_trial_terminal is not None:
+                on_trial_terminal(
+                    {
+                        "trial_number": int(trial.number),
+                        "trial_state": trial.state.name.lower(),
+                        "trial_value": None if trial.value is None else float(trial.value),
+                        "completed_trials": int(_completed_trial_count(study_instance)),
+                        "failed_trials": int(_failed_trial_count(study_instance)),
+                        "target_completed_trials": int(n_trials_target),
+                    }
+                )
 
-        # Persist even when all work was already complete in a prior invocation. This
-        # covers first-study creation where no callback was triggered because no new
-        # trial had to run after a normal resume.
+        while _completed_trial_count(study) < int(n_trials_target):
+            if should_stop is not None and should_stop():
+                raise GracefulStopRequested(
+                    "Clean stop requested after the last persistent Stage-A trial."
+                )
+            failed_trials = _failed_trial_count(study)
+            if failed_trials >= allowed_failures:
+                raise SearchExecutionError(
+                    "Stage A exceeded its allowed failed/pruned-trial count before "
+                    f"reaching {n_trials_target} valid completed trials: "
+                    f"failed_or_pruned={failed_trials}, allowed={allowed_failures}."
+                )
+            study.optimize(
+                objective,
+                n_trials=1,
+                callbacks=[persist_after_trial],
+                catch=(Exception,),
+                gc_after_trial=True,
+            )
+
         _atomic_pickle(config.sampler_path, study.sampler)
         _atomic_pickle(config.pruner_path, study.pruner)
         return study
@@ -650,11 +687,22 @@ def run_two_stage_optuna_search(
     n_trials_target: int,
     confirmation_top_k: int,
     search_profile: str,
+    should_stop: Callable[[], bool] | None = None,
+    stage_callback: Callable[[str, Mapping[str, Any]], None] | None = None,
+    max_failed_trials: int | None = None,
 ) -> SearchResult:
-    """Run persistent Stage A and durable Stage-B configuration confirmation."""
+    """Run persistent Stage A and durable Stage-B confirmation safely across resumes."""
     if confirmation_top_k < 1:
         raise ValueError("confirmation_top_k must be positive.")
 
+    def emit(stage: str, **details: Any) -> None:
+        if stage_callback is not None:
+            stage_callback(stage, dict(details))
+
+    def trial_update(details: Mapping[str, Any]) -> None:
+        emit("stage_a", **dict(details))
+
+    emit("stage_a", target_completed_trials=int(n_trials_target))
     study = run_stage_a_optuna_search(
         config=config,
         X=X,
@@ -662,8 +710,15 @@ def run_two_stage_optuna_search(
         stage_a_cv=stage_a_cv,
         n_trials_target=n_trials_target,
         search_profile=search_profile,
+        should_stop=should_stop,
+        on_trial_terminal=trial_update,
+        max_failed_trials=max_failed_trials,
     )
     try:
+        if should_stop is not None and should_stop():
+            raise GracefulStopRequested(
+                "Clean stop requested after Stage-A completion and before Stage-B confirmation."
+            )
         top_trials = _top_completed_trials(study, confirmation_top_k)
         stage_b_seed = int(getattr(stage_b_cv, "random_state", config.random_state))
         fingerprint = _confirmation_fingerprint(
@@ -684,7 +739,17 @@ def run_two_stage_optuna_search(
             records = tuple(dict(record) for record in persisted["records"])
         else:
             records_list: list[dict[str, Any]] = []
-            for trial in top_trials:
+            for position, trial in enumerate(top_trials, start=1):
+                if should_stop is not None and should_stop():
+                    raise GracefulStopRequested(
+                        "Clean stop requested between Stage-B confirmation configurations."
+                    )
+                emit(
+                    "stage_b",
+                    confirmation_position=position,
+                    confirmation_total=len(top_trials),
+                    stage_a_trial_number=int(trial.number),
+                )
                 result = evaluate_candidate_cv(
                     candidate_id=config.candidate_id,
                     parameters=_resolved_parameters_from_trial(trial),
@@ -741,7 +806,7 @@ def run_two_stage_optuna_search(
             selected_stage_b_average_precision=float(
                 selected["stage_b_average_precision"]
             ),
-            stage_a_completed_trials=int(_terminal_trial_count(study)),
+            stage_a_completed_trials=int(_completed_trial_count(study)),
             stage_a_best_average_precision=float(study.best_value),
             stage_b_records=records,
             study_database_path=str(config.database_path),
