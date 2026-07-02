@@ -184,9 +184,7 @@ def suggest_core_candidate_parameters(
     if candidate_id == CANDIDATE_RIDGE_CLASSIFIER:
         return {
             "alpha": float(trial.suggest_float("alpha", 1e-5, 1e4, log=True)),
-            "class_weight": trial.suggest_categorical(
-                "class_weight", ["none", "balanced"]
-            ),
+            "class_weight": "none",
         }
 
     if candidate_id == CANDIDATE_KNN:
@@ -234,9 +232,7 @@ def suggest_core_candidate_parameters(
             "base_min_samples_leaf": int(
                 trial.suggest_int("base_min_samples_leaf", 1, leaf_upper)
             ),
-            "base_class_weight": trial.suggest_categorical(
-                "base_class_weight", ["none", "balanced"]
-            ),
+            "base_class_weight": "none",
         }
 
     if candidate_id == CANDIDATE_RANDOM_FOREST:
@@ -271,9 +267,7 @@ def suggest_core_candidate_parameters(
                 "max_features", ["sqrt", "log2", "0.5", "0.75", "1.0"]
             ),
             "max_samples": float(trial.suggest_float("max_samples", 0.5, 1.0)),
-            "class_weight": trial.suggest_categorical(
-                "class_weight", ["none", "balanced", "balanced_subsample"]
-            ),
+            "class_weight": "none",
             "ccp_alpha": float(trial.suggest_float("ccp_alpha", 1e-8, 1e-2, log=True)),
         }
 
@@ -387,9 +381,7 @@ def suggest_core_candidate_parameters(
         return {
             "C": float(trial.suggest_float("C", 1e-4, 1e3, log=True)),
             "gamma": float(trial.suggest_float("gamma", 1e-5, 10.0, log=True)),
-            "class_weight": trial.suggest_categorical(
-                "class_weight", ["none", "balanced"]
-            ),
+            "class_weight": "none",
         }
 
     raise CoreCandidateBuilderError(f"No search space for {candidate_id!r}")

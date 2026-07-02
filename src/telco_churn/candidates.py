@@ -47,7 +47,14 @@ from telco_churn.feature_policy_pipelines import (
     REPRESENTATION_DENSE_SCALED,
     REPRESENTATION_SPARSE_SCALED,
     REPRESENTATION_SPARSE_UNSCALED,
+    apply_imbalance_policy_to_pipeline,
     make_feature_policy_classifier_pipeline,
+)
+from telco_churn.imbalance_routing import (
+    neutralize_estimator_weight_parameters,
+    pop_imbalance_configuration,
+    suggest_imbalance_configuration,
+    supported_imbalance_policies,
 )
 from telco_churn.models import (
     make_linear_svc_classifier,
@@ -261,14 +268,33 @@ def validate_candidate_feature_selection(
 
 
 def candidate_procedure_contract(candidate_id: str) -> dict[str, object]:
-    """Return the routing contract that must bind a persistent inner HPO study."""
+    """Return the routing contract that must bind a persistent inner HPO study.
+
+    The contract now includes the candidate, feature-policy, selector, and imbalance
+    matrix. Persistent Optuna studies therefore cannot resume under a changed treatment
+    universe where a previous trial may have searched a different fitted procedure.
+    """
     feature_policies = supported_feature_policies(candidate_id)
+    feature_selection_policies = {
+        policy_id: list(supported_feature_selection_policies(candidate_id, policy_id))
+        for policy_id in feature_policies
+    }
     return {
         "candidate_id": candidate_id,
         "feature_policies": list(feature_policies),
-        "feature_selection_policies": {
-            policy_id: list(supported_feature_selection_policies(candidate_id, policy_id))
-            for policy_id in feature_policies
+        "feature_selection_policies": feature_selection_policies,
+        "imbalance_policies": {
+            policy_id: {
+                selection_policy: list(
+                    supported_imbalance_policies(
+                        candidate_id,
+                        policy_id,
+                        selection_policy,
+                    )
+                )
+                for selection_policy in selection_policies
+            }
+            for policy_id, selection_policies in feature_selection_policies.items()
         },
     }
 
@@ -325,7 +351,7 @@ def _with_feature_policy(
     parameters: Mapping[str, Any],
     profile: str,
 ) -> dict[str, Any]:
-    """Append compatible feature and feature-selection policy choices for inner HPO."""
+    """Append compatible feature, selection, and imbalance choices for inner HPO."""
     result = dict(parameters)
     feature_policy = trial.suggest_categorical(
         "feature_policy", list(supported_feature_policies(candidate_id))
@@ -340,6 +366,15 @@ def _with_feature_policy(
         _selection_parameter_suggestions(
             trial,
             selection_policy=selection_policy,
+            profile=profile,
+        )
+    )
+    result.update(
+        suggest_imbalance_configuration(
+            trial,
+            candidate_id=candidate_id,
+            feature_policy=feature_policy,
+            feature_selection_policy=selection_policy,
             profile=profile,
         )
     )
@@ -603,10 +638,7 @@ def suggest_candidate_parameters(
         parameters: dict[str, Any] = {
             "penalty": penalty,
             "C": float(trial.suggest_float("C", 1e-4, 1e3, log=True)),
-            "class_weight": trial.suggest_categorical(
-                "class_weight",
-                ["none", "balanced"],
-            ),
+            "class_weight": "none",
             "max_iter": 8_000,
         }
         if penalty == "elasticnet":
@@ -628,17 +660,6 @@ def suggest_candidate_parameters(
             min_leaf_high = 40
 
         bootstrap = bool(trial.suggest_categorical("bootstrap", [False, True]))
-        class_weight = trial.suggest_categorical(
-            "class_weight",
-            ["none", "balanced"],
-        )
-        if bootstrap:
-            bootstrap_weight_policy = trial.suggest_categorical(
-                "bootstrap_weight_policy",
-                ["inherit", "balanced_subsample"],
-            )
-            if bootstrap_weight_policy == "balanced_subsample":
-                class_weight = "balanced_subsample"
 
         parameters = {
             "n_estimators": n_estimators,
@@ -658,7 +679,7 @@ def suggest_candidate_parameters(
                 ["sqrt", "log2", "0.5", "0.75", "1.0"],
             ),
             "bootstrap": bootstrap,
-            "class_weight": class_weight,
+            "class_weight": "none",
             "ccp_alpha": float(trial.suggest_float("ccp_alpha", 1e-8, 1e-2, log=True)),
         }
         if bootstrap:
@@ -678,10 +699,7 @@ def suggest_candidate_parameters(
             parameters={
                 "C": float(trial.suggest_float("C", 1e-4, 1e3, log=True)),
                 "loss": trial.suggest_categorical("loss", ["hinge", "squared_hinge"]),
-                "class_weight": trial.suggest_categorical(
-                    "class_weight",
-                    ["none", "balanced"],
-                ),
+                "class_weight": "none",
             },
             profile=profile,
         )
@@ -819,7 +837,7 @@ def make_extra_trees_pipeline(
     )
 
 
-def build_candidate_pipeline(
+def _build_candidate_pipeline_without_imbalance(
     candidate_id: str,
     parameters: Mapping[str, Any],
     *,
@@ -943,4 +961,47 @@ def build_candidate_pipeline(
         feature_policy=feature_policy,
         feature_selection_policy=feature_selection_policy,
         feature_selection_parameters=feature_selection_parameters,
+    )
+
+
+def build_candidate_pipeline(
+    candidate_id: str,
+    parameters: Mapping[str, Any],
+    *,
+    random_state: int = RANDOM_STATE,
+):
+    """Build a fresh candidate procedure including its declared imbalance treatment.
+
+    The base pipeline is constructed first with neutral estimator-side weight settings.
+    Exactly one predeclared imbalance policy is then inserted into its fitted training
+    path. This avoids combining an estimator's historical ``class_weight`` option with
+    I1 balanced sample weighting or a resampling policy.
+    """
+    get_candidate_definition(candidate_id)
+    routed_parameters = neutralize_estimator_weight_parameters(candidate_id, parameters)
+    feature_policy = validate_candidate_feature_policy(
+        candidate_id,
+        routed_parameters.get("feature_policy", FEATURE_POLICY_RAW),
+    )
+    feature_selection_policy = validate_candidate_feature_selection(
+        candidate_id,
+        feature_policy,
+        routed_parameters.get("feature_selection_policy", FEATURE_SELECTION_NONE),
+    )
+    imbalance_policy, imbalance_parameters = pop_imbalance_configuration(
+        candidate_id=candidate_id,
+        feature_policy=feature_policy,
+        feature_selection_policy=feature_selection_policy,
+        parameters=routed_parameters,
+    )
+    base_pipeline = _build_candidate_pipeline_without_imbalance(
+        candidate_id,
+        routed_parameters,
+        random_state=int(random_state),
+    )
+    return apply_imbalance_policy_to_pipeline(
+        base_pipeline,
+        imbalance_policy=imbalance_policy,
+        imbalance_parameters=imbalance_parameters,
+        random_state=int(random_state),
     )
