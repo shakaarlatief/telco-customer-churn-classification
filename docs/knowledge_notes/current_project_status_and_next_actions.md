@@ -25,12 +25,12 @@ The individual model-family workflows are complete through:
 
 The formal LaTeX report includes the MLP section as Section 13 and has been compiled locally at 126 pages. The report is an executed-workflow artifact, not a substitute for the remaining final-selection stage.
 
-The final-comparison implementation is also complete through Phase 8B:
+The current final-comparison infrastructure checkpoint is Phase 8B:
 
 ```text
 Phase 1: protocol, deterministic repeated outer splits, run storage, resume safety
 Phase 2: persistent two-stage Optuna HPO inside each outer training partition
-Phase 3: complete core C01-C23 candidate registry
+Phase 3: implemented 17-family registry drawn from the documented C01-C23 universe
 Phase 4: deterministic F0/F1/F2 feature-policy layer
 Phase 5: candidate-specific feature-policy routing
 Phase 6: candidate-specific S0/S1/S2 feature-selection routing
@@ -38,6 +38,17 @@ Phase 7: fold-safe I0-I4 imbalance primitives
 Phase 8A: fit-time imbalance pipeline adapter
 Phase 8B: candidate-specific imbalance routing inside Optuna and final pipelines
 ```
+
+The latest substantive final-comparison implementation checkpoint before this coordination
+update is:
+
+```text
+c823f61fd386f8e6765a62c0cda218c491669e5c
+Route final comparison candidates through imbalance policies
+```
+
+The later coordination-document commits do not supersede this as an implementation
+milestone.
 
 All associated smoke tests passed on the local Windows environment before the Phase 8B changes were committed and pushed.
 
@@ -244,7 +255,7 @@ strict mismatch protection when a protocol or candidate contract changes
 outer-task process parallelism with native estimator threads limited to one
 ```
 
-The frozen intended evaluation design remains:
+The predeclared evaluation design, pending the final F2 audit below, is:
 
 ```text
 5 outer folds x 10 repeats

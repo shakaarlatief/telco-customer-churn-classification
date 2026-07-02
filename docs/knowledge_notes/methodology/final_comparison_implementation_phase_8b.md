@@ -34,17 +34,21 @@ over-sampling. The single selected policy remains visible in stored trial parame
 ## Candidate compatibility matrix
 
 ```text
-Ridge, logistic regression, linear SVM, RBF SVM, MLP:
+Ridge and logistic regression:
     I0, I1, I2, I3, I4 when feature policy is F0
     I0, I1, I2, I3 when feature policy is F1 or F2
+
+Linear SVM, RBF SVM, and MLP:
+    I0, I1, I2, I3, I4 when feature policy is F0
+    I0, I1, I2, I3 when feature policy is F1
 
 kNN and hybrid Gaussian-Bernoulli Naive Bayes:
     I0, I2, I3, I4 when feature policy is F0
     I0, I2, I3 when feature policy is F1
 
-Decision tree, Extra Trees, bagging, random forest,
-AdaBoost, gradient boosting, histogram gradient boosting,
-XGBoost, LightGBM, CatBoost:
+Decision tree, Extra Trees, bagging, random forest, AdaBoost,
+GradientBoostingClassifier, HistGradientBoostingClassifier,
+XGBoost, LightGBM, and CatBoost:
     I0, I1
 ```
 

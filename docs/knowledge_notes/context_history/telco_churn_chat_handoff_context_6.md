@@ -71,7 +71,7 @@ The default workflow remains local-first and user-controlled:
 4. User stages, commits, and pushes by default.
 ```
 
-Do not directly write to GitHub, modify repository files through a connected tool, stage changes, create commits, or push commits unless the user explicitly authorizes that specific action. This handoff was created after an explicit direct-GitHub authorization for the coordination-document update only. That authorization does not continue automatically.
+Do not directly write to GitHub, modify repository files through a connected tool, stage changes, create commits, or push commits unless the user explicitly authorizes that specific action. Authorization for one action does not create continuing permission for later writes.
 
 ### Reusable source and smoke-test rule
 
@@ -338,7 +338,7 @@ Every procedure remains an unfitted, fold-safe pipeline. Native parallel estimat
 
 ### Evaluation and HPO protocol
 
-The frozen intended architecture is:
+The predeclared target architecture, pending the final F2 audit, is:
 
 ```text
 5 outer folds x 10 repeats
@@ -424,17 +424,21 @@ The policies are mutually exclusive. F1 and F2 are not compatible with I4 becaus
 The Phase 8B compatibility matrix is:
 
 ```text
-Ridge, logistic regression, linear SVM, RBF SVM, MLP:
+Ridge and logistic regression:
     I0, I1, I2, I3, I4 with F0
     I0, I1, I2, I3 with F1 or F2
+
+Linear SVM, RBF SVM, and MLP:
+    I0, I1, I2, I3, I4 with F0
+    I0, I1, I2, I3 with F1
 
 kNN and hybrid Gaussian-Bernoulli Naive Bayes:
     I0, I2, I3, I4 with F0
     I0, I2, I3 with F1
 
-Decision tree, Extra Trees, bagging, random forest,
-AdaBoost, gradient boosting, histogram gradient boosting,
-XGBoost, LightGBM, CatBoost:
+Decision tree, Extra Trees, bagging, random forest, AdaBoost,
+GradientBoostingClassifier, HistGradientBoostingClassifier,
+XGBoost, LightGBM, and CatBoost:
     I0, I1
 ```
 
