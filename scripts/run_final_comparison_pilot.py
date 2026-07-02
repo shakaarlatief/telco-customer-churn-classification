@@ -132,7 +132,7 @@ STAGE_B_N_SPLITS = 3
 STAGE_A_N_TRIALS = 12
 CONFIRMATION_TOP_K = 3
 SEARCH_PROFILE = "full"
-DEFAULT_RUN_ID = "pilot_pruned_f2_v2_monitorable"
+DEFAULT_RUN_ID = "pilot_pruned_f2_v3_observable"
 ARTIFACTS_ROOT = PROJECT_ROOT / "artifacts" / "final_comparison"
 
 
@@ -227,7 +227,7 @@ def _make_tasks(
         for split in outer_splits:
             task_seed = derive_seed(
                 RANDOM_STATE,
-                "pruned_f2_pilot_v2",
+                "pruned_f2_pilot_v3",
                 candidate_id,
                 split.repeat_index,
                 split.fold_index,
@@ -314,7 +314,7 @@ def _make_protocol(source_provenance: dict[str, object]) -> ExperimentProtocol:
     """Return the immutable, explicitly non-master pilot protocol."""
     return ExperimentProtocol(
         protocol_id="telco_final_comparison_pilot_pruned_f2",
-        version="v2",
+        version="v3",
         candidate_ids=PILOT_CANDIDATE_IDS,
         primary_metric="average_precision",
         outer_n_splits=OUTER_N_SPLITS,
@@ -323,7 +323,7 @@ def _make_protocol(source_provenance: dict[str, object]) -> ExperimentProtocol:
         random_state=RANDOM_STATE,
         metadata={
             "purpose": (
-                "monitorable operational persistent nested-CV pilot after the pruned F2 policy; "
+                "observable operational persistent nested-CV pilot after the pruned F2 policy; "
                 "not a final ranking or procedure-selection run"
             ),
             "development_data_scope": "all rows in data/processed/train.csv only",
@@ -334,7 +334,7 @@ def _make_protocol(source_provenance: dict[str, object]) -> ExperimentProtocol:
             "stage_a_n_trials": STAGE_A_N_TRIALS,
             "confirmation_top_k": CONFIRMATION_TOP_K,
             "feature_policy_contract": "F2 pruned after target-free structural audit",
-            "monitoring_contract": "task progress sidecars, read-only status command, and clean pause control",
+            "monitoring_contract": "atomic task progress, task and coordinator event logs, in-place read-only dashboard, clean pause control, and incremental Stage-B checkpoints",
             "held_out_test_set_policy": "not loaded or referenced",
             "source_provenance": dict(source_provenance),
         },
@@ -394,56 +394,149 @@ def _print_plan(
         )
 
 
-def _pilot_event(
-    event_name: str,
-    task,
-    details: dict[str, object],
-) -> None:
-    """Print concise coordinator-owned operational events without ranking candidates."""
-    timestamp = __import__("datetime").datetime.now().strftime("%H:%M:%S")
-    task_label = (
-        f"{task.candidate_id} r{task.repeat_index:02d}f{task.fold_index:02d}"
-        if task is not None
-        else None
-    )
-    if event_name == "task_started":
-        print(
-            f"[{timestamp}] START {task_label} "
-            f"(active={details.get('active_tasks')}/{details.get('worker_capacity', 1)})",
-            flush=True,
+def _task_label(task) -> str:
+    """Return one compact deterministic label for coordinator events."""
+    if task is None:
+        return "run"
+    return f"{task.candidate_id} r{task.repeat_index:02d}f{task.fold_index:02d}"
+
+
+def _make_pilot_event_callback(run_directory: Path):
+    """Return a coordinator callback that mirrors events to terminal and durable logs."""
+    from telco_churn.experiment_progress import RunEventLogger, format_parameter_summary
+
+    logger = RunEventLogger(run_directory)
+
+    def callback(event_name: str, task, details: dict[str, object]) -> None:
+        task_label = _task_label(task)
+        if event_name == "worker_event":
+            worker_event = details.get("worker_event", {})
+            if not isinstance(worker_event, dict):
+                return
+            worker_details = worker_event.get("details", {})
+            if not isinstance(worker_details, dict):
+                worker_details = {}
+            worker_message = str(
+                worker_event.get("message")
+                or worker_event.get("event")
+                or "Worker event."
+            )
+            record = logger.emit(
+                str(worker_event.get("event", "worker_event")),
+                message=worker_message,
+                task=task,
+                details=worker_details,
+                source="worker",
+            )
+            extras: list[str] = []
+            completed = worker_details.get("completed_trials")
+            target = worker_details.get("target_completed_trials")
+            if completed is not None and target is not None:
+                extras.append(f"valid={completed}/{target}")
+            if worker_details.get("current_trial_number") is not None:
+                extras.append(
+                    "optuna_trial_id="
+                    + str(worker_details.get("current_trial_number"))
+                )
+            if worker_details.get("partial_mean_average_precision") is not None:
+                extras.append(
+                    "partial_AP="
+                    f"{float(worker_details['partial_mean_average_precision']):.4f}"
+                )
+            if worker_details.get("last_trial_average_precision") is not None:
+                extras.append(
+                    "AP="
+                    f"{float(worker_details['last_trial_average_precision']):.4f}"
+                )
+            if worker_details.get("best_stage_a_average_precision") is not None:
+                extras.append(
+                    "best="
+                    f"{float(worker_details['best_stage_a_average_precision']):.4f}"
+                )
+            parameters = worker_details.get("current_trial_parameters")
+            if isinstance(parameters, dict):
+                extras.append(
+                    "parameters="
+                    + format_parameter_summary(parameters, max_items=5)
+                )
+            suffix = " | " + " | ".join(extras) if extras else ""
+            print(
+                f"[{record['occurred_at_local']}] {task_label} | "
+                f"{str(worker_event.get('event', 'worker_event')).upper()} | "
+                f"{worker_message}{suffix}",
+                flush=True,
+            )
+            return
+
+        if event_name == "task_started":
+            message = (
+                f"START {task_label} | task {details.get('task_position')}/"
+                f"{details.get('task_total')} | active={details.get('active_tasks')}/"
+                f"{details.get('worker_capacity')}"
+            )
+        elif event_name == "task_completed":
+            message = (
+                f"COMPLETE {task_label} | task {details.get('task_position')}/"
+                f"{details.get('task_total')} | elapsed="
+                f"{format_duration(details.get('elapsed_seconds'))}"
+            )
+        elif event_name == "task_failed":
+            message = (
+                f"FAILED {task_label} | elapsed="
+                f"{format_duration(details.get('elapsed_seconds'))}"
+            )
+        elif event_name == "task_interrupted":
+            message = (
+                f"INTERRUPTED {task_label} | elapsed="
+                f"{format_duration(details.get('elapsed_seconds'))} | "
+                f"{details.get('reason', '-')}"
+            )
+        elif event_name == "graceful_stop_requested":
+            message = f"PAUSE REQUESTED | {details.get('message', '')}"
+        elif event_name == "hard_stop_requested":
+            message = f"EMERGENCY STOP REQUESTED | {details.get('message', '')}"
+        elif event_name == "active_snapshot":
+            active_keys = details.get("active_task_keys", [])
+            message = (
+                "ACTIVE SNAPSHOT | "
+                f"active={details.get('active_tasks')}/{details.get('worker_capacity')} | "
+                f"tasks={', '.join(str(item) for item in active_keys) or '-'}"
+            )
+        elif event_name == "intentional_pause":
+            message = "INTENTIONAL PAUSE AFTER COMPLETED TASK"
+        elif event_name == "run_started":
+            message = (
+                f"RUN STARTED {details.get('run_id')} | tasks={details.get('task_total')} | "
+                f"workers={details.get('worker_capacity')}"
+            )
+        elif event_name == "run_resumed":
+            message = (
+                f"RUN RESUMED {details.get('run_id')} | tasks={details.get('task_total')} | "
+                f"workers={details.get('worker_capacity')}"
+            )
+        elif event_name == "run_paused":
+            message = (
+                "RUN PAUSED | "
+                f"completed={details.get('completed')} | "
+                f"interrupted={details.get('interrupted')} | "
+                f"pending={details.get('pending')}"
+            )
+        elif event_name == "run_failed":
+            message = f"RUN FINISHED WITH FAILURES | failed={details.get('failed')}"
+        elif event_name == "run_completed":
+            message = "RUN COMPLETED"
+        else:
+            message = str(event_name).replace("_", " ").upper()
+
+        record = logger.emit(
+            event_name,
+            message=message,
+            task=task,
+            details=details,
         )
-    elif event_name == "task_completed":
-        print(
-            f"[{timestamp}] COMPLETE {task_label} "
-            f"elapsed={format_duration(details.get('elapsed_seconds'))}",
-            flush=True,
-        )
-    elif event_name == "task_failed":
-        print(
-            f"[{timestamp}] FAILED {task_label} "
-            f"elapsed={format_duration(details.get('elapsed_seconds'))}",
-            flush=True,
-        )
-    elif event_name == "task_interrupted":
-        print(
-            f"[{timestamp}] INTERRUPTED {task_label}: {details.get('reason', '-')}",
-            flush=True,
-        )
-    elif event_name == "active_snapshot":
-        elapsed_by_task = details.get("elapsed_seconds", {})
-        active_items = []
-        for task_key in details.get("active_task_keys", []):
-            elapsed = None
-            if isinstance(elapsed_by_task, dict):
-                elapsed = elapsed_by_task.get(task_key)
-            active_items.append(f"{task_key} ({format_duration(elapsed)})")
-        print(f"[{timestamp}] ACTIVE {', '.join(active_items) or '-'}", flush=True)
-    elif event_name == "graceful_stop_requested":
-        print(f"[{timestamp}] PAUSE REQUESTED: {details.get('message', '')}", flush=True)
-    elif event_name == "hard_stop_requested":
-        print(f"[{timestamp}] EMERGENCY STOP REQUESTED", flush=True)
-    elif event_name == "intentional_pause":
-        print(f"[{timestamp}] INTENTIONAL PAUSE AFTER COMPLETED TASK", flush=True)
+        print(f"[{record['occurred_at_local']}] {message}", flush=True)
+
+    return callback
 
 def _open_store(
     *,
@@ -545,6 +638,16 @@ def main() -> None:
             full_training_positions=full_training_positions,
             protocol_fingerprint=protocol.fingerprint,
         )
+        event_callback = _make_pilot_event_callback(store.run_directory)
+        event_callback(
+            "run_resumed" if arguments.resume else "run_started",
+            None,
+            {
+                "run_id": arguments.run_id,
+                "task_total": len(tasks),
+                "worker_capacity": arguments.max_workers,
+            },
+        )
         summary = execute_monitored_registered_tasks(
             store=store,
             tasks=tasks,
@@ -552,9 +655,10 @@ def main() -> None:
             max_workers=arguments.max_workers,
             retry_failed=bool(arguments.retry_failed),
             stop_after_completed=arguments.stop_after_completed,
-            event_callback=_pilot_event,
+            event_callback=event_callback,
             stop_control_run_directory=store.run_directory,
             progress_directory=store.run_directory / "progress",
+            worker_event_directory=store.run_directory / "logs" / "tasks",
         )
         task_status = store.task_summary()
         store.validate_completed_artifacts()
@@ -568,16 +672,37 @@ def main() -> None:
         print(f"Run directory: {store.run_directory}", flush=True)
 
         if summary["failed"]:
+            event_callback(
+                "run_failed",
+                None,
+                {
+                    "failed": summary["failed"],
+                    "completed": summary["completed"],
+                    "interrupted": summary["interrupted"],
+                },
+            )
             raise SystemExit(
                 "One or more pilot tasks failed. Resolve the persisted task error and rerun "
                 "with --resume --retry-failed; completed tasks will be skipped."
             )
         if summary["paused"]:
+            task_state = store.task_summary()
+            event_callback(
+                "run_paused",
+                None,
+                {
+                    "completed": task_state.get("completed", 0),
+                    "interrupted": task_state.get("interrupted", 0),
+                    "pending": task_state.get("pending", 0),
+                },
+            )
             print(
                 "Pilot paused. Inspect it with scripts/final_comparison_status.py, then "
                 "resume the same compatible run with --resume when ready.",
                 flush=True,
             )
+        else:
+            event_callback("run_completed", None, {"completed": summary["completed"]})
     finally:
         store.close()
 

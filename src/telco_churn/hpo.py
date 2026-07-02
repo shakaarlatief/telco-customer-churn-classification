@@ -439,6 +439,21 @@ def extract_continuous_scores(estimator, X) -> tuple[np.ndarray, str]:
     )
 
 
+def _emit_fold_event(
+    callback: Callable[[str, Mapping[str, Any]], None] | None,
+    event_name: str,
+    **details: Any,
+) -> None:
+    """Emit optional fold-level progress without affecting model selection behavior."""
+    if callback is None:
+        return
+    try:
+        callback(event_name, dict(details))
+    except Exception:
+        # Telemetry must not invalidate a candidate evaluation.
+        return
+
+
 def evaluate_candidate_cv(
     *,
     candidate_id: str,
@@ -447,13 +462,26 @@ def evaluate_candidate_cv(
     y: pd.Series,
     cv: StratifiedKFold,
     random_state: int,
+    on_fold_event: Callable[[str, Mapping[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
-    """Evaluate one configuration by fold-internal fitting and average precision."""
+    """Evaluate one configuration by fold-internal fitting and average precision.
+
+    ``on_fold_event`` is operational telemetry only. It reports durable stage progress
+    but does not change folds, seeds, estimators, scores, or selection logic.
+    """
     fold_scores: list[float] = []
     warning_messages: list[str] = []
+    fold_total = int(cv.get_n_splits(X, y))
 
-    for fold_index, (train_indices, validation_indices) in enumerate(cv.split(X, y)):
-        fold_seed = derive_seed(random_state, candidate_id, "inner", fold_index)
+    for fold_index, (train_indices, validation_indices) in enumerate(cv.split(X, y), start=1):
+        _emit_fold_event(
+            on_fold_event,
+            "fold_started",
+            inner_fold_index=fold_index,
+            inner_fold_total=fold_total,
+            completed_inner_folds=len(fold_scores),
+        )
+        fold_seed = derive_seed(random_state, candidate_id, "inner", fold_index - 1)
         estimator = build_candidate_pipeline(
             candidate_id,
             parameters,
@@ -472,8 +500,17 @@ def evaluate_candidate_cv(
         )
 
         score, _ = extract_continuous_scores(fitted, X.iloc[validation_indices])
-        fold_score = average_precision_score(y.iloc[validation_indices], score)
-        fold_scores.append(float(fold_score))
+        fold_score = float(average_precision_score(y.iloc[validation_indices], score))
+        fold_scores.append(fold_score)
+        _emit_fold_event(
+            on_fold_event,
+            "fold_completed",
+            inner_fold_index=fold_index,
+            inner_fold_total=fold_total,
+            completed_inner_folds=len(fold_scores),
+            fold_average_precision=fold_score,
+            partial_mean_average_precision=float(np.mean(fold_scores)),
+        )
 
     score_array = np.asarray(fold_scores, dtype=float)
     if not np.isfinite(score_array).all():
@@ -488,7 +525,7 @@ def evaluate_candidate_cv(
 
 
 def _completed_trial_count(study) -> int:
-    """Count valid Stage-A evaluations that can enter Stage-B confirmation."""
+    """Count valid Stage-A configurations eligible for Stage-B confirmation."""
     optuna = _require_optuna()
     return sum(
         trial.state == optuna.trial.TrialState.COMPLETE and trial.value is not None
@@ -497,13 +534,25 @@ def _completed_trial_count(study) -> int:
 
 
 def _failed_trial_count(study) -> int:
-    """Count terminal non-successful trial states for a bounded retry policy."""
+    """Count failed or pruned Stage-A attempts for the bounded retry safeguard."""
     optuna = _require_optuna()
     failure_states = {
         optuna.trial.TrialState.FAIL,
         optuna.trial.TrialState.PRUNED,
     }
     return sum(trial.state in failure_states for trial in study.trials)
+
+
+def _best_completed_trial_value(study) -> float | None:
+    """Return the best valid Stage-A objective without assuming a completed trial exists."""
+    values = [
+        float(trial.value)
+        for trial in study.trials
+        if trial.value is not None
+        and trial.state == _require_optuna().trial.TrialState.COMPLETE
+    ]
+    return max(values, default=None)
+
 
 def run_stage_a_optuna_search(
     *,
@@ -514,16 +563,14 @@ def run_stage_a_optuna_search(
     n_trials_target: int,
     search_profile: str,
     should_stop: Callable[[], bool] | None = None,
-    on_trial_terminal: Callable[[Mapping[str, Any]], None] | None = None,
+    on_trial_event: Callable[[Mapping[str, Any]], None] | None = None,
     max_failed_trials: int | None = None,
 ) -> Any:
-    """Run or resume Stage A until it has the requested number of valid trials.
+    """Run or resume Stage A until its valid-completed-trial target is satisfied.
 
-    A stale or failed Optuna trial is persisted for auditability, but it is not a valid
-    configuration for Stage-B confirmation and therefore does not consume the requested
-    successful-trial budget. The bounded failure allowance prevents a systematically
-    invalid search space from looping indefinitely while allowing a normal interruption
-    or an isolated numerical failure to resume with the intended search effort.
+    Failed and pruned Optuna trials remain durable audit records but do not consume the
+    valid configuration budget. A bounded failure allowance prevents an invalid search
+    space from running indefinitely while preserving ordinary interruption recovery.
     """
     if n_trials_target < 1:
         raise ValueError("n_trials_target must be positive.")
@@ -537,6 +584,21 @@ def run_stage_a_optuna_search(
         else max(3, int(n_trials_target))
     )
 
+    def emit(event_name: str, **details: Any) -> None:
+        if on_trial_event is None:
+            return
+        payload = {
+            "event_name": event_name,
+            "target_completed_trials": int(n_trials_target),
+            "completed_trials": int(_completed_trial_count(study)),
+            "failed_trials": int(_failed_trial_count(study)),
+        }
+        payload.update(details)
+        try:
+            on_trial_event(payload)
+        except Exception:
+            return
+
     try:
         def objective(trial) -> float:
             parameters = suggest_candidate_parameters(
@@ -545,6 +607,19 @@ def run_stage_a_optuna_search(
                 profile=search_profile,
             )
             trial.set_user_attr("resolved_parameters", dict(parameters))
+            emit(
+                "stage_a_trial_started",
+                current_trial_number=int(trial.number),
+                current_trial_parameters=dict(parameters),
+            )
+
+            def fold_event(event_name: str, details: Mapping[str, Any]) -> None:
+                emit(
+                    f"stage_a_{event_name}",
+                    current_trial_number=int(trial.number),
+                    **dict(details),
+                )
+
             try:
                 result = evaluate_candidate_cv(
                     candidate_id=config.candidate_id,
@@ -557,51 +632,52 @@ def run_stage_a_optuna_search(
                         "trial",
                         trial.number,
                     ),
+                    on_fold_event=fold_event,
                 )
             except BaseException as exc:
                 trial.set_user_attr("failure_type", type(exc).__name__)
                 trial.set_user_attr("failure_message", str(exc))
                 raise
 
-            trial.set_user_attr(
-                "fold_average_precision",
-                result["fold_average_precision"],
-            )
-            trial.set_user_attr(
-                "std_average_precision",
-                result["std_average_precision"],
-            )
-            trial.set_user_attr(
-                "warning_messages",
-                result["warning_messages"],
-            )
+            trial.set_user_attr("fold_average_precision", result["fold_average_precision"])
+            trial.set_user_attr("std_average_precision", result["std_average_precision"])
+            trial.set_user_attr("warning_messages", result["warning_messages"])
             return float(result["mean_average_precision"])
 
         def persist_after_trial(study_instance, trial) -> None:
             _PersistStudyComponents(config)(study_instance, trial)
-            if on_trial_terminal is not None:
-                on_trial_terminal(
-                    {
-                        "trial_number": int(trial.number),
-                        "trial_state": trial.state.name.lower(),
-                        "trial_value": None if trial.value is None else float(trial.value),
-                        "completed_trials": int(_completed_trial_count(study_instance)),
-                        "failed_trials": int(_failed_trial_count(study_instance)),
-                        "target_completed_trials": int(n_trials_target),
-                    }
-                )
+            completed = _completed_trial_count(study_instance)
+            failed = _failed_trial_count(study_instance)
+            best = _best_completed_trial_value(study_instance)
+            emit(
+                "stage_a_trial_terminal",
+                current_trial_number=int(trial.number),
+                trial_state=trial.state.name.lower(),
+                last_completed_trial_number=(
+                    int(trial.number)
+                    if trial.state == _require_optuna().trial.TrialState.COMPLETE
+                    and trial.value is not None
+                    else None
+                ),
+                last_trial_average_precision=(
+                    float(trial.value) if trial.value is not None else None
+                ),
+                completed_trials=int(completed),
+                failed_trials=int(failed),
+                best_stage_a_average_precision=best,
+            )
 
         while _completed_trial_count(study) < int(n_trials_target):
             if should_stop is not None and should_stop():
                 raise GracefulStopRequested(
                     "Clean stop requested after the last persistent Stage-A trial."
                 )
-            failed_trials = _failed_trial_count(study)
-            if failed_trials >= allowed_failures:
+            if _failed_trial_count(study) >= allowed_failures:
                 raise SearchExecutionError(
                     "Stage A exceeded its allowed failed/pruned-trial count before "
                     f"reaching {n_trials_target} valid completed trials: "
-                    f"failed_or_pruned={failed_trials}, allowed={allowed_failures}."
+                    f"failed_or_pruned={_failed_trial_count(study)}, "
+                    f"allowed={allowed_failures}."
                 )
             study.optimize(
                 objective,
@@ -618,8 +694,9 @@ def run_stage_a_optuna_search(
         release_persistent_study_resources(study)
         raise
 
+
 def _stage_b_confirmation_path(config: PersistentStudyConfig) -> Path:
-    """Return a durable file for the Stage-B confirmation result."""
+    """Return the durable incremental Stage-B confirmation artifact path."""
     return config.database_path.with_suffix(".stage_b_confirmation.json")
 
 
@@ -638,13 +715,7 @@ def _top_completed_trials(study, top_k: int):
 
 
 def _resolved_parameters_from_trial(trial) -> dict[str, Any]:
-    """Return the actual pipeline configuration evaluated by one Optuna trial.
-
-    Conditional search spaces can contain suggestion-only control parameters. For
-    example, Extra Trees may expose a bootstrap-specific policy that resolves into a
-    final ``class_weight`` value. Stage-B confirmation must refit the evaluated
-    resolved configuration, not merely replay raw trial suggestion fields.
-    """
+    """Return the exact resolved pipeline configuration evaluated by one Optuna trial."""
     resolved = trial.user_attrs.get("resolved_parameters")
     if resolved is None:
         return dict(trial.params)
@@ -662,10 +733,10 @@ def _confirmation_fingerprint(
     stage_b_n_splits: int,
     stage_b_seed: int,
 ) -> str:
-    """Fingerprint the exact Stage-B candidates and split policy."""
+    """Fingerprint exact Stage-B candidates and split policy for safe incremental resume."""
     return _sha256_payload(
         {
-            "schema_version": "stage_b_confirmation_v1",
+            "schema_version": "stage_b_confirmation_v2",
             "task_fingerprint": config.task_fingerprint,
             "trial_numbers": [int(trial.number) for trial in top_trials],
             "trial_parameters": [
@@ -674,6 +745,47 @@ def _confirmation_fingerprint(
             "stage_b_n_splits": int(stage_b_n_splits),
             "stage_b_seed": int(stage_b_seed),
         }
+    )
+
+
+def _load_stage_b_records(
+    *,
+    confirmation_path: Path,
+    fingerprint: str,
+) -> list[dict[str, Any]]:
+    """Load compatible partial Stage-B records or return an empty fresh confirmation."""
+    if not confirmation_path.exists():
+        return []
+    persisted = json.loads(confirmation_path.read_text(encoding="utf-8"))
+    if persisted.get("fingerprint") != fingerprint:
+        raise StudyCompatibilityError(
+            "Existing Stage-B confirmation does not match the current top-trial or split "
+            "contract. Create a new run rather than overwriting it."
+        )
+    records = persisted.get("records", [])
+    if not isinstance(records, list):
+        raise StudyCompatibilityError("Existing Stage-B confirmation has invalid records.")
+    return [dict(record) for record in records]
+
+
+def _write_stage_b_records(
+    *,
+    confirmation_path: Path,
+    fingerprint: str,
+    records: Sequence[Mapping[str, Any]],
+    total_configurations: int,
+    complete: bool,
+) -> None:
+    """Atomically checkpoint Stage-B confirmation after each completed configuration."""
+    _atomic_json(
+        confirmation_path,
+        {
+            "schema_version": "stage_b_confirmation_v2",
+            "fingerprint": fingerprint,
+            "confirmation_total": int(total_configurations),
+            "complete": bool(complete),
+            "records": [dict(record) for record in records],
+        },
     )
 
 
@@ -691,18 +803,30 @@ def run_two_stage_optuna_search(
     stage_callback: Callable[[str, Mapping[str, Any]], None] | None = None,
     max_failed_trials: int | None = None,
 ) -> SearchResult:
-    """Run persistent Stage A and durable Stage-B confirmation safely across resumes."""
+    """Run durable Stage A and incrementally checkpointed Stage-B confirmation."""
     if confirmation_top_k < 1:
         raise ValueError("confirmation_top_k must be positive.")
 
-    def emit(stage: str, **details: Any) -> None:
-        if stage_callback is not None:
-            stage_callback(stage, dict(details))
+    def emit(stage: str, event_name: str, **details: Any) -> None:
+        if stage_callback is None:
+            return
+        payload = {"event_name": event_name}
+        payload.update(details)
+        try:
+            stage_callback(stage, payload)
+        except Exception:
+            return
 
-    def trial_update(details: Mapping[str, Any]) -> None:
-        emit("stage_a", **dict(details))
+    def stage_a_event(details: Mapping[str, Any]) -> None:
+        payload = dict(details)
+        event_name = str(payload.pop("event_name", "stage_a_updated"))
+        emit("stage_a", event_name, **payload)
 
-    emit("stage_a", target_completed_trials=int(n_trials_target))
+    emit(
+        "stage_a",
+        "stage_a_started",
+        target_completed_trials=int(n_trials_target),
+    )
     study = run_stage_a_optuna_search(
         config=config,
         X=X,
@@ -711,7 +835,7 @@ def run_two_stage_optuna_search(
         n_trials_target=n_trials_target,
         search_profile=search_profile,
         should_stop=should_stop,
-        on_trial_terminal=trial_update,
+        on_trial_event=stage_a_event,
         max_failed_trials=max_failed_trials,
     )
     try:
@@ -719,6 +843,7 @@ def run_two_stage_optuna_search(
             raise GracefulStopRequested(
                 "Clean stop requested after Stage-A completion and before Stage-B confirmation."
             )
+
         top_trials = _top_completed_trials(study, confirmation_top_k)
         stage_b_seed = int(getattr(stage_b_cv, "random_state", config.random_state))
         fingerprint = _confirmation_fingerprint(
@@ -728,78 +853,143 @@ def run_two_stage_optuna_search(
             stage_b_seed=stage_b_seed,
         )
         confirmation_path = _stage_b_confirmation_path(config)
+        records = _load_stage_b_records(
+            confirmation_path=confirmation_path,
+            fingerprint=fingerprint,
+        )
+        completed_trial_numbers = {
+            int(record["stage_a_trial_number"])
+            for record in records
+            if "stage_a_trial_number" in record
+        }
+        total_configurations = len(top_trials)
+        emit(
+            "stage_b",
+            "stage_b_started",
+            confirmation_completed=len(records),
+            confirmation_total=total_configurations,
+        )
 
-        if confirmation_path.exists():
-            persisted = json.loads(confirmation_path.read_text(encoding="utf-8"))
-            if persisted.get("fingerprint") != fingerprint:
-                raise StudyCompatibilityError(
-                    "Existing Stage-B confirmation does not match the current top-trial "
-                    "or split contract. Create a new run rather than overwriting it."
-                )
-            records = tuple(dict(record) for record in persisted["records"])
-        else:
-            records_list: list[dict[str, Any]] = []
-            for position, trial in enumerate(top_trials, start=1):
-                if should_stop is not None and should_stop():
-                    raise GracefulStopRequested(
-                        "Clean stop requested between Stage-B confirmation configurations."
-                    )
+        for position, trial in enumerate(top_trials, start=1):
+            if int(trial.number) in completed_trial_numbers:
                 emit(
                     "stage_b",
+                    "stage_b_configuration_reused",
                     confirmation_position=position,
-                    confirmation_total=len(top_trials),
+                    confirmation_completed=len(records),
+                    confirmation_total=total_configurations,
                     stage_a_trial_number=int(trial.number),
+                    current_trial_parameters=_resolved_parameters_from_trial(trial),
                 )
-                result = evaluate_candidate_cv(
-                    candidate_id=config.candidate_id,
-                    parameters=_resolved_parameters_from_trial(trial),
-                    X=X,
-                    y=y,
-                    cv=stage_b_cv,
-                    random_state=derive_seed(
-                        config.random_state,
-                        "stage_b",
-                        trial.number,
-                    ),
+                continue
+            if should_stop is not None and should_stop():
+                _write_stage_b_records(
+                    confirmation_path=confirmation_path,
+                    fingerprint=fingerprint,
+                    records=records,
+                    total_configurations=total_configurations,
+                    complete=False,
                 )
-                records_list.append(
-                    {
-                        "stage_a_trial_number": int(trial.number),
-                        "parameters": _resolved_parameters_from_trial(trial),
-                        "stage_a_average_precision": float(trial.value),
-                        "stage_b_average_precision": float(
-                            result["mean_average_precision"]
-                        ),
-                        "stage_b_std_average_precision": float(
-                            result["std_average_precision"]
-                        ),
-                        "stage_b_fold_average_precision": list(
-                            result["fold_average_precision"]
-                        ),
-                        "stage_b_warning_messages": list(result["warning_messages"]),
-                    }
+                raise GracefulStopRequested(
+                    "Clean stop requested between Stage-B confirmation configurations."
                 )
 
-            records_list.sort(
-                key=lambda record: (
-                    -float(record["stage_b_average_precision"]),
-                    -float(record["stage_a_average_precision"]),
-                    int(record["stage_a_trial_number"]),
-                )
+            parameters = _resolved_parameters_from_trial(trial)
+            emit(
+                "stage_b",
+                "stage_b_configuration_started",
+                confirmation_position=position,
+                confirmation_completed=len(records),
+                confirmation_total=total_configurations,
+                stage_a_trial_number=int(trial.number),
+                current_trial_parameters=parameters,
             )
-            _atomic_json(
-                confirmation_path,
-                {
-                    "fingerprint": fingerprint,
-                    "records": records_list,
-                },
-            )
-            records = tuple(records_list)
 
+            def stage_b_fold_event(event_name: str, details: Mapping[str, Any]) -> None:
+                emit(
+                    "stage_b",
+                    f"stage_b_{event_name}",
+                    confirmation_position=position,
+                    confirmation_completed=len(records),
+                    confirmation_total=total_configurations,
+                    stage_a_trial_number=int(trial.number),
+                    **dict(details),
+                )
+
+            result = evaluate_candidate_cv(
+                candidate_id=config.candidate_id,
+                parameters=parameters,
+                X=X,
+                y=y,
+                cv=stage_b_cv,
+                random_state=derive_seed(
+                    config.random_state,
+                    "stage_b",
+                    trial.number,
+                ),
+                on_fold_event=stage_b_fold_event,
+            )
+            record = {
+                "stage_a_trial_number": int(trial.number),
+                "parameters": parameters,
+                "stage_a_average_precision": float(trial.value),
+                "stage_b_average_precision": float(result["mean_average_precision"]),
+                "stage_b_std_average_precision": float(
+                    result["std_average_precision"]
+                ),
+                "stage_b_fold_average_precision": list(
+                    result["fold_average_precision"]
+                ),
+                "stage_b_warning_messages": list(result["warning_messages"]),
+            }
+            records.append(record)
+            completed_trial_numbers.add(int(trial.number))
+            _write_stage_b_records(
+                confirmation_path=confirmation_path,
+                fingerprint=fingerprint,
+                records=records,
+                total_configurations=total_configurations,
+                complete=len(records) == total_configurations,
+            )
+            emit(
+                "stage_b",
+                "stage_b_configuration_completed",
+                confirmation_position=position,
+                confirmation_completed=len(records),
+                confirmation_total=total_configurations,
+                stage_a_trial_number=int(trial.number),
+                last_trial_average_precision=float(result["mean_average_precision"]),
+            )
+
+        records.sort(
+            key=lambda record: (
+                -float(record["stage_b_average_precision"]),
+                -float(record["stage_a_average_precision"]),
+                int(record["stage_a_trial_number"]),
+            )
+        )
+        _write_stage_b_records(
+            confirmation_path=confirmation_path,
+            fingerprint=fingerprint,
+            records=records,
+            total_configurations=total_configurations,
+            complete=True,
+        )
         if not records:
             raise SearchExecutionError("Stage B produced no confirmation records.")
 
         selected = records[0]
+        emit(
+            "stage_b",
+            "stage_b_selected_configuration",
+            confirmation_completed=len(records),
+            confirmation_total=total_configurations,
+            selected_stage_a_trial_number=int(selected["stage_a_trial_number"]),
+            selected_parameters=dict(selected["parameters"]),
+            selected_stage_b_average_precision=float(
+                selected["stage_b_average_precision"]
+            ),
+        )
         return SearchResult(
             candidate_id=config.candidate_id,
             selected_parameters=dict(selected["parameters"]),
@@ -807,8 +997,8 @@ def run_two_stage_optuna_search(
                 selected["stage_b_average_precision"]
             ),
             stage_a_completed_trials=int(_completed_trial_count(study)),
-            stage_a_best_average_precision=float(study.best_value),
-            stage_b_records=records,
+            stage_a_best_average_precision=float(_best_completed_trial_value(study)),
+            stage_b_records=tuple(records),
             study_database_path=str(config.database_path),
             study_name=config.study_name,
         )

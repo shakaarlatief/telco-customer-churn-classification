@@ -198,13 +198,23 @@ def execute_registered_tasks(
 TaskEventCallback = Callable[[str, ExperimentTask | None, Mapping[str, Any]], None]
 
 
+_LOW_LEVEL_WORKER_EVENT_NAMES = frozenset(
+    {
+        "stage_a_fold_started",
+        "stage_a_fold_completed",
+        "stage_b_fold_started",
+        "stage_b_fold_completed",
+    }
+)
+
+
 def _emit_monitored_event(
     callback: TaskEventCallback | None,
     event_name: str,
     task: ExperimentTask | None,
     **details: Any,
 ) -> None:
-    """Emit a coordinator-side monitoring event without risking experiment progress."""
+    """Emit coordinator monitoring telemetry without risking experiment progress."""
     if callback is None:
         return
     try:
@@ -214,7 +224,7 @@ def _emit_monitored_event(
 
 
 def _terminate_monitored_worker_processes(executor: ProcessPoolExecutor) -> None:
-    """Best-effort emergency termination used only after a second Ctrl+C request."""
+    """Best-effort emergency termination used only after a deliberate second Ctrl+C."""
     processes = getattr(executor, "_processes", {})
     for process in processes.values():
         if process.is_alive():
@@ -248,8 +258,71 @@ def _refresh_monitored_progress_heartbeats(
         observed_mtimes[task.task_key] = mtime_ns
 
 
+def _drain_worker_event_logs(
+    *,
+    active_tasks: Mapping[Future, tuple[ExperimentTask, float]],
+    worker_event_directory: Path | None,
+    offsets: dict[str, int],
+    callback: TaskEventCallback | None,
+) -> None:
+    """Forward new worker-owned task events to the coordinator callback in order.
+
+    Each worker writes only its own task-local JSONL file. The coordinator tails those
+    files and remains the only process that writes the combined run-level event log.
+    """
+    if worker_event_directory is None:
+        return
+    for task, _ in active_tasks.values():
+        path = Path(worker_event_directory) / f"{task.task_key}.jsonl"
+        start_offset = offsets.get(task.task_key, 0)
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                handle.seek(start_offset)
+                lines = handle.readlines()
+                offsets[task.task_key] = handle.tell()
+        except FileNotFoundError:
+            continue
+        except OSError:
+            continue
+
+        for line in lines:
+            try:
+                import json
+
+                record = json.loads(line)
+            except Exception:
+                continue
+            if not isinstance(record, Mapping):
+                continue
+            worker_event_name = str(record.get("event", ""))
+            if worker_event_name in _LOW_LEVEL_WORKER_EVENT_NAMES:
+                continue
+            _emit_monitored_event(
+                callback,
+                "worker_event",
+                task,
+                worker_event=dict(record),
+            )
+
+
+def _initialise_worker_event_offset(
+    *,
+    worker_event_directory: Path | None,
+    task_key: str,
+    offsets: dict[str, int],
+) -> None:
+    """Start a new coordinator tail at the current end of a pre-existing task event log."""
+    if worker_event_directory is None:
+        return
+    path = Path(worker_event_directory) / f"{task_key}.jsonl"
+    try:
+        offsets[task_key] = path.stat().st_size
+    except FileNotFoundError:
+        offsets[task_key] = 0
+
+
 def _configure_monitored_worker() -> None:
-    """Configure a spawned worker and reserve Ctrl+C handling for the coordinator."""
+    """Configure a spawned worker and reserve Ctrl+C signal handling for its coordinator."""
     configure_worker_threads(worker_threads=1)
     try:
         signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -268,26 +341,28 @@ def execute_monitored_registered_tasks(
     event_callback: TaskEventCallback | None = None,
     stop_control_run_directory: Path | None = None,
     progress_directory: Path | None = None,
+    worker_event_directory: Path | None = None,
     poll_interval_seconds: float = 1.0,
     terminal_update_interval_seconds: float = 60.0,
 ) -> dict[str, int]:
-    """Execute tasks with live monitoring and clean interruption semantics.
+    """Execute outer tasks with truthful task state, monitoring, and clean pause support.
 
-    This monitored scheduler claims a task only when it is actually submitted to an
-    available worker. A ``running`` record therefore means active execution rather than
-    a queued future. The legacy scheduler remains available for historical smoke tests;
-    long-running pilots and later master runs should use this monitored variant.
+    A task becomes ``running`` only when it has been submitted to an available worker.
+    Worker progress sidecars provide live stage and fold telemetry. Worker task logs retain
+    meaningful task, trial, confirmation, warning, and terminal events, while the
+    coordinator alone persists durable task-state transitions and combined event history.
     """
     if max_workers < 1:
         raise ValueError("max_workers must be at least one.")
     if stop_after_completed is not None and stop_after_completed < 1:
-        raise ValueError("stop_after_completed must be positive when provided.")
+        raise ValueError("stop_after_completed must be positive.")
     if poll_interval_seconds <= 0:
         raise ValueError("poll_interval_seconds must be positive.")
     if terminal_update_interval_seconds <= 0:
         raise ValueError("terminal_update_interval_seconds must be positive.")
 
     task_list = list(tasks)
+    total_tasks = len(task_list)
     store.register_tasks(task_list)
     summary = {
         "submitted": 0,
@@ -300,7 +375,7 @@ def execute_monitored_registered_tasks(
 
     if max_workers == 1:
         configure_worker_threads(worker_threads=1)
-        for task in task_list:
+        for task_position, task in enumerate(task_list, start=1):
             record = store.get_task(task.task_key)
             if record.status == TASK_COMPLETED:
                 summary["skipped"] += 1
@@ -311,7 +386,15 @@ def execute_monitored_registered_tasks(
 
             summary["submitted"] += 1
             started = time.perf_counter()
-            _emit_monitored_event(event_callback, "task_started", task, active_tasks=1)
+            _emit_monitored_event(
+                event_callback,
+                "task_started",
+                task,
+                active_tasks=1,
+                worker_capacity=1,
+                task_position=task_position,
+                task_total=total_tasks,
+            )
             try:
                 result = worker(task)
                 store.complete_task(task.task_key, result)
@@ -322,12 +405,22 @@ def execute_monitored_registered_tasks(
                     task,
                     elapsed_seconds=time.perf_counter() - started,
                     completed=summary["completed"],
+                    task_position=task_position,
+                    task_total=total_tasks,
                 )
             except GracefulStopRequested as exc:
                 store.interrupt_task(task.task_key, str(exc))
                 summary["interrupted"] += 1
                 summary["paused"] = 1
-                _emit_monitored_event(event_callback, "task_interrupted", task, reason=str(exc))
+                _emit_monitored_event(
+                    event_callback,
+                    "task_interrupted",
+                    task,
+                    elapsed_seconds=time.perf_counter() - started,
+                    reason=str(exc),
+                    task_position=task_position,
+                    task_total=total_tasks,
+                )
                 break
             except KeyboardInterrupt:
                 store.interrupt_task(
@@ -341,7 +434,13 @@ def execute_monitored_registered_tasks(
                         stop_control_run_directory,
                         reason="User requested a serial clean pause with Ctrl+C.",
                     )
-                _emit_monitored_event(event_callback, "graceful_stop_requested", task)
+                _emit_monitored_event(
+                    event_callback,
+                    "graceful_stop_requested",
+                    task,
+                    active_tasks=1,
+                    message="No new task will be submitted. The active task was interrupted.",
+                )
                 break
             except BaseException:
                 store.fail_task(task.task_key, traceback.format_exc())
@@ -351,27 +450,39 @@ def execute_monitored_registered_tasks(
                     "task_failed",
                     task,
                     elapsed_seconds=time.perf_counter() - started,
+                    task_position=task_position,
+                    task_total=total_tasks,
                 )
 
             if stop_after_completed is not None and summary["completed"] >= stop_after_completed:
                 summary["paused"] = 1
-                _emit_monitored_event(event_callback, "intentional_pause", task)
+                _emit_monitored_event(
+                    event_callback,
+                    "intentional_pause",
+                    task,
+                    completed=summary["completed"],
+                    task_total=total_tasks,
+                )
                 break
         return summary
 
-    task_iterator = iter(task_list)
-    active: dict[Future, tuple[ExperimentTask, float]] = {}
+    task_iterator = iter(enumerate(task_list, start=1))
+    active: dict[Future, tuple[ExperimentTask, float, int]] = {}
     observed_progress_mtimes: dict[str, int] = {}
+    worker_event_offsets: dict[str, int] = {}
     stop_requested = False
     iterator_exhausted = False
     last_terminal_update = time.perf_counter()
-    executor = ProcessPoolExecutor(max_workers=max_workers, initializer=_configure_monitored_worker)
+    executor = ProcessPoolExecutor(
+        max_workers=max_workers,
+        initializer=_configure_monitored_worker,
+    )
 
     def submit_available_tasks() -> None:
         nonlocal iterator_exhausted
         while not stop_requested and not iterator_exhausted and len(active) < max_workers:
             try:
-                task = next(task_iterator)
+                task_position, task = next(task_iterator)
             except StopIteration:
                 iterator_exhausted = True
                 return
@@ -382,8 +493,13 @@ def execute_monitored_registered_tasks(
             if not store.claim_task(task.task_key, retry_failed=retry_failed):
                 summary["skipped"] += 1
                 continue
+            _initialise_worker_event_offset(
+                worker_event_directory=worker_event_directory,
+                task_key=task.task_key,
+                offsets=worker_event_offsets,
+            )
             future = executor.submit(_run_worker, task, worker)
-            active[future] = (task, time.perf_counter())
+            active[future] = (task, time.perf_counter(), task_position)
             summary["submitted"] += 1
             _emit_monitored_event(
                 event_callback,
@@ -391,6 +507,8 @@ def execute_monitored_registered_tasks(
                 task,
                 active_tasks=len(active),
                 worker_capacity=max_workers,
+                task_position=task_position,
+                task_total=total_tasks,
             )
 
     try:
@@ -416,10 +534,11 @@ def execute_monitored_registered_tasks(
                         "graceful_stop_requested",
                         None,
                         active_tasks=len(active),
+                        worker_capacity=max_workers,
                         message=(
-                            "No new outer tasks will start. Active tasks will stop at their "
-                            "next safe persistent boundary. Press Ctrl+C again only for an "
-                            "emergency hard stop."
+                            "No new outer tasks will start. Active tasks will stop at "
+                            "their next durable boundary. Press Ctrl+C again only for "
+                            "an emergency hard stop."
                         ),
                     )
                     continue
@@ -429,14 +548,24 @@ def execute_monitored_registered_tasks(
                     "hard_stop_requested",
                     None,
                     active_tasks=len(active),
+                    worker_capacity=max_workers,
+                    message="Emergency second Ctrl+C requested worker termination.",
                 )
-                for future, (task, _) in active.items():
+                for future, (task, _, task_position) in active.items():
                     future.cancel()
                     store.interrupt_task(
                         task.task_key,
                         "Emergency second Ctrl+C terminated the active worker process.",
                     )
                     summary["interrupted"] += 1
+                    _emit_monitored_event(
+                        event_callback,
+                        "task_interrupted",
+                        task,
+                        reason="Emergency second Ctrl+C terminated the active worker process.",
+                        task_position=task_position,
+                        task_total=total_tasks,
+                    )
                 _terminate_monitored_worker_processes(executor)
                 executor.shutdown(wait=False, cancel_futures=True)
                 active.clear()
@@ -445,9 +574,21 @@ def execute_monitored_registered_tasks(
 
             _refresh_monitored_progress_heartbeats(
                 store=store,
-                active_tasks=active,
+                active_tasks={
+                    future: (task, started)
+                    for future, (task, started, _) in active.items()
+                },
                 progress_directory=progress_directory,
                 observed_mtimes=observed_progress_mtimes,
+            )
+            _drain_worker_event_logs(
+                active_tasks={
+                    future: (task, started)
+                    for future, (task, started, _) in active.items()
+                },
+                worker_event_directory=worker_event_directory,
+                offsets=worker_event_offsets,
+                callback=event_callback,
             )
 
             now = time.perf_counter()
@@ -456,17 +597,25 @@ def execute_monitored_registered_tasks(
                     event_callback,
                     "active_snapshot",
                     None,
-                    active_task_keys=[task.task_key for task, _ in active.values()],
+                    active_task_keys=[task.task_key for task, _, _ in active.values()],
                     elapsed_seconds={
                         task.task_key: now - started
-                        for task, started in active.values()
+                        for task, started, _ in active.values()
                     },
+                    active_tasks=len(active),
+                    worker_capacity=max_workers,
                 )
                 last_terminal_update = now
 
             for future in completed_futures:
-                task, started = active.pop(future)
+                task, started, task_position = active.pop(future)
                 elapsed_seconds = time.perf_counter() - started
+                _drain_worker_event_logs(
+                    active_tasks={future: (task, started)},
+                    worker_event_directory=worker_event_directory,
+                    offsets=worker_event_offsets,
+                    callback=event_callback,
+                )
                 try:
                     result = future.result()
                     store.complete_task(task.task_key, result)
@@ -477,6 +626,8 @@ def execute_monitored_registered_tasks(
                         task,
                         elapsed_seconds=elapsed_seconds,
                         completed=summary["completed"],
+                        task_position=task_position,
+                        task_total=total_tasks,
                     )
                 except GracefulStopRequested as exc:
                     store.interrupt_task(task.task_key, str(exc))
@@ -489,6 +640,8 @@ def execute_monitored_registered_tasks(
                         task,
                         elapsed_seconds=elapsed_seconds,
                         reason=str(exc),
+                        task_position=task_position,
+                        task_total=total_tasks,
                     )
                 except BaseException:
                     store.fail_task(task.task_key, traceback.format_exc())
@@ -498,6 +651,8 @@ def execute_monitored_registered_tasks(
                         "task_failed",
                         task,
                         elapsed_seconds=elapsed_seconds,
+                        task_position=task_position,
+                        task_total=total_tasks,
                     )
 
             if not stop_requested:
@@ -506,7 +661,7 @@ def execute_monitored_registered_tasks(
         return summary
     finally:
         if active:
-            for _, (task, _) in active.items():
+            for _, (task, _, _) in active.items():
                 try:
                     store.interrupt_task(
                         task.task_key,

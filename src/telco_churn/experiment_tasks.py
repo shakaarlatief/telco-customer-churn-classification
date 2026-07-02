@@ -254,13 +254,82 @@ def run_nested_hpo_outer_task(task: ExperimentTask) -> Mapping[str, Any]:
         def stage_callback(stage: str, details: Mapping[str, Any]) -> None:
             if reporter is None:
                 return
-            label = "Stage-A persistent Optuna exploration." if stage == "stage_a" else "Stage-B confirmation."
-            reporter.update(stage=stage, message=label, **dict(details))
+            payload = dict(details)
+            event_name = str(payload.pop("event_name", f"{stage}_updated"))
+            messages = {
+                "stage_a_started": "Starting persistent Stage-A Optuna exploration.",
+                "stage_a_trial_started": "Stage A started a new candidate configuration.",
+                "stage_a_fold_started": "Stage A is fitting an inner cross-validation fold.",
+                "stage_a_fold_completed": "Stage A completed an inner cross-validation fold.",
+                "stage_a_trial_terminal": "Stage A completed a persistent trial.",
+                "stage_b_started": "Starting Stage-B confirmation of leading configurations.",
+                "stage_b_configuration_started": "Stage B started confirming one configuration.",
+                "stage_b_fold_started": "Stage B is fitting an inner cross-validation fold.",
+                "stage_b_fold_completed": "Stage B completed an inner cross-validation fold.",
+                "stage_b_configuration_completed": "Stage B completed one configuration confirmation.",
+                "stage_b_selected_configuration": "Stage B selected the confirmed configuration.",
+            }
+            if event_name in {"stage_a_started", "stage_a_trial_started"}:
+                # Partial fold metrics belong to exactly one active configuration. Clearing
+                # them before a new Stage-A configuration prevents a prior trial's partial
+                # AP from being displayed while the new trial has not completed a fold yet.
+                payload.update(
+                    {
+                        "partial_mean_average_precision": None,
+                        "fold_average_precision": None,
+                        "completed_inner_folds": 0,
+                        "inner_fold_index": None,
+                        "inner_fold_total": None,
+                    }
+                )
+            elif event_name in {"stage_b_started", "stage_b_configuration_started"}:
+                payload.update(
+                    {
+                        "partial_mean_average_precision": None,
+                        "fold_average_precision": None,
+                        "completed_inner_folds": 0,
+                        "inner_fold_index": None,
+                        "inner_fold_total": None,
+                    }
+                )
+            elif event_name == "stage_b_selected_configuration":
+                # Confirmation is now complete. Clear the last exploratory configuration
+                # so outer fitting can display only the durable Stage-B-selected parameters.
+                payload.update(
+                    {
+                        "current_trial_parameters": None,
+                        "current_trial_number": None,
+                        "partial_mean_average_precision": None,
+                        "fold_average_precision": None,
+                        "completed_inner_folds": 0,
+                        "inner_fold_index": None,
+                        "inner_fold_total": None,
+                    }
+                )
+
+            message = messages.get(event_name, f"{stage.replace('_', ' ').title()} updated.")
+            if event_name in {
+                "stage_a_fold_started",
+                "stage_a_fold_completed",
+                "stage_b_fold_started",
+                "stage_b_fold_completed",
+            }:
+                # Fold events update the atomic sidecar for the live dashboard only. They
+                # intentionally do not become append-only task or coordinator log entries.
+                reporter.update(stage=stage, message=message, **payload)
+            else:
+                reporter.update(
+                    stage=stage,
+                    message=message,
+                    event_name=event_name,
+                    **payload,
+                )
 
         if reporter is not None:
             reporter.update(
                 stage="stage_a",
                 message="Starting persistent Stage-A Optuna exploration.",
+                event_name="stage_a_search_started",
                 target_completed_trials=stage_a_n_trials,
                 confirmation_top_k=confirmation_top_k,
             )
@@ -286,7 +355,9 @@ def run_nested_hpo_outer_task(task: ExperimentTask) -> Mapping[str, Any]:
         if reporter is not None:
             reporter.update(
                 stage="outer_fit",
-                message="Fitting the selected configuration on the outer-training partition.",
+                message="Fitting the Stage-B-selected configuration on the outer-training partition.",
+                event_name="outer_fit_started",
+                selected_parameters=dict(search_result.selected_parameters),
             )
         final_seed = derive_seed(task_seed, "outer_final_fit")
         estimator = build_candidate_pipeline(
@@ -309,6 +380,8 @@ def run_nested_hpo_outer_task(task: ExperimentTask) -> Mapping[str, Any]:
             reporter.update(
                 stage="outer_prediction",
                 message="Scoring the untouched outer-validation partition.",
+                event_name="outer_prediction_started",
+                selected_parameters=dict(search_result.selected_parameters),
             )
         prediction_started = time.perf_counter()
         y_score, observed_score_kind = extract_continuous_scores(fitted, X_outer_validation)
@@ -372,6 +445,8 @@ def run_nested_hpo_outer_task(task: ExperimentTask) -> Mapping[str, Any]:
             reporter.close(
                 final_stage="completed",
                 message="Outer task completed and is returning its result to the coordinator.",
+                selected_parameters=dict(search_result.selected_parameters),
+                outer_average_precision=float(metrics["average_precision"]),
             )
         return result
     except GracefulStopRequested as exc:
