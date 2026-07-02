@@ -34,11 +34,11 @@ have passed their independent training-only smoke test.
 from __future__ import annotations
 
 from collections import Counter
-from typing import Final, Literal, Sequence
+from typing import Final, Literal, Mapping, Sequence
 
 import numpy as np
 import pandas as pd
-from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.base import BaseEstimator, ClassifierMixin, TransformerMixin, clone
 from sklearn.utils.validation import check_is_fitted
 
 from telco_churn.feature_policies import (
@@ -96,6 +96,48 @@ def is_resampling_policy(policy_id: str) -> bool:
     }
 
 
+def normalize_imbalance_parameters(
+    policy_id: str,
+    parameters: Mapping[str, object] | None,
+) -> dict[str, object]:
+    """Validate and normalize conditional parameters for one imbalance policy.
+
+    Persistent HPO stores a candidate configuration as one flat JSON-compatible
+    dictionary. This helper makes every imbalance-policy branch explicit and rejects
+    parameters that do not belong to the selected branch. That prevents an apparently
+    valid resume from silently ignoring, for example, an SMOTENC neighbour count on a
+    random-under-sampling configuration.
+    """
+    policy_id = validate_imbalance_policy_id(policy_id)
+    result = dict(parameters or {})
+
+    if policy_id in {IMBALANCE_NONE, IMBALANCE_CLASS_WEIGHT_BALANCED}:
+        if result:
+            raise ImbalancePolicyError(
+                f"{policy_id} must not receive imbalance-specific parameters."
+            )
+        return {}
+
+    if policy_id in {IMBALANCE_RANDOM_OVERSAMPLING, IMBALANCE_RANDOM_UNDERSAMPLING}:
+        required = {"imbalance_sampling_strategy"}
+    elif policy_id == IMBALANCE_SMOTENC:
+        required = {
+            "imbalance_sampling_strategy",
+            "imbalance_smotenc_k_neighbors",
+        }
+    else:
+        raise RuntimeError(f"Unexpected validated imbalance policy {policy_id!r}.")
+
+    unexpected = sorted(set(result).difference(required))
+    missing = sorted(required.difference(result))
+    if unexpected or missing:
+        raise ImbalancePolicyError(
+            f"{policy_id} has unexpected parameters {unexpected!r} or missing "
+            f"parameters {missing!r}."
+        )
+    return result
+
+
 def _binary_class_counts(y: Sequence[int] | pd.Series | np.ndarray) -> dict[int, int]:
     """Validate a binary target and return deterministic class counts."""
     values = np.asarray(y)
@@ -135,6 +177,69 @@ def balanced_class_weight_mapping(
         0: total / (2.0 * float(counts[0])),
         1: total / (2.0 * float(counts[1])),
     }
+
+
+class BalancedSampleWeightClassifier(ClassifierMixin, BaseEstimator):
+    """Apply fold-local balanced class weighting through ``sample_weight``.
+
+    Estimator libraries use different constructor names for class weighting and some
+    estimators expose weighting only through ``fit(sample_weight=...)``. This adapter
+    implements one consistent I1 mechanism: it derives
+    :math:`n / (2 n_c)` from the active fitting target, clones the wrapped classifier,
+    and passes the resulting per-row weights into fitting. No validation or held-out rows
+    participate in this calculation.
+
+    Optional score methods are delegated only after fitting. Consequently, a wrapped
+    margin-only estimator remains margin-only, while a probabilistic estimator continues
+    to expose ``predict_proba``.
+    """
+
+    def __init__(self, *, estimator) -> None:
+        self.estimator = estimator
+
+    def fit(self, X, y):
+        """Fit a cloned classifier with balanced weights from this target vector."""
+        weights_by_class = balanced_class_weight_mapping(y)
+        target = np.asarray(y)
+        sample_weight = np.asarray(
+            [weights_by_class[int(value)] for value in target],
+            dtype=float,
+        )
+        fitted_estimator = clone(self.estimator)
+        try:
+            fitted_estimator.fit(X, y, sample_weight=sample_weight)
+        except TypeError as exc:
+            raise ImbalancePolicyError(
+                "I1_CLASS_WEIGHT_BALANCED requires a classifier whose fit method "
+                "accepts sample_weight."
+            ) from exc
+
+        classes = getattr(fitted_estimator, "classes_", None)
+        if classes is None:
+            raise ImbalancePolicyError(
+                "A class-weighted binary classifier must expose classes_ after fitting."
+            )
+        self.estimator_ = fitted_estimator
+        self.classes_ = np.asarray(classes)
+        self.class_counts_ = _binary_class_counts(y)
+        self.class_weight_mapping_ = dict(weights_by_class)
+        self.sample_weight_ = sample_weight
+        return self
+
+    def predict(self, X):
+        """Predict labels using the fitted wrapped classifier."""
+        check_is_fitted(self, "estimator_")
+        return self.estimator_.predict(X)
+
+    def __getattr__(self, name: str):
+        """Delegate optional fitted-estimator methods without changing score semantics."""
+        if name.startswith("_"):
+            raise AttributeError(name)
+        try:
+            fitted_estimator = object.__getattribute__(self, "estimator_")
+        except AttributeError as exc:
+            raise AttributeError(name) from exc
+        return getattr(fitted_estimator, name)
 
 
 def _validate_sampling_strategy(value: object, *, policy_id: str) -> float:

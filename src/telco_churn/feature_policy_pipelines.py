@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import Final, Literal, Mapping
 
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, ClassifierMixin, TransformerMixin
@@ -40,6 +41,20 @@ from telco_churn.feature_policies import (
     feature_policy_categorical_features,
     feature_policy_numeric_features,
     validate_feature_policy_id,
+)
+from telco_churn.imbalance_policies import (
+    BalancedSampleWeightClassifier,
+    FeaturePolicySamplerImputer,
+    IMBALANCE_CLASS_WEIGHT_BALANCED,
+    IMBALANCE_NONE,
+    IMBALANCE_RANDOM_OVERSAMPLING,
+    IMBALANCE_RANDOM_UNDERSAMPLING,
+    IMBALANCE_SMOTENC,
+    ImbalancePolicyId,
+    make_random_resampler,
+    make_smotenc_resampler,
+    normalize_imbalance_parameters,
+    validate_imbalance_policy_id,
 )
 
 
@@ -240,7 +255,12 @@ class CloneSafeFeaturePolicyCatBoostClassifier(ClassifierMixin, BaseEstimator):
         self.random_state = random_state
         self.thread_count = thread_count
 
-    def fit(self, X: pd.DataFrame, y: pd.Series | np.ndarray):
+    def fit(
+        self,
+        X: pd.DataFrame,
+        y: pd.Series | np.ndarray,
+        sample_weight=None,
+    ):
         """Fit CatBoost with policy-specific categorical feature names."""
         try:
             from catboost import CatBoostClassifier
@@ -261,7 +281,10 @@ class CloneSafeFeaturePolicyCatBoostClassifier(ClassifierMixin, BaseEstimator):
             allow_writing_files=False,
             thread_count=int(self.thread_count),
         )
-        self.model_.fit(X, y, cat_features=list(self.categorical_features))
+        fit_kwargs = {"cat_features": list(self.categorical_features)}
+        if sample_weight is not None:
+            fit_kwargs["sample_weight"] = np.asarray(sample_weight, dtype=float)
+        self.model_.fit(X, y, **fit_kwargs)
         self.classes_ = np.asarray(self.model_.classes_)
         return self
 
@@ -354,3 +377,96 @@ def make_feature_policy_classifier_pipeline(
             ("classifier", classifier),
         ]
     )
+
+
+def apply_imbalance_policy_to_pipeline(
+    pipeline: Pipeline,
+    *,
+    imbalance_policy: ImbalancePolicyId = IMBALANCE_NONE,
+    imbalance_parameters: Mapping[str, object] | None = None,
+    random_state: int = 42,
+):
+    """Return a fitted-path-safe pipeline with one declared imbalance policy.
+
+    ``I0_NONE`` preserves the original scikit-learn pipeline. ``I1`` wraps only the
+    final classifier, so fold-local balanced weights are computed at fitting time. ``I2``
+    and ``I3`` use an imbalanced-learn pipeline where row duplication or removal occurs
+    after fold-local representation preprocessing and only during ``fit``. ``I4`` uses
+    the mixed-data route before one-hot encoding and is intentionally restricted to
+    ``F0_RAW``: synthesizing F1/F2 derived columns independently could violate their
+    deterministic within-row relationships.
+    """
+    imbalance_policy = validate_imbalance_policy_id(imbalance_policy)
+    parameters = normalize_imbalance_parameters(imbalance_policy, imbalance_parameters)
+
+    required_steps = ("feature_policy", "preprocessor", "feature_selection", "classifier")
+    missing_steps = [name for name in required_steps if name not in pipeline.named_steps]
+    if missing_steps:
+        raise FeaturePolicyPipelineError(
+            "Imbalance routing requires the standard feature-policy pipeline steps; "
+            f"missing {missing_steps!r}."
+        )
+
+    feature_policy_transformer = pipeline.named_steps["feature_policy"]
+    policy_id = validate_feature_policy_id(feature_policy_transformer.policy_id)
+    preprocessor = pipeline.named_steps["preprocessor"]
+    feature_selection = pipeline.named_steps["feature_selection"]
+    classifier = pipeline.named_steps["classifier"]
+
+    if imbalance_policy == IMBALANCE_NONE:
+        return pipeline
+
+    if imbalance_policy == IMBALANCE_CLASS_WEIGHT_BALANCED:
+        return Pipeline(
+            steps=[
+                ("feature_policy", feature_policy_transformer),
+                ("preprocessor", preprocessor),
+                ("feature_selection", feature_selection),
+                ("classifier", BalancedSampleWeightClassifier(estimator=classifier)),
+            ]
+        )
+
+    if imbalance_policy in {
+        IMBALANCE_RANDOM_OVERSAMPLING,
+        IMBALANCE_RANDOM_UNDERSAMPLING,
+    }:
+        sampler = make_random_resampler(
+            imbalance_policy,
+            sampling_strategy=parameters["imbalance_sampling_strategy"],
+            random_state=int(random_state),
+        )
+        return ImblearnPipeline(
+            steps=[
+                ("feature_policy", feature_policy_transformer),
+                ("preprocessor", preprocessor),
+                ("sampler", sampler),
+                ("feature_selection", feature_selection),
+                ("classifier", classifier),
+            ]
+        )
+
+    if imbalance_policy == IMBALANCE_SMOTENC:
+        if policy_id != FEATURE_POLICY_RAW:
+            raise FeaturePolicyPipelineError(
+                "I4_SMOTENC is initially compatible only with F0_RAW so that derived "
+                "feature values are never synthesized independently of their inputs."
+            )
+        sampler = make_smotenc_resampler(
+            n_numeric_features=len(feature_policy_numeric_features(policy_id)),
+            n_categorical_features=len(feature_policy_categorical_features(policy_id)),
+            sampling_strategy=parameters["imbalance_sampling_strategy"],
+            k_neighbors=parameters["imbalance_smotenc_k_neighbors"],
+            random_state=int(random_state),
+        )
+        return ImblearnPipeline(
+            steps=[
+                ("feature_policy", feature_policy_transformer),
+                ("sampler_imputer", FeaturePolicySamplerImputer(policy_id=policy_id)),
+                ("sampler", sampler),
+                ("preprocessor", preprocessor),
+                ("feature_selection", feature_selection),
+                ("classifier", classifier),
+            ]
+        )
+
+    raise RuntimeError(f"Unexpected validated imbalance policy {imbalance_policy!r}.")
