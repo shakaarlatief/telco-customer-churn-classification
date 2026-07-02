@@ -8,10 +8,11 @@ The project has two linked goals:
 
 ```text
 1. Build a professional, portfolio-ready churn-classification project.
-2. Preserve reusable knowledge of classification modelling, evaluation, and implementation.
+2. Preserve reusable knowledge of classification modelling, evaluation, implementation,
+   and statistically responsible final selection.
 ```
 
-The project deliberately studies more than one strong model. A model family remains valuable even when it is not the strongest observed candidate, because it teaches a distinct modelling principle, preprocessing requirement, loss function, geometry, or error tradeoff.
+The project deliberately studies more than one strong model. A model family remains valuable even when it is not the strongest observed candidate, because it teaches a distinct modelling principle, preprocessing requirement, loss function, geometry, or error trade-off.
 
 This roadmap is strategic rather than tactical. For immediate work, use:
 
@@ -29,15 +30,13 @@ docs/knowledge_notes/context_history/
 
 ```text
 Clean modelling dataset: 7043 observations
-Training set:            5634 observations
+Development training set: 5634 observations
 Held-out test set:       1409 observations
 Positive class:          Churn_binary = 1
-Training churn rate:     approximately 26.54%
+Development churn rate:  approximately 26.54%
 ```
 
-The test set remains untouched until one final end-to-end modelling procedure is frozen.
-
-All current model-family results are training-only, development-stage estimates. They support understanding, tuning, and candidate shortlisting. They do not establish final test performance or prove that small metric differences represent genuine population-level superiority.
+The held-out test set remains untouched until one final end-to-end procedure is frozen. All current model-family and candidate-comparison evidence is development-stage evidence. It supports understanding, tuning, shortlisting, and procedure design. It does not establish final test performance or prove that small metric differences represent genuine population-level superiority.
 
 ## Completed project foundations
 
@@ -72,13 +71,15 @@ the strict single-final-test-model policy
 The labels below refer to repository workflow and notebook identifiers, not LaTeX report section numbers.
 
 ```text
-Workflow 05:
-    notebook and knowledge-note identifier 05
-
 Workflow 11:
     support-vector-machine workflow identifier 11
-    integrated as Section 12 in the LaTeX report because the report also contains
-    earlier data-audit, EDA, and methodology sections
+
+Workflow 12:
+    multilayer-perceptron workflow identifier 12
+
+LaTeX report:
+    these workflows appear later because the report contains data-audit, EDA, and
+    methodology sections before the model-family sequence.
 ```
 
 This distinction prevents the documentation roadmap from implying that workflow numbers and report section numbers must match.
@@ -110,7 +111,8 @@ Observed development-stage position:
 
 ```text
 L1 and L2 logistic regression are essentially tied.
-The representative L2 logistic model has PR-AUC about 0.658 and ROC-AUC about 0.846.
+The representative L2 logistic model has pooled OOF average precision about 0.658
+and pooled OOF ROC-AUC about 0.846.
 ```
 
 ### Workflow 06: k-nearest neighbours
@@ -136,7 +138,7 @@ Observed development-stage position:
 
 ```text
 The selected kNN model uses k = 101, uniform weighting, and Manhattan distance.
-Its PR-AUC is about 0.628 and its ROC-AUC is about 0.836.
+Its pooled OOF average precision is about 0.628 and its pooled OOF ROC-AUC is about 0.836.
 ```
 
 ### Workflow 07: Naive Bayes
@@ -161,7 +163,8 @@ introduce a probabilistic generative perspective for mixed tabular data
 Observed development-stage position:
 
 ```text
-The selected HybridGaussianBernoulliNB has PR-AUC about 0.615 and ROC-AUC about 0.822.
+The selected HybridGaussianBernoulliNB has pooled OOF average precision about 0.615
+and pooled OOF ROC-AUC about 0.822.
 The hybrid likelihood is more coherent than treating one-hot categorical indicators as Gaussian.
 ```
 
@@ -184,13 +187,14 @@ Project role:
 
 ```text
 first nonlinear rule-based model
-foundation for all later tree ensembles
+foundation for later tree ensembles
 ```
 
 Observed development-stage position:
 
 ```text
-The selected pre-pruned tree has PR-AUC about 0.628 and ROC-AUC about 0.824.
+The selected pre-pruned tree has pooled OOF average precision about 0.628
+and pooled OOF ROC-AUC about 0.824.
 The unrestricted tree overfits strongly, which demonstrates why tree regularization is necessary.
 ```
 
@@ -218,15 +222,15 @@ Observed development-stage position:
 
 ```text
 Selected bagged trees:
-    pooled OOF PR-AUC about 0.662
+    pooled OOF average precision about 0.662
     pooled OOF ROC-AUC about 0.846
 
 Selected random forest:
-    pooled OOF PR-AUC about 0.660
+    pooled OOF average precision about 0.660
     pooled OOF ROC-AUC about 0.847
 ```
 
-The relevant conclusion is that both ensembles materially improve on the single tree. Their close differences do not establish that one is meaningfully superior.
+Both ensembles materially improve on the single tree. Their close difference does not establish that one is meaningfully superior.
 
 ### Workflow 10: Boosting
 
@@ -253,7 +257,8 @@ Observed development-stage position:
 
 ```text
 CatBoost, GradientBoostingClassifier, and XGBoost form a very close leading group.
-The representative XGBoost pooled OOF diagnostic has PR-AUC about 0.670 and ROC-AUC about 0.850.
+The representative XGBoost pooled OOF diagnostic has average precision about 0.670
+and ROC-AUC about 0.850.
 ```
 
 The top boosting point estimates are too close to support a conclusion that one boosting library is definitively best.
@@ -289,26 +294,22 @@ Selected LinearSVC:
     squared hinge
     C = 0.1
     balanced class weights
-    mean fold PR-AUC about 0.6594
-    mean fold ROC-AUC about 0.8453
+    mean-fold average precision about 0.6594
+    mean-fold ROC-AUC about 0.8453
 
 Selected RBF SVC:
     C = 10
     gamma = 0.001
     balanced class weights
-    mean fold PR-AUC about 0.6595
-    mean fold ROC-AUC about 0.8424
+    mean-fold average precision about 0.6595
+    mean-fold ROC-AUC about 0.8424
 ```
 
-The selected linear and RBF candidates are effectively tied within the tried grid. The RBF point estimate is only about 0.0001 higher in mean fold PR-AUC and does not justify a nonlinear-advantage claim. The linear SVM is retained as the representative SVM diagnostic model because it is faster, interpretable, and stronger on the pooled OOF diagnostic.
-
-## Remaining model-family roadmap
+The selected linear and RBF candidates are effectively tied within the tried grid. The RBF point estimate is only about 0.0001 higher in mean-fold average precision and does not justify a nonlinear-advantage claim. The linear SVM remains the representative SVM diagnostic because it is faster, interpretable, and stronger on pooled out-of-fold evidence.
 
 ### Workflow 12: Multilayer perceptrons and feed-forward neural networks
 
-This is the immediate next model-family workflow. Its eventual LaTeX report section number will be determined by the report structure rather than assumed from the workflow identifier.
-
-Core topics:
+Core ideas:
 
 ```text
 perceptrons and affine transformations
@@ -318,51 +319,166 @@ sigmoid output for binary classification
 binary cross-entropy
 backpropagation
 gradient descent, mini-batches, and adaptive optimization
-learning rate, batch size, epochs, and early stopping
-weight decay, dropout, and capacity control
+learning rate, batch size, epochs, regularization, and early stopping
 scaling and one-hot encoded tabular inputs
-validation behaviour, calibration, and thresholds
+validation behaviour, calibration, and threshold behaviour
 ```
 
-The MLP workflow should compare shallow and moderately deep tabular neural-network candidates while maintaining training-only preprocessing and cross-validation discipline. The purpose is not to assume that neural networks will beat boosted trees. It is to understand whether learned nonlinear representations add useful predictive signal for this relatively small mixed tabular dataset.
-
-## Cross-cutting modelling topics before final evaluation
-
-The project has already introduced several cross-cutting issues, including preprocessing, imbalance, thresholds, and calibration. Before final test evaluation, the remaining serious candidates may require targeted, training-only work on the following topics where justified:
+Project role:
 
 ```text
-feature engineering and transformations
-feature selection or ablation
-class weighting versus resampling
-probability calibration
-threshold policy
-business-value or cost-sensitive evaluation
-repeated cross-validation
-nested cross-validation
-paired comparisons and uncertainty analysis
+test whether a feed-forward neural network can extract useful nonlinear evidence from
+scaled one-hot Telco data without assuming that it should outperform tree boosting
 ```
 
-These should not be applied indiscriminately to every model family. They should be introduced when they answer a specific modelling question and must remain inside the training-only development process.
+Observed development-stage position:
+
+```text
+The representative MLP has pooled OOF average precision about 0.654.
+```
+
+The MLP is a legitimate finalist family but does not establish a material advantage over the leading boosted, bagged, regularized-linear, or SVM procedures from historical workflow evidence alone.
+
+## Core candidate library and final-comparison infrastructure
+
+The individual educational workflows now transition into a systematic final-selection stage. The implemented core registry contains 17 candidate families from the documented C01-C23 universe:
+
+```text
+C01  Ridge classifier
+C02  Regularized logistic regression
+C06  k-nearest neighbours
+C07  Hybrid Gaussian-Bernoulli Naive Bayes
+C08  Decision tree
+C09  Extra Trees
+C10  Bagging
+C11  Random forest
+C13  AdaBoost
+C15  GradientBoostingClassifier
+C16  HistGradientBoostingClassifier
+C17  XGBoost
+C18  LightGBM
+C19  CatBoost
+C21  Linear SVM
+C22  RBF SVM
+C23  Dense multilayer perceptron
+```
+
+The registry compares complete procedures, not bare estimator names. A procedure includes its feature policy, preprocessing representation, feature-selection policy where compatible, imbalance treatment, model hyperparameters, and random-state contract.
+
+The reusable infrastructure now provides:
+
+```text
+deterministic repeated outer splits
+persistent Optuna studies and trial continuation
+Stage-A exploration and Stage-B confirmation
+SQLite task coordination and atomic result artifacts
+resume-safety fingerprints for protocol, data, environment, and candidate procedure
+single-threaded native estimators inside process-level outer parallelism
+training-only smoke tests for every major reusable component
+```
+
+## Cross-cutting modelling policies before final evaluation
+
+### Feature policies
+
+```text
+F0_RAW:
+    raw cleaned predictor table
+
+F1_DOMAIN_ENRICHED:
+    target-free service aggregates, tenure summaries, selected interactions, and one
+    categorical contract-by-payment interaction
+
+F2_LINEAR_EXPANDED:
+    controlled nonlinear and interaction basis available only to ridge and logistic
+    regression procedures
+```
+
+F2 requires a final protocol review before the master run. The final feature contract must not duplicate semantic constructs and must justify any interaction involving `TotalCharges`, which is a cumulative quantity related to tenure and monthly charges.
+
+### Feature selection
+
+```text
+S0_NONE:
+    no selection
+
+S1_VARIANCE_MUTUAL_INFO:
+    variance filtering plus mutual-information SelectKBest
+
+S2_L1_LOGISTIC_SELECT_FROM_MODEL:
+    embedded L1-logistic feature selection
+```
+
+Feature selection remains limited to candidate families for which it has a coherent modelling role. It is not presumed beneficial for trees, boosted trees, or native-categorical procedures.
+
+### Imbalance treatment
+
+```text
+I0_NONE:
+    observed training-fold class distribution
+
+I1_CLASS_WEIGHT_BALANCED:
+    fold-local balanced sample weighting
+
+I2_RANDOM_OVERSAMPLING:
+    fit-time-only random oversampling after representation preprocessing
+
+I3_RANDOM_UNDERSAMPLING:
+    fit-time-only random undersampling after representation preprocessing
+
+I4_SMOTENC:
+    raw-only mixed-data synthetic oversampling before one-hot encoding
+```
+
+The policies are mutually exclusive. The registry records compatibility explicitly, and all sampling occurs only during fitting inside the relevant inner or outer training partition.
 
 ## Final training-only selection roadmap
-
-After the remaining model-family work, the project should transition from educational family workflows to a dedicated finalist-selection stage.
 
 The intended sequence is:
 
 ```text
-1. Define a limited set of serious finalists.
-2. Freeze comparable candidate procedures, including preprocessing and hyperparameters.
-3. Compare candidates with training-only evidence.
-4. Use stronger stability or uncertainty methods when they add decision value.
-5. Decide whether calibration is needed for the intended decision use.
-6. Define and freeze a threshold policy from retention economics, contact capacity,
-   and false-positive versus false-negative costs.
-7. Select one final end-to-end pipeline.
-8. Fit the frozen pipeline on the complete training set.
-9. Evaluate once on the untouched test set.
-10. Report final metrics and uncertainty intervals where feasible.
+1. Resolve the final F2 feature-policy review and freeze all candidate contracts.
+2. Run a realistic persistent-run pilot and inspect artifacts, runtimes, resume behavior,
+   warnings, and failures.
+3. Freeze the master comparison revision.
+4. Run the 5 outer-fold x 10-repeat nested-CV comparison using average precision as the
+   primary ranking metric.
+5. Analyze outer-fold stability, paired differences, practical equivalence, runtime, and
+   selected-configuration stability.
+6. Define a defensible finalist set using training-only evidence.
+7. Compare calibration only when probability outputs are operationally relevant.
+8. Perform cross-fitted threshold, capacity, cost, and intervention-volume analysis.
+9. Consider stacking only after constituent procedures and out-of-fold evidence are frozen.
+10. Select one final procedure or justified stack.
+11. Rerun the frozen search on all 5,634 development rows and fit the complete pipeline.
+12. Evaluate once on the untouched test set and report final metrics with uncertainty where
+    feasible.
 ```
+
+The master comparison should use:
+
+```text
+5 outer folds x 10 repeats
+Stage A: 3-fold persistent Optuna exploration
+Stage B: 5-fold confirmation of the strongest Stage-A configurations
+primary metric: average precision
+```
+
+## Advanced-candidate admission rule
+
+The documented candidate universe also contains advanced procedures such as balanced ensembles, explainable boosting, TabNet, FT-Transformer, TabM, TabPFN, and an AutoML benchmark. They are not admitted automatically merely to enlarge the model list.
+
+A later advanced candidate may enter only after it passes:
+
+```text
+installation and licensing check
+reproducible fit-and-predict smoke test
+fold-safe preprocessing smoke test
+checkpoint and resume smoke test
+CPU or GPU resource scheduling smoke test
+```
+
+A failure must be recorded as a technical exclusion rather than silently ignored.
 
 ## Model-selection language
 
@@ -387,14 +503,15 @@ final performance
 
 ## Deliberately deferred work
 
-The following are not current modelling-workflow tasks:
+The following remain prohibited or deferred until the correct stage:
 
 ```text
 using the test set to compare candidates
 using the test set to choose a threshold
 using the test set to decide whether calibration is useful
 claiming a final production model before the finalist-selection stage
-treating close cross-validation point estimates as proof of superiority
+using close historical cross-validation point estimates as proof of superiority
+adding advanced model families without the documented admission checks
 ```
 
 ## Documentation convention
