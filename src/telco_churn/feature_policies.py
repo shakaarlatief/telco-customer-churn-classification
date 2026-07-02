@@ -13,10 +13,11 @@ target-free feature policies that operate on the cleaned raw modelling table:
     interpretation is clear before model fitting.
 
 ``F2_LINEAR_EXPANDED``
-    A larger but still bounded systematic expansion intended only for regularized
-    linear procedures. It contains the structural F1 features, quadratic numeric
-    terms, pairwise numeric products, and numeric-by-nonreference-category products.
-    It intentionally does not create every categorical-by-categorical cross-product.
+    A pruned, bounded expansion intended only for regularized linear procedures. It
+    contains the structural F1 features, one nonduplicative numeric square, one
+    tenure-by-monthly-charge product, and numeric-by-nonreference-category products
+    only for tenure and MonthlyCharges. It intentionally excludes structurally
+    redundant terms and higher-order TotalCharges expansions.
 
 The transformer learns only training-partition imputation values needed to construct
 features when a raw input contains missing values. It never uses target values. When it
@@ -133,15 +134,38 @@ def _slugify(value: str) -> str:
 
 
 F2_QUADRATIC_NUMERIC_FEATURES: Final[tuple[str, ...]] = (
-    "f2_tenure_squared",
     "f2_monthlycharges_squared",
-    "f2_totalcharges_squared",
 )
 
 F2_NUMERIC_PRODUCT_FEATURES: Final[tuple[str, ...]] = (
     "f2_tenure_x_monthlycharges",
-    "f2_tenure_x_totalcharges",
-    "f2_monthlycharges_x_totalcharges",
+)
+
+F2_NUMERIC_BY_CATEGORY_BASE_FEATURES: Final[tuple[str, ...]] = (
+    "tenure",
+    "MonthlyCharges",
+)
+
+# These category levels encode support states determined exactly by another raw
+# categorical feature. Their numeric interactions would be exact linear combinations
+# of a numeric main effect and retained category interactions:
+#
+# * ``MultipleLines = No phone service`` is equivalent to ``PhoneService = No``;
+# * every ``<internet-dependent service> = No internet service`` is equivalent to
+#   ``InternetService = No``.
+#
+# The latter state is already represented by the numeric main effect together with the
+# retained ``InternetService = DSL`` and ``InternetService = Fiber optic`` interactions.
+F2_EXCLUDED_NUMERIC_BY_CATEGORY_LEVELS: Final[frozenset[tuple[str, str]]] = frozenset(
+    {
+        ("MultipleLines", "No phone service"),
+        ("OnlineSecurity", "No internet service"),
+        ("OnlineBackup", "No internet service"),
+        ("DeviceProtection", "No internet service"),
+        ("TechSupport", "No internet service"),
+        ("StreamingTV", "No internet service"),
+        ("StreamingMovies", "No internet service"),
+    }
 )
 
 F2_NUMERIC_BY_CATEGORY_FEATURE_SPECS: Final[
@@ -153,10 +177,11 @@ F2_NUMERIC_BY_CATEGORY_FEATURE_SPECS: Final[
         level,
         f"f2_{numeric_feature.lower()}_x_{categorical_feature.lower()}_{_slugify(level)}",
     )
-    for numeric_feature in NUMERIC_FEATURES
+    for numeric_feature in F2_NUMERIC_BY_CATEGORY_BASE_FEATURES
     for categorical_feature in CATEGORICAL_FEATURES
     # The first declared level is the reference level and is intentionally omitted.
     for level in CATEGORICAL_LEVELS_BY_FEATURE[categorical_feature][1:]
+    if (categorical_feature, level) not in F2_EXCLUDED_NUMERIC_BY_CATEGORY_LEVELS
 )
 
 F2_NUMERIC_BY_CATEGORY_FEATURES: Final[tuple[str, ...]] = tuple(
@@ -435,18 +460,13 @@ class FeaturePolicyTransformer(BaseEstimator, TransformerMixin):
         numeric: pd.DataFrame,
         categorical: pd.DataFrame,
     ) -> dict[str, pd.Series]:
-        """Create the bounded systematic expansion for regularized linear procedures."""
+        """Create the pruned regularized-linear expansion for F2."""
         tenure = numeric["tenure"].clip(lower=0.0)
         monthly_charges = numeric["MonthlyCharges"]
-        total_charges = numeric["TotalCharges"]
 
         features: dict[str, pd.Series] = {
-            "f2_tenure_squared": tenure.pow(2),
             "f2_monthlycharges_squared": monthly_charges.pow(2),
-            "f2_totalcharges_squared": total_charges.pow(2),
             "f2_tenure_x_monthlycharges": tenure * monthly_charges,
-            "f2_tenure_x_totalcharges": tenure * total_charges,
-            "f2_monthlycharges_x_totalcharges": monthly_charges * total_charges,
         }
 
         for numeric_feature, categorical_feature, level, feature_name in (

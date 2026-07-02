@@ -125,12 +125,10 @@ def _assert_controlled_f1_values(transformed: pd.DataFrame) -> None:
 
 
 def _assert_controlled_f2_values(transformed: pd.DataFrame) -> None:
-    """Verify representative quadratic and numeric-by-category F2 interactions."""
+    """Verify retained quadratic and numeric-by-category F2 interactions."""
     values = transformed.iloc[0]
     expected = {
-        "f2_tenure_squared": 0.0,
         "f2_monthlycharges_squared": 10_000.0,
-        "f2_totalcharges_squared": 0.0,
         "f2_tenure_x_monthlycharges": 0.0,
         "f2_monthlycharges_x_contract_month_to_month": 100.0,
         "f2_monthlycharges_x_contract_two_year": 0.0,
@@ -145,6 +143,53 @@ def _assert_controlled_f2_values(transformed: pd.DataFrame) -> None:
                 f"Controlled F2 value for {column!r} should equal {expected_value}, "
                 f"observed {values[column]!r}."
             )
+
+
+def _assert_pruned_f2_contract(transformed: pd.DataFrame) -> None:
+    """Verify that F2 preserves its target-free, nonredundant frozen schema."""
+    if len(F2_ADDITIONAL_NUMERIC_FEATURES) != 42:
+        raise AssertionError(
+            "The frozen F2 contract should contain exactly 42 additional numeric features, "
+            f"observed {len(F2_ADDITIONAL_NUMERIC_FEATURES)}."
+        )
+    if len(feature_policy_output_features(FEATURE_POLICY_LINEAR_EXPANDED)) != 69:
+        raise AssertionError("The frozen F2 policy should contain exactly 69 columns.")
+
+    forbidden_exact = {
+        "f2_tenure_squared",
+        "f2_totalcharges_squared",
+        "f2_tenure_x_totalcharges",
+        "f2_monthlycharges_x_totalcharges",
+    }
+    forbidden_fragments = (
+        "_x_multiplelines_no_phone_service",
+        "_x_onlinesecurity_no_internet_service",
+        "_x_onlinebackup_no_internet_service",
+        "_x_deviceprotection_no_internet_service",
+        "_x_techsupport_no_internet_service",
+        "_x_streamingtv_no_internet_service",
+        "_x_streamingmovies_no_internet_service",
+    )
+    forbidden_columns = [
+        column
+        for column in F2_ADDITIONAL_NUMERIC_FEATURES
+        if column in forbidden_exact
+        or column.startswith("f2_totalcharges_x_")
+        or any(fragment in column for fragment in forbidden_fragments)
+    ]
+    if forbidden_columns:
+        raise AssertionError(
+            "F2 retains excluded redundant terms: "
+            f"{sorted(forbidden_columns)!r}."
+        )
+
+    numeric_frame = transformed.select_dtypes(include=[np.number]).astype(float)
+    duplicated_columns = numeric_frame.columns[numeric_frame.T.duplicated()].tolist()
+    if duplicated_columns:
+        raise AssertionError(
+            "F2 contains exact duplicate numeric output columns: "
+            f"{duplicated_columns!r}."
+        )
 
 
 def main() -> None:
@@ -207,6 +252,7 @@ def main() -> None:
         transformed_by_policy[FEATURE_POLICY_LINEAR_EXPANDED].columns
     ):
         raise AssertionError("F2 is missing declared systematic linear-expansion features.")
+    _assert_pruned_f2_contract(transformed_by_policy[FEATURE_POLICY_LINEAR_EXPANDED])
 
     controlled_row = _make_controlled_row(X_train)
     f1_transformer = make_feature_policy_transformer(policy_id=FEATURE_POLICY_DOMAIN).fit(X_train)

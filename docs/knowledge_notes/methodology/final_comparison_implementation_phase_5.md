@@ -31,11 +31,14 @@ F2_LINEAR_EXPANDED
     Ridge classifier and regularized logistic regression only.
 ```
 
-F2 is deliberately restricted. It contains systematic numeric squares, numeric
-products, and numeric-by-category interactions. Ridge and logistic regression require
-explicit basis terms to represent such effects. For logistic regression, L1 and
-elastic-net regularization may remove or jointly shrink a large expansion; Ridge
-retains all terms but can shrink correlated coefficients.
+F2 is deliberately restricted. Its pruned basis retains the F1 structural terms,
+MonthlyCharges squared, tenure × MonthlyCharges, and selected tenure- or
+MonthlyCharges-by-category interactions. It retains raw TotalCharges as a main feature
+but excludes every higher-order TotalCharges term because cumulative charges are almost
+determined by tenure × MonthlyCharges in the development data. Ridge and logistic
+regression require explicit basis terms to represent such effects. For logistic
+regression, L1 and elastic-net regularization may remove or jointly shrink related
+terms; Ridge retains all terms but can shrink correlated coefficients.
 
 The other families are not denied nonlinear information. Trees, forests, boosting,
 CatBoost, LightGBM, RBF SVMs, and MLPs have their own mechanisms for nonlinear or
