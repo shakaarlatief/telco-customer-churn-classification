@@ -29,7 +29,10 @@ from telco_churn.experiment_progress import (  # noqa: E402
     TaskProgressReporter,
     clear_graceful_stop_request,
     collect_run_status,
+    format_human_event_line,
+    format_terminal_event_line,
     progress_path,
+    render_event_log,
     render_run_status,
     request_graceful_stop,
     task_event_jsonl_path,
@@ -207,6 +210,21 @@ def _assert_reporter_heartbeat_and_events(store: ExperimentStore) -> None:
         inner_fold_total=2,
         partial_mean_average_precision=0.5,
     )
+    active_payload = json.loads(reporter.path.read_text(encoding="utf-8"))
+    active_details = active_payload.get("details", {})
+    if not active_details.get("current_trial_started_at"):
+        raise AssertionError("Active Stage-A trial did not expose a current-trial start timestamp.")
+    reporter.update(
+        stage="stage_a",
+        message="Direct trial completed.",
+        event_name="stage_a_trial_terminal",
+        current_trial_number=1,
+        target_completed_trials=2,
+        completed_trials=1,
+        trial_state="complete",
+        last_trial_average_precision=0.5,
+        best_stage_a_average_precision=0.5,
+    )
     reporter.close(final_stage="completed", message="Direct heartbeat fixture completed.")
     if first["updated_at"] == second["updated_at"]:
         raise AssertionError("Progress reporter did not refresh its periodic sidecar heartbeat.")
@@ -216,6 +234,18 @@ def _assert_reporter_heartbeat_and_events(store: ExperimentStore) -> None:
         raise AssertionError("Task reporter did not persist the detailed trial-start event.")
     if any(event["event"] == "stage_a_fold_completed" for event in events):
         raise AssertionError("Fold telemetry must remain in the live sidecar, not the durable task log.")
+    terminal = next((event for event in events if event["event"] == "stage_a_trial_terminal"), None)
+    if terminal is None:
+        raise AssertionError("Task reporter did not persist the Stage-A completion event.")
+    duration = terminal.get("details", {}).get("trial_duration_seconds")
+    if duration is None or float(duration) < 0.0:
+        raise AssertionError("Stage-A completion did not include a non-negative trial duration.")
+    final_payload = json.loads(reporter.path.read_text(encoding="utf-8"))
+    final_details = final_payload.get("details", {})
+    if final_details.get("current_trial_started_at") is not None:
+        raise AssertionError("Completed Stage-A trial retained a stale current-trial start timestamp.")
+    if final_details.get("current_trial_parameters") is not None:
+        raise AssertionError("Completed Stage-A trial retained stale current parameters.")
 
 
 def _assert_serial_pause_and_resume(store: ExperimentStore, tasks: list[ExperimentTask]) -> None:
@@ -290,6 +320,9 @@ def _assert_parallel_event_forwarding(store: ExperimentStore, tasks: list[Experi
         raise AssertionError(f"Parallel monitored scheduler did not complete all tasks: {summary}")
     if "stage_a_trial_started" not in observed_events:
         raise AssertionError("Coordinator did not forward worker trial events during parallel work.")
+    suppressed = {"task_worker_started", "task_completed", "task_interrupted", "task_failed"}
+    if suppressed.intersection(observed_events):
+        raise AssertionError("Coordinator forwarded duplicate worker lifecycle events.")
     if any(record.status != TASK_COMPLETED for record in store.list_tasks()):
         raise AssertionError("Parallel monitored tasks were not all completed.")
     store.validate_completed_artifacts()
@@ -395,8 +428,42 @@ def _assert_read_only_dashboard_and_run_log(store: ExperimentStore) -> None:
         raise AssertionError("Completed invocation lifecycle metadata was not rendered.")
     if not (store.run_directory / "logs" / "coordinator.log").exists():
         raise AssertionError("Human-readable coordinator event log is missing.")
-    if not (store.run_directory / "logs" / "coordinator_events.jsonl").exists():
+    jsonl_path = store.run_directory / "logs" / "coordinator_events.jsonl"
+    if not jsonl_path.exists():
         raise AssertionError("Structured coordinator event log is missing.")
+    raw_first_line = jsonl_path.read_text(encoding="utf-8").splitlines()[0]
+    if not raw_first_line.startswith('{"occurred_at_local":'):
+        raise AssertionError("Structured coordinator records do not begin with local timestamp fields.")
+    coordinator_log = (store.run_directory / "logs" / "coordinator.log").read_text(encoding="utf-8")
+    if "West-Europa" in coordinator_log or "zomertijd" in coordinator_log:
+        raise AssertionError("Human-readable coordinator log retained an unnecessary timezone name.")
+    sample_record = {
+        "occurred_at_local": "2026-07-03 09:10:11",
+        "event": "stage_a_trial_terminal",
+        "candidate_id": "C19_CATBOOST",
+        "outer_repeat_index": 0,
+        "outer_fold_index": 1,
+        "details": {
+            "current_trial_number": 4,
+            "trial_state": "complete",
+            "last_trial_average_precision": 0.6123,
+            "best_stage_a_average_precision": 0.6234,
+            "completed_trials": 4,
+            "target_completed_trials": 12,
+            "trial_duration_seconds": 85.0,
+        },
+    }
+    human_line = format_human_event_line(sample_record)
+    terminal_line = format_terminal_event_line(sample_record, color=True)
+    if "trial 4 completed" not in human_line or "duration=1m 25s" not in human_line:
+        raise AssertionError("Human event formatting did not render clean trial completion timing.")
+    if "Stage A completed a persistent trial" in human_line:
+        raise AssertionError("Human event formatting retained duplicated terminal wording.")
+    if "\033[" not in terminal_line:
+        raise AssertionError("Terminal event formatting did not emit ANSI color sequences.")
+    rendered_events = render_event_log(store.run_directory, limit=3, color=False)
+    if "RUN" not in rendered_events:
+        raise AssertionError("Color-capable event-log view did not render coordinator events.")
 
 def main() -> None:
     """Run all disposable monitoring and event-log integration checks."""

@@ -200,6 +200,11 @@ TaskEventCallback = Callable[[str, ExperimentTask | None, Mapping[str, Any]], No
 
 _LOW_LEVEL_WORKER_EVENT_NAMES = frozenset(
     {
+        "task_worker_started",
+        "task_completed",
+        "task_interrupted",
+        "task_failed",
+        "stage_a_started",
         "stage_a_fold_started",
         "stage_a_fold_completed",
         "stage_b_fold_started",

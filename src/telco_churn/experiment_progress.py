@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 import json
 import os
+import re
 from pathlib import Path
 import socket
 import sqlite3
@@ -33,8 +34,9 @@ class GracefulStopRequested(RuntimeError):
     """Signal that a worker observed a clean pause request at a durable boundary."""
 
 
-_LOW_LEVEL_FOLD_EVENT_NAMES = frozenset(
+_NON_DURABLE_TASK_EVENT_NAMES = frozenset(
     {
+        "stage_a_started",
         "stage_a_fold_started",
         "stage_a_fold_completed",
         "stage_b_fold_started",
@@ -43,16 +45,14 @@ _LOW_LEVEL_FOLD_EVENT_NAMES = frozenset(
 )
 
 
-def is_low_level_fold_event(event_name: str | None) -> bool:
-    """Return whether an event is live fold telemetry rather than a durable audit event.
+def is_non_durable_task_event(event_name: str | None) -> bool:
+    """Return whether a telemetry event should update only the live progress sidecar.
 
-    Fold boundaries are useful in the active dashboard because they show that a lengthy
-    cross-validation trial remains alive and how much of the current trial is complete.
-    They are intentionally not retained in the append-only task or coordinator logs:
-    a master comparison would otherwise produce many low-value log records that repeat
-    information already preserved in the current progress sidecar.
+    Inner-fold boundaries are frequent liveness telemetry. ``stage_a_started`` is also
+    suppressed because the outer task already emits the clearer ``stage_a_search_started``
+    event immediately before it. Persisting both would create duplicate start messages.
     """
-    return str(event_name) in _LOW_LEVEL_FOLD_EVENT_NAMES
+    return str(event_name) in _NON_DURABLE_TASK_EVENT_NAMES
 
 
 def _utc_now() -> str:
@@ -61,10 +61,13 @@ def _utc_now() -> str:
 
 
 def _local_timestamp() -> str:
-    """Return a concise timezone-aware local timestamp for human-readable event logs."""
-    timestamp = datetime.now().astimezone()
-    zone = timestamp.tzname() or timestamp.strftime("%z")
-    return f"{timestamp:%Y-%m-%d %H:%M:%S} {zone}"
+    """Return the local date and clock time used by compact human-facing logs.
+
+    The durable UTC timestamp stored beside this field retains the explicit offset needed
+    for unambiguous machine auditability. Repeating a local-zone name on every human log
+    line adds visual noise without helping a single-machine operational monitor.
+    """
+    return datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
@@ -103,10 +106,14 @@ def _append_text_line(path: Path, line: str) -> None:
 
 
 def _append_jsonl(path: Path, payload: Mapping[str, Any]) -> None:
-    """Append one structured event record to an append-only JSON Lines artifact."""
+    """Append one structured record while preserving deliberate field order.
+
+    JSON object order is not semantic, but retaining insertion order makes direct manual
+    inspection practical: each coordinator event starts with its local and UTC timestamps.
+    """
     _append_text_line(
         path,
-        json.dumps(dict(payload), ensure_ascii=False, sort_keys=True, default=str),
+        json.dumps(dict(payload), ensure_ascii=False, sort_keys=False, default=str),
     )
 
 
@@ -259,52 +266,283 @@ def format_parameter_summary(
     return ", ".join(rendered)
 
 
-def _make_human_event_line(record: Mapping[str, Any]) -> str:
-    """Render a concise timestamped event line from one structured event record."""
-    timestamp = str(record.get("occurred_at_local") or _local_timestamp())
-    event = str(record.get("event") or "event").upper().replace("_", " ")
-    task_key = record.get("task_key")
-    stage = record.get("stage")
-    fragments = [f"[{timestamp}]", event]
-    if task_key:
-        fragments.append(str(task_key))
-    if stage:
-        fragments.append(f"stage={stage}")
-    message = record.get("message")
-    if message:
-        fragments.append(str(message))
+def _record_details(record: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Return the event-detail mapping or an empty mapping."""
     details = record.get("details")
-    if isinstance(details, Mapping):
-        if "parameters" in details and isinstance(details["parameters"], Mapping):
-            fragments.append(
-                "parameters="
-                + format_parameter_summary(details["parameters"], max_items=5)
-            )
-        display_names = {
-            "current_trial_number": "optuna_trial_id",
-            "target_completed_trials": "valid_target",
-        }
-        for key in (
-            "task_position",
-            "task_total",
-            "completed_trials",
-            "target_completed_trials",
-            "current_trial_number",
-            "partial_mean_average_precision",
-            "last_trial_average_precision",
-            "best_stage_a_average_precision",
-            "confirmation_position",
-            "confirmation_total",
-            "elapsed_seconds",
-        ):
-            if key in details and details[key] is not None:
-                value = details[key]
-                if key == "elapsed_seconds":
-                    value = format_duration(float(value))
-                elif "precision" in key:
-                    value = f"{float(value):.4f}"
-                fragments.append(f"{display_names.get(key, key)}={value}")
+    return details if isinstance(details, Mapping) else {}
+
+
+def _compact_candidate_label(record: Mapping[str, Any]) -> str | None:
+    """Render one compact candidate and outer-split label for human-facing output."""
+    candidate_id = record.get("candidate_id")
+    repeat_index = record.get("outer_repeat_index")
+    fold_index = record.get("outer_fold_index")
+    if candidate_id is None:
+        return None
+    candidate = str(candidate_id)
+    code, separator, family = candidate.partition("_")
+    family_label = {
+        "CATBOOST": "CatBoost",
+        "LIGHTGBM": "LightGBM",
+        "XGBOOST": "XGBoost",
+        "MULTILAYER_PERCEPTRON": "MLP",
+        "RBF_SVM": "RBF SVM",
+        "LINEAR_SVM": "Linear SVM",
+        "HYBRID_NAIVE_BAYES": "Hybrid NB",
+        "KNN": "kNN",
+        "HIST_GRADIENT_BOOSTING": "HistGradientBoosting",
+        "GRADIENT_BOOSTING": "Gradient Boosting",
+        "EXTRA_TREES": "Extra Trees",
+        "RANDOM_FOREST": "Random Forest",
+        "DECISION_TREE": "Decision Tree",
+        "LOGISTIC_REGRESSION": "Logistic Regression",
+        "RIDGE_CLASSIFIER": "Ridge Classifier",
+    }.get(family, family.replace("_", " ").title()) if separator else candidate
+    label = f"{code} {family_label}" if separator else family_label
+    try:
+        return f"{label} r{int(repeat_index):02d}/f{int(fold_index):02d}"
+    except (TypeError, ValueError):
+        return label
+
+
+def _metric(value: Any) -> str | None:
+    """Format one optional average-precision value defensively."""
+    if value is None:
+        return None
+    try:
+        return f"{float(value):.4f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _event_components(record: Mapping[str, Any]) -> tuple[str, str, str | None, list[str]]:
+    """Return category, summary, task label, and compact extras for one event."""
+    event = str(record.get("event") or "event")
+    details = _record_details(record)
+    task_label = _compact_candidate_label(record)
+    category = "EVENT"
+    summary = str(record.get("message") or event.replace("_", " ").title())
+    extras: list[str] = []
+
+    completed = details.get("completed_trials")
+    target = details.get("target_completed_trials")
+    valid = (
+        f"valid={completed}/{target}"
+        if completed is not None and target is not None
+        else None
+    )
+    confirmation_completed = details.get("confirmation_completed")
+    confirmation_total = details.get("confirmation_total")
+    confirmations = (
+        f"configs={confirmation_completed}/{confirmation_total}"
+        if confirmation_completed is not None and confirmation_total is not None
+        else None
+    )
+    duration = details.get("trial_duration_seconds")
+    if duration is None:
+        duration = details.get("configuration_duration_seconds")
+    if duration is None and event in {"task_completed", "task_interrupted", "task_failed"}:
+        duration = details.get("elapsed_seconds")
+
+    if event == "stage_a_trial_started":
+        category, summary = "STAGE A", f"trial {details.get('current_trial_number', '?')} started"
+        if valid:
+            extras.append(valid)
+    elif event == "stage_a_trial_terminal":
+        state = str(details.get("trial_state") or "completed").lower()
+        trial_id = details.get("current_trial_number", "?")
+        verb = "completed" if state == "complete" else state
+        category, summary = "STAGE A", f"trial {trial_id} {verb}"
+        ap = _metric(details.get("last_trial_average_precision"))
+        best = _metric(details.get("best_stage_a_average_precision"))
+        if ap is not None:
+            extras.append(f"AP={ap}")
+        if best is not None:
+            extras.append(f"best={best}")
+        if valid:
+            extras.append(valid)
+    elif event == "stage_a_search_started":
+        category, summary = "STAGE A", "search started"
+        if target is not None:
+            extras.append(f"valid target={target}")
+    elif event == "stage_b_started":
+        category, summary = "STAGE B", "confirmation started"
+        if confirmations:
+            extras.append(confirmations)
+    elif event == "stage_b_configuration_started":
+        category = "STAGE B"
+        position = details.get("confirmation_position", "?")
+        total = details.get("confirmation_total", "?")
+        from_trial = details.get("stage_a_trial_number")
+        summary = f"config {position}/{total} started"
+        if from_trial is not None:
+            extras.append(f"from Stage-A trial {from_trial}")
+    elif event == "stage_b_configuration_completed":
+        category = "STAGE B"
+        position = details.get("confirmation_position", "?")
+        total = details.get("confirmation_total", "?")
+        summary = f"config {position}/{total} completed"
+        ap = _metric(details.get("last_trial_average_precision"))
+        if ap is not None:
+            extras.append(f"AP={ap}")
+        if confirmations:
+            extras.append(confirmations)
+    elif event == "stage_b_selected_configuration":
+        category = "STAGE B"
+        selected = details.get("selected_stage_a_trial_number")
+        summary = "selected confirmed configuration"
+        if selected is not None:
+            extras.append(f"from Stage-A trial {selected}")
+        ap = _metric(details.get("selected_stage_b_average_precision"))
+        if ap is not None:
+            extras.append(f"AP={ap}")
+    elif event == "outer_fit_started":
+        category, summary = "OUTER FIT", "selected configuration fit started"
+    elif event == "outer_prediction_started":
+        category, summary = "OUTER PREDICT", "outer-validation scoring started"
+    elif event == "task_worker_started":
+        category, summary = "START", "worker started"
+    elif event == "task_completed":
+        category, summary = "DONE", "outer task completed"
+        ap = _metric(details.get("outer_average_precision"))
+        if ap is not None:
+            extras.append(f"outer AP={ap}")
+    elif event == "task_interrupted":
+        category, summary = "PAUSED", "outer task interrupted at a durable boundary"
+        reason = details.get("reason") or record.get("message")
+        if reason:
+            extras.append(str(reason))
+    elif event == "task_failed":
+        category, summary = "FAILED", "outer task failed"
+    elif event == "task_started":
+        category, summary = "START", "outer task started"
+        position, total = details.get("task_position"), details.get("task_total")
+        if position is not None and total is not None:
+            extras.append(f"task={position}/{total}")
+    elif event in {"run_started", "run_resumed"}:
+        category = "RUN"
+        summary = "run started" if event == "run_started" else "run resumed"
+        workers = details.get("worker_capacity")
+        if workers is not None:
+            extras.append(f"workers={workers}")
+    elif event == "run_paused":
+        category, summary = "RUN", "run paused cleanly"
+    elif event == "run_completed":
+        category, summary = "RUN", "run completed"
+    elif event == "run_failed":
+        category, summary = "RUN", "run finished with failures"
+    elif event == "graceful_stop_requested":
+        category, summary = "CONTROL", "clean pause requested"
+    elif event == "active_snapshot":
+        category, summary = "STATUS", "active-worker snapshot"
+        active = details.get("active_tasks")
+        capacity = details.get("worker_capacity")
+        if active is not None and capacity is not None:
+            extras.append(f"active={active}/{capacity}")
+
+    if duration is not None:
+        try:
+            extras.append(f"duration={format_duration(float(duration))}")
+        except (TypeError, ValueError):
+            pass
+    return category, summary, task_label, extras
+
+
+def format_human_event_line(record: Mapping[str, Any]) -> str:
+    """Render a compact durable log line without terminal-control sequences."""
+    timestamp = str(record.get("occurred_at_local") or _local_timestamp())
+    category, summary, task_label, extras = _event_components(record)
+    fragments = [f"[{timestamp}]", category]
+    if task_label:
+        fragments.append(task_label)
+    fragments.append(summary)
+    fragments.extend(extras)
     return " | ".join(fragments)
+
+
+_ANSI_RESET = "\033[0m"
+_ANSI_DIM = "\033[2m"
+_ANSI_BOLD = "\033[1m"
+_ANSI_CYAN = "\033[36m"
+_ANSI_GREEN = "\033[32m"
+_ANSI_YELLOW = "\033[33m"
+_ANSI_RED = "\033[31m"
+
+
+def _paint(text: str, *, code: str, enabled: bool, bold: bool = False) -> str:
+    """Apply one ANSI style only when terminal color is enabled."""
+    if not enabled or not text:
+        return text
+    prefix = (_ANSI_BOLD if bold else "") + code
+    return f"{prefix}{text}{_ANSI_RESET}"
+
+
+def format_terminal_event_line(record: Mapping[str, Any], *, color: bool = True) -> str:
+    """Render one structured event for an interactive color-capable terminal."""
+    timestamp = str(record.get("occurred_at_local") or _local_timestamp())
+    category, summary, task_label, extras = _event_components(record)
+    event = str(record.get("event") or "")
+    category_color = _ANSI_CYAN
+    if event in {"task_completed", "run_completed", "stage_b_configuration_completed", "stage_b_selected_configuration"}:
+        category_color = _ANSI_GREEN
+    if event == "stage_a_trial_terminal":
+        state = str(_record_details(record).get("trial_state") or "complete").lower()
+        category_color = _ANSI_GREEN if state == "complete" else _ANSI_RED
+    if event in {"task_interrupted", "run_paused", "graceful_stop_requested", "hard_stop_requested"}:
+        category_color = _ANSI_YELLOW
+    if event in {"task_failed", "run_failed"}:
+        category_color = _ANSI_RED
+    fragments = [
+        _paint(f"[{timestamp}]", code=_ANSI_DIM, enabled=color),
+        _paint(category, code=category_color, enabled=color, bold=True),
+    ]
+    if task_label:
+        fragments.append(_paint(task_label, code=_ANSI_BOLD, enabled=color))
+    fragments.append(summary)
+    for extra in extras:
+        if extra.startswith(("AP=", "best=", "outer AP=")):
+            fragments.append(_paint(extra, code=_ANSI_GREEN, enabled=color))
+        elif extra.startswith("duration="):
+            fragments.append(_paint(extra, code=_ANSI_DIM, enabled=color))
+        else:
+            fragments.append(_paint(extra, code=_ANSI_DIM, enabled=color))
+    return " | ".join(fragments)
+
+
+def colorize_dashboard(text: str, *, color: bool = True) -> str:
+    """Apply restrained terminal-only color to a plain dashboard rendering."""
+    if not color:
+        return text
+    rendered = text
+    for heading in ("FINAL COMPARISON MONITOR", "ACTIVE TASKS", "OTHER OUTSTANDING TASKS", "TASK DETAIL"):
+        rendered = rendered.replace(heading, _paint(heading, code=_ANSI_CYAN, enabled=True, bold=True))
+    for word, ansi in (
+        ("failed", _ANSI_RED),
+        ("FAILED", _ANSI_RED),
+        ("interrupted", _ANSI_YELLOW),
+        ("PAUSED", _ANSI_YELLOW),
+        ("pending", _ANSI_DIM),
+        ("completed", _ANSI_GREEN),
+        ("DONE", _ANSI_GREEN),
+        ("Stage A", _ANSI_CYAN),
+        ("Stage B", _ANSI_CYAN),
+    ):
+        rendered = re.sub(rf"\b{re.escape(word)}\b", lambda match: _paint(match.group(0), code=ansi, enabled=True), rendered)
+    return rendered
+
+
+def render_event_log(
+    run_directory: Path,
+    *,
+    limit: int = 40,
+    color: bool = True,
+) -> str:
+    """Render the latest coordinator events as a chronological terminal log view."""
+    events = _read_event_records(Path(run_directory), limit=max(1, int(limit)))
+    if not events:
+        return "No coordinator events have been recorded yet."
+    return "\n".join(format_terminal_event_line(event, color=color) for event in events)
+
 
 
 _INVOCATION_EVENT_STATES = {
@@ -401,11 +639,11 @@ class RunEventLogger:
     ) -> dict[str, Any]:
         """Append one structured and human-readable event and return its record."""
         record: dict[str, Any] = {
-            "schema_version": "final_comparison_event_v1",
+            "occurred_at_local": _local_timestamp(),
+            "occurred_at_utc": _utc_now(),
             "event": str(event),
             "source": str(source),
-            "occurred_at_utc": _utc_now(),
-            "occurred_at_local": _local_timestamp(),
+            "schema_version": "final_comparison_event_v2",
             "message": str(message),
             "details": dict(details or {}),
         }
@@ -425,7 +663,7 @@ class RunEventLogger:
             # filesystem problem prevents a best-effort status refresh.
             pass
         _append_jsonl(coordinator_event_jsonl_path(self.run_directory), record)
-        _append_text_line(coordinator_log_path(self.run_directory), _make_human_event_line(record))
+        _append_text_line(coordinator_log_path(self.run_directory), format_human_event_line(record))
         return record
 
 
@@ -529,11 +767,11 @@ class TaskProgressReporter:
         with self._lock:
             stage = self._stage
         record: dict[str, Any] = {
-            "schema_version": "final_comparison_task_event_v1",
+            "occurred_at_local": _local_timestamp(),
+            "occurred_at_utc": _utc_now(),
             "event": str(event),
             "source": "worker",
-            "occurred_at_utc": _utc_now(),
-            "occurred_at_local": _local_timestamp(),
+            "schema_version": "final_comparison_task_event_v2",
             "task_key": self.task_key,
             "candidate_id": self.candidate_id,
             "outer_repeat_index": self.repeat_index,
@@ -543,7 +781,7 @@ class TaskProgressReporter:
             "details": dict(details or {}),
         }
         _append_jsonl(task_event_jsonl_path(self.run_directory, self.task_key), record)
-        _append_text_line(task_log_path(self.run_directory, self.task_key), _make_human_event_line(record))
+        _append_text_line(task_log_path(self.run_directory, self.task_key), format_human_event_line(record))
         return record
 
     def start(
@@ -570,20 +808,64 @@ class TaskProgressReporter:
         event_name: str | None = None,
         **details: Any,
     ) -> None:
-        """Persist a progress update and optionally append one meaningful task event."""
+        """Persist progress and attach operation timing to meaningful trial events.
+
+        Stage-A trials and Stage-B confirmations are the units a user needs to time. The
+        worker owns their lifecycle, so the atomic sidecar receives the start timestamp
+        immediately and the corresponding durable terminal event receives the elapsed
+        duration. No model-selection behavior depends on this telemetry.
+        """
+        event_details = dict(details)
         with self._lock:
             if stage is not None:
                 self._stage = str(stage)
             if message is not None:
                 self._message = str(message)
-            if details:
-                self._details.update(details)
+
+            start_key: str | None = None
+            duration_key: str | None = None
+            if event_name == "stage_a_trial_started":
+                start_key = "current_trial_started_at"
+            elif event_name == "stage_b_configuration_started":
+                start_key = "current_confirmation_started_at"
+            elif event_name == "stage_a_trial_terminal":
+                start_key = "current_trial_started_at"
+                duration_key = "trial_duration_seconds"
+            elif event_name == "stage_b_configuration_completed":
+                start_key = "current_confirmation_started_at"
+                duration_key = "configuration_duration_seconds"
+
+            if event_name in {"stage_a_trial_started", "stage_b_configuration_started"}:
+                assert start_key is not None
+                started_at = _utc_now()
+                self._details[start_key] = started_at
+                event_details[start_key] = started_at
+            elif duration_key is not None and start_key is not None:
+                started_at = _parse_timestamp(str(self._details.get(start_key) or ""))
+                if started_at is not None:
+                    event_details[duration_key] = max(
+                        0.0,
+                        (datetime.now(UTC) - started_at).total_seconds(),
+                    )
+                self._details[start_key] = None
+                # A completed configuration is not an active configuration. Retaining its
+                # parameters as ``current`` would make the live dashboard misleading.
+                self._details["current_trial_parameters"] = None
+                self._details["current_trial_number"] = None
+                self._details["partial_mean_average_precision"] = None
+                self._details["fold_average_precision"] = None
+                self._details["completed_inner_folds"] = 0
+                self._details["inner_fold_index"] = None
+                self._details["inner_fold_total"] = None
+
+            if event_details:
+                self._details.update(event_details)
         self._write_progress()
-        if event_name is not None and not is_low_level_fold_event(event_name):
+        if event_name is not None and not is_non_durable_task_event(event_name):
             self.emit_event(
                 event_name,
                 message=message or str(event_name).replace("_", " "),
-                details=details,
+                details=event_details,
             )
 
     def stop_requested(self) -> bool:
@@ -1012,6 +1294,16 @@ def _task_metric_summary(task: TaskStatusSnapshot) -> tuple[str, str, str]:
     return partial_text, last_text, best_text
 
 
+def _current_operation_elapsed(task: TaskStatusSnapshot, *, now: datetime) -> str | None:
+    """Return elapsed time for the currently active trial or Stage-B configuration."""
+    details = _task_progress_details(task)
+    for key in ("current_trial_started_at", "current_confirmation_started_at"):
+        started = _parse_timestamp(str(details.get(key) or ""))
+        if started is not None:
+            return format_duration(max(0.0, (now - started).total_seconds()))
+    return None
+
+
 def _task_progress_label(task: TaskStatusSnapshot) -> str:
     """Return a readable stage-specific trial or confirmation-progress label."""
     stage = _task_stage(task)
@@ -1054,14 +1346,8 @@ def _task_progress_label(task: TaskStatusSnapshot) -> str:
 
 
 def _format_event_compact(event: Mapping[str, Any] | None) -> str:
-    """Render the latest combined coordinator event for dashboard context."""
-    if not event:
-        return "-"
-    timestamp = str(event.get("occurred_at_local") or event.get("occurred_at_utc") or "-")
-    message = str(event.get("message") or event.get("event") or "-")
-    task_key = event.get("task_key")
-    prefix = f"{task_key}: " if task_key else ""
-    return f"[{timestamp}] {prefix}{message}"
+    """Render the latest event using the same compact vocabulary as coordinator.log."""
+    return "-" if not event else format_human_event_line(event)
 
 
 def _estimate_remaining_seconds(
@@ -1197,11 +1483,15 @@ def render_run_status(
                 f"{format_duration(task.elapsed_seconds(now=now))} | heartbeat="
                 f"{format_duration(heartbeat)} ago"
             )
-            lines.append(
+            current_operation_elapsed = _current_operation_elapsed(task, now=now)
+            stage_line = (
                 "  stage="
                 f"{stage} | current partial AP={partial_ap} | "
                 f"last completed AP={last_ap} | best Stage-A AP={best_ap}"
             )
+            if current_operation_elapsed is not None:
+                stage_line += f" | current configuration elapsed={current_operation_elapsed}"
+            lines.append(stage_line)
             if stage in {"outer_fit", "outer_prediction"}:
                 parameters = details_map.get("selected_parameters")
             else:
