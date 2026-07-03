@@ -137,6 +137,16 @@ def coordinator_log_path(run_directory: Path) -> Path:
     return Path(run_directory) / "logs" / "coordinator.log"
 
 
+def configuration_history_jsonl_path(run_directory: Path) -> Path:
+    """Return the coordinator-owned structured configuration-history artifact."""
+    return Path(run_directory) / "logs" / "configuration_history.jsonl"
+
+
+def configuration_history_log_path(run_directory: Path) -> Path:
+    """Return the coordinator-owned readable configuration-history artifact."""
+    return Path(run_directory) / "logs" / "configuration_history.log"
+
+
 def task_event_jsonl_path(run_directory: Path, task_key: str) -> Path:
     """Return one worker-owned structured task-event log."""
     return Path(run_directory) / "logs" / "tasks" / f"{task_key}.jsonl"
@@ -341,6 +351,8 @@ def _event_components(record: Mapping[str, Any]) -> tuple[str, str, str | None, 
     duration = details.get("trial_duration_seconds")
     if duration is None:
         duration = details.get("configuration_duration_seconds")
+    if duration is None:
+        duration = details.get("outer_fit_duration_seconds")
     if duration is None and event in {"task_completed", "task_interrupted", "task_failed"}:
         duration = details.get("elapsed_seconds")
 
@@ -377,16 +389,19 @@ def _event_components(record: Mapping[str, Any]) -> tuple[str, str, str | None, 
         summary = f"config {position}/{total} started"
         if from_trial is not None:
             extras.append(f"from Stage-A trial {from_trial}")
-    elif event == "stage_b_configuration_completed":
+    elif event in {"stage_b_configuration_completed", "stage_b_configuration_failed"}:
         category = "STAGE B"
         position = details.get("confirmation_position", "?")
         total = details.get("confirmation_total", "?")
-        summary = f"config {position}/{total} completed"
+        verb = "completed" if event == "stage_b_configuration_completed" else "failed"
+        summary = f"config {position}/{total} {verb}"
         ap = _metric(details.get("last_trial_average_precision"))
         if ap is not None:
             extras.append(f"AP={ap}")
         if confirmations:
             extras.append(confirmations)
+        if event == "stage_b_configuration_failed" and details.get("failure_type"):
+            extras.append(str(details.get("failure_type")))
     elif event == "stage_b_selected_configuration":
         category = "STAGE B"
         selected = details.get("selected_stage_a_trial_number")
@@ -398,6 +413,8 @@ def _event_components(record: Mapping[str, Any]) -> tuple[str, str, str | None, 
             extras.append(f"AP={ap}")
     elif event == "outer_fit_started":
         category, summary = "OUTER FIT", "selected configuration fit started"
+    elif event == "outer_fit_completed":
+        category, summary = "OUTER FIT", "selected configuration fit completed"
     elif event == "outer_prediction_started":
         category, summary = "OUTER PREDICT", "outer-validation scoring started"
     elif event == "task_worker_started":
@@ -617,6 +634,329 @@ def _update_latest_invocation_status(
     _atomic_write_json(path, payload)
 
 
+
+_CONFIGURATION_HISTORY_EVENTS = frozenset(
+    {
+        "stage_a_trial_terminal",
+        "stage_b_configuration_completed",
+        "stage_b_configuration_failed",
+        "outer_fit_completed",
+    }
+)
+
+
+def _history_stage_label(event: str) -> str:
+    """Return the stable display stage for one configuration-history event."""
+    return {
+        "stage_a_trial_terminal": "Stage A",
+        "stage_b_configuration_completed": "Stage B",
+        "stage_b_configuration_failed": "Stage B",
+        "outer_fit_completed": "Outer fit",
+    }.get(event, event.replace("_", " ").title())
+
+
+def _history_identifier(record: Mapping[str, Any]) -> str:
+    """Return one concise configuration identifier from a terminal telemetry event."""
+    event = str(record.get("event") or "")
+    details = _record_details(record)
+    if event == "stage_a_trial_terminal":
+        return f"Optuna ID {details.get('current_trial_number', '?')}"
+    if event.startswith("stage_b_configuration"):
+        position = details.get("confirmation_position", "?")
+        total = details.get("confirmation_total", "?")
+        stage_a_trial = details.get("stage_a_trial_number")
+        suffix = f", Stage-A ID {stage_a_trial}" if stage_a_trial is not None else ""
+        return f"config {position}/{total}{suffix}"
+    return "selected configuration"
+
+
+def _history_status(record: Mapping[str, Any]) -> str:
+    """Normalise a terminal telemetry event into one human-facing history status."""
+    event = str(record.get("event") or "")
+    if event == "stage_a_trial_terminal":
+        state = str(_record_details(record).get("trial_state") or "complete").lower()
+        return "completed" if state == "complete" else state
+    if event == "stage_b_configuration_failed":
+        return "failed"
+    return "completed"
+
+
+def _configuration_history_record(record: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Project one terminal configuration event into a durable history row.
+
+    The coordinator is the only writer of the combined history files. Workers continue
+    to own their progress sidecars and task-local logs, preventing concurrent appends to
+    a shared history artifact. A row is emitted only when one Stage-A configuration,
+    Stage-B confirmation configuration, or final outer fit reaches a durable boundary.
+    """
+    event = str(record.get("event") or "")
+    if event not in _CONFIGURATION_HISTORY_EVENTS:
+        return None
+    details = _record_details(record)
+    duration_key = {
+        "stage_a_trial_terminal": "trial_duration_seconds",
+        "stage_b_configuration_completed": "configuration_duration_seconds",
+        "stage_b_configuration_failed": "configuration_duration_seconds",
+        "outer_fit_completed": "outer_fit_duration_seconds",
+    }[event]
+    parameters = details.get("parameters")
+    if not isinstance(parameters, Mapping):
+        parameters = details.get("selected_parameters")
+    fold_history = details.get("fold_history")
+    if not isinstance(fold_history, list):
+        fold_history = []
+    payload: dict[str, Any] = {
+        "schema_version": "final_comparison_configuration_history_v1",
+        "occurred_at_local": record.get("occurred_at_local"),
+        "occurred_at_utc": record.get("occurred_at_utc"),
+        "event": event,
+        "stage": _history_stage_label(event),
+        "identifier": _history_identifier(record),
+        "status": _history_status(record),
+        "task_key": record.get("task_key"),
+        "candidate_id": record.get("candidate_id"),
+        "outer_repeat_index": record.get("outer_repeat_index"),
+        "outer_fold_index": record.get("outer_fold_index"),
+        "started_at": details.get("configuration_started_at"),
+        "finished_at": record.get("occurred_at_utc"),
+        "duration_seconds": details.get(duration_key),
+        "average_precision": details.get("last_trial_average_precision"),
+        "best_stage_a_average_precision": details.get("best_stage_a_average_precision"),
+        "completed_trials": details.get("completed_trials"),
+        "target_completed_trials": details.get("target_completed_trials"),
+        "confirmation_position": details.get("confirmation_position"),
+        "confirmation_total": details.get("confirmation_total"),
+        "stage_a_trial_number": details.get("stage_a_trial_number"),
+        "parameters": dict(parameters) if isinstance(parameters, Mapping) else {},
+        "fold_history": [dict(item) for item in fold_history if isinstance(item, Mapping)],
+        "failure_type": details.get("failure_type"),
+        "failure_message": details.get("failure_message"),
+    }
+    return payload
+
+
+def _format_history_timestamp(value: Any) -> str:
+    """Render one stored history timestamp without adding a local-zone name."""
+    if value is None:
+        return "-"
+    parsed = _parse_timestamp(str(value))
+    return parsed.astimezone().strftime("%Y-%m-%d %H:%M:%S") if parsed else str(value)
+
+
+def _format_configuration_history_record(record: Mapping[str, Any]) -> str:
+    """Render one multi-line human-readable configuration-history record."""
+    candidate = _compact_candidate_label(record) or str(record.get("task_key") or "-")
+    lines = [
+        " | ".join(
+            [
+                f"[{record.get('occurred_at_local') or _local_timestamp()}]",
+                str(record.get("stage") or "Configuration"),
+                candidate,
+                str(record.get("identifier") or "configuration"),
+                str(record.get("status") or "completed"),
+            ]
+        )
+    ]
+    details: list[str] = []
+    if record.get("started_at") is not None:
+        details.append(f"started: {_format_history_timestamp(record.get('started_at'))}")
+    details.append(f"finished: {_format_history_timestamp(record.get('finished_at'))}")
+    if record.get("duration_seconds") is not None:
+        try:
+            details.append(f"duration: {format_duration(float(record['duration_seconds']))}")
+        except (TypeError, ValueError):
+            pass
+    if record.get("average_precision") is not None:
+        metric = _metric(record.get("average_precision"))
+        if metric is not None:
+            details.append(f"AP: {metric}")
+    if record.get("best_stage_a_average_precision") is not None:
+        metric = _metric(record.get("best_stage_a_average_precision"))
+        if metric is not None:
+            details.append(f"best Stage-A AP: {metric}")
+    completed = record.get("completed_trials")
+    target = record.get("target_completed_trials")
+    if completed is not None and target is not None:
+        details.append(f"valid configurations: {completed}/{target}")
+    if details:
+        lines.extend(f"  {item}" for item in details)
+
+    folds = record.get("fold_history")
+    if isinstance(folds, list) and folds:
+        lines.append("  inner folds:")
+        for fold in folds:
+            if not isinstance(fold, Mapping):
+                continue
+            fold_index = fold.get("fold_index", "?")
+            fold_total = fold.get("fold_total", "?")
+            fragments = [f"fold {fold_index}/{fold_total}"]
+            metric = _metric(fold.get("average_precision"))
+            if metric is not None:
+                fragments.append(f"AP={metric}")
+            if fold.get("duration_seconds") is not None:
+                try:
+                    fragments.append(f"duration={format_duration(float(fold['duration_seconds']))}")
+                except (TypeError, ValueError):
+                    pass
+            lines.append("    " + " | ".join(fragments))
+
+    parameters = record.get("parameters")
+    if isinstance(parameters, Mapping) and parameters:
+        lines.append("  parameters:")
+        for key, value in sorted(parameters.items(), key=lambda pair: str(pair[0])):
+            lines.append(f"    {key}: {_format_scalar(value, max_length=160)}")
+    if record.get("failure_type") or record.get("failure_message"):
+        lines.append(
+            "  failure: "
+            + " | ".join(
+                part
+                for part in (
+                    str(record.get("failure_type")) if record.get("failure_type") else None,
+                    str(record.get("failure_message")) if record.get("failure_message") else None,
+                )
+                if part
+            )
+        )
+    return "\n".join(lines)
+
+
+def _read_configuration_history_records(
+    run_directory: Path,
+    *,
+    task_key: str | None = None,
+    limit: int = 50,
+    max_bytes: int = 1_048_576,
+) -> list[dict[str, Any]]:
+    """Read configuration history without hiding older records for one requested task.
+
+    The unfiltered overview follows only a bounded file tail because it is refreshed
+    repeatedly by the live monitor. A task-specific history request is an occasional
+    forensic query, so it scans the complete coordinator-owned JSONL file before taking
+    the requested final rows. This keeps old completed tasks inspectable after a long
+    master run rather than silently reporting that no history exists outside the tail.
+    """
+    path = configuration_history_jsonl_path(run_directory)
+    if not path.exists():
+        return []
+    try:
+        with path.open("rb") as handle:
+            if task_key is None:
+                handle.seek(0, os.SEEK_END)
+                size = handle.tell()
+                start = max(0, size - max(1, int(max_bytes)))
+                handle.seek(start)
+            else:
+                start = 0
+                handle.seek(0)
+            data = handle.read()
+    except OSError:
+        return []
+    if start > 0:
+        newline = data.find(b"\n")
+        if newline < 0:
+            return []
+        data = data[newline + 1 :]
+    rows: list[dict[str, Any]] = []
+    for raw_line in data.splitlines():
+        try:
+            payload = json.loads(raw_line.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, Mapping):
+            continue
+        row = dict(payload)
+        if task_key is not None and str(row.get("task_key")) != str(task_key):
+            continue
+        rows.append(row)
+    return rows[-max(1, int(limit)) :]
+
+
+def render_configuration_history(
+    run_directory: Path,
+    *,
+    task_key: str | None = None,
+    limit: int = 50,
+    detailed: bool = False,
+) -> str:
+    """Render durable configuration timing and parameter history read-only."""
+    records = _read_configuration_history_records(
+        Path(run_directory), task_key=task_key, limit=limit
+    )
+    heading = "CONFIGURATION HISTORY"
+    if task_key is not None:
+        heading += f": {task_key}"
+    if not records:
+        return heading + "\nNo completed or failed configuration records have been written yet."
+    if detailed:
+        blocks = [heading]
+        for record in records:
+            blocks.extend(["", _format_configuration_history_record(record)])
+        return "\n".join(blocks)
+    lines = [heading, "time                task                         stage      id/status                     AP      duration"]
+    lines.append("-" * len(lines[-1]))
+    for record in records:
+        label = _compact_candidate_label(record) or str(record.get("task_key") or "-")
+        metric = _metric(record.get("average_precision")) or "-"
+        duration = (
+            format_duration(float(record["duration_seconds"]))
+            if record.get("duration_seconds") is not None
+            else "-"
+        )
+        identifier = f"{record.get('identifier', '-') } | {record.get('status', '-')}"
+        lines.append(
+            f"{_truncate(str(record.get('occurred_at_local') or '-'), 19):19} "
+            f"{_truncate(label, 28):28} "
+            f"{_truncate(str(record.get('stage') or '-'), 10):10} "
+            f"{_truncate(identifier, 29):29} "
+            f"{metric:7} "
+            f"{duration}"
+        )
+    return "\n".join(lines)
+
+
+def _render_recent_history_for_task(snapshot: RunStatusSnapshot, task: TaskStatusSnapshot) -> list[str]:
+    """Render recent completed configurations with their completed inner-fold timings."""
+    records = _read_configuration_history_records(snapshot.run_directory, task_key=task.task_key, limit=5)
+    if not records:
+        return ["  recent configuration history: no completed configuration records yet."]
+    lines = ["  recent configuration history:"]
+    for record in records:
+        metric = _metric(record.get("average_precision")) or "-"
+        best = _metric(record.get("best_stage_a_average_precision"))
+        duration = (
+            format_duration(float(record["duration_seconds"]))
+            if record.get("duration_seconds") is not None
+            else "-"
+        )
+        fragments = [
+            str(record.get("stage") or "-"),
+            str(record.get("identifier") or "-"),
+            str(record.get("status") or "-"),
+            f"AP={metric}",
+        ]
+        if best is not None:
+            fragments.append(f"best Stage-A AP={best}")
+        fragments.append(f"duration={duration}")
+        lines.append("    " + " | ".join(fragments))
+        folds = record.get("fold_history")
+        if isinstance(folds, list) and folds:
+            for fold in folds:
+                if not isinstance(fold, Mapping):
+                    continue
+                fold_metric = _metric(fold.get("average_precision")) or "-"
+                fold_duration = (
+                    format_duration(float(fold["duration_seconds"]))
+                    if fold.get("duration_seconds") is not None
+                    else "-"
+                )
+                lines.append(
+                    "      "
+                    + f"fold {fold.get('fold_index', '?')}/{fold.get('fold_total', '?')}"
+                    + f" | AP={fold_metric} | duration={fold_duration}"
+                )
+    return lines
+
+
 class RunEventLogger:
     """Coordinator-owned append-only log writer for one experiment run.
 
@@ -664,6 +1004,18 @@ class RunEventLogger:
             pass
         _append_jsonl(coordinator_event_jsonl_path(self.run_directory), record)
         _append_text_line(coordinator_log_path(self.run_directory), format_human_event_line(record))
+        history_record = _configuration_history_record(record)
+        if history_record is not None:
+            try:
+                _append_jsonl(configuration_history_jsonl_path(self.run_directory), history_record)
+                _append_text_line(
+                    configuration_history_log_path(self.run_directory),
+                    _format_configuration_history_record(history_record),
+                )
+            except OSError:
+                # A coordinator history view is observability only. Its failure must not
+                # invalidate the modelling task whose terminal event has already arrived.
+                pass
         return record
 
 
@@ -808,14 +1160,16 @@ class TaskProgressReporter:
         event_name: str | None = None,
         **details: Any,
     ) -> None:
-        """Persist progress and attach operation timing to meaningful trial events.
+        """Persist progress and attach configuration-level timing and fold history.
 
-        Stage-A trials and Stage-B confirmations are the units a user needs to time. The
-        worker owns their lifecycle, so the atomic sidecar receives the start timestamp
-        immediately and the corresponding durable terminal event receives the elapsed
-        duration. No model-selection behavior depends on this telemetry.
+        The progress sidecar represents only the currently active configuration. Terminal
+        events carry an immutable snapshot of the parameters, completed fold metrics, and
+        elapsed time needed by the coordinator-owned configuration history. This avoids
+        requiring users to manually subtract timestamps when reviewing a past trial.
         """
         event_details = dict(details)
+        sidecar_details = dict(details)
+        outer_fit_completion: dict[str, Any] | None = None
         with self._lock:
             if stage is not None:
                 self._stage = str(stage)
@@ -824,32 +1178,98 @@ class TaskProgressReporter:
 
             start_key: str | None = None
             duration_key: str | None = None
+            configuration_terminal = False
             if event_name == "stage_a_trial_started":
                 start_key = "current_trial_started_at"
             elif event_name == "stage_b_configuration_started":
                 start_key = "current_confirmation_started_at"
+            elif event_name == "outer_fit_started":
+                start_key = "current_outer_fit_started_at"
+            elif event_name == "stage_a_fold_started":
+                start_key = "current_inner_fold_started_at"
             elif event_name == "stage_a_trial_terminal":
                 start_key = "current_trial_started_at"
                 duration_key = "trial_duration_seconds"
-            elif event_name == "stage_b_configuration_completed":
+                configuration_terminal = True
+            elif event_name in {"stage_b_configuration_completed", "stage_b_configuration_failed"}:
                 start_key = "current_confirmation_started_at"
                 duration_key = "configuration_duration_seconds"
+                configuration_terminal = True
+            elif event_name in {"stage_a_fold_completed", "stage_b_fold_completed"}:
+                start_key = "current_inner_fold_started_at"
+                duration_key = "fold_duration_seconds"
 
-            if event_name in {"stage_a_trial_started", "stage_b_configuration_started"}:
+            if event_name in {
+                "stage_a_trial_started",
+                "stage_b_configuration_started",
+                "outer_fit_started",
+                "stage_a_fold_started",
+                "stage_b_fold_started",
+            }:
+                if event_name == "stage_b_fold_started":
+                    start_key = "current_inner_fold_started_at"
                 assert start_key is not None
                 started_at = _utc_now()
                 self._details[start_key] = started_at
-                event_details[start_key] = started_at
-            elif duration_key is not None and start_key is not None:
-                started_at = _parse_timestamp(str(self._details.get(start_key) or ""))
-                if started_at is not None:
+                if event_name in {"stage_a_trial_started", "stage_b_configuration_started"}:
+                    self._details["current_configuration_fold_history"] = []
+
+            if event_name == "outer_prediction_started":
+                stored_start = self._details.get("current_outer_fit_started_at")
+                parsed_start = _parse_timestamp(str(stored_start or ""))
+                if stored_start is not None:
+                    duration = max(
+                        0.0,
+                        (datetime.now(UTC) - parsed_start).total_seconds(),
+                    ) if parsed_start is not None else None
+                    parameters = self._details.get("selected_parameters")
+                    if not isinstance(parameters, Mapping):
+                        parameters = event_details.get("selected_parameters")
+                    outer_fit_completion = {
+                        "configuration_started_at": stored_start,
+                        "outer_fit_duration_seconds": duration,
+                        "parameters": dict(parameters) if isinstance(parameters, Mapping) else {},
+                    }
+                self._details["current_outer_fit_started_at"] = None
+
+            if duration_key is not None and start_key is not None:
+                stored_start = self._details.get(start_key)
+                parsed_start = _parse_timestamp(str(stored_start or ""))
+                if stored_start is not None and event_name not in {"stage_a_fold_completed", "stage_b_fold_completed"}:
+                    event_details["configuration_started_at"] = stored_start
+                if parsed_start is not None:
                     event_details[duration_key] = max(
                         0.0,
-                        (datetime.now(UTC) - started_at).total_seconds(),
+                        (datetime.now(UTC) - parsed_start).total_seconds(),
+                    )
+
+            if event_name in {"stage_a_fold_completed", "stage_b_fold_completed"}:
+                history = self._details.get("current_configuration_fold_history")
+                if not isinstance(history, list):
+                    history = []
+                fold_row = {
+                    "fold_index": event_details.get("inner_fold_index"),
+                    "fold_total": event_details.get("inner_fold_total"),
+                    "average_precision": event_details.get("fold_average_precision"),
+                    "duration_seconds": event_details.get("fold_duration_seconds"),
+                }
+                history.append(fold_row)
+                self._details["current_configuration_fold_history"] = history
+                self._details["current_inner_fold_started_at"] = None
+
+            if configuration_terminal:
+                parameters = self._details.get("current_trial_parameters")
+                if isinstance(parameters, Mapping):
+                    event_details.setdefault("parameters", dict(parameters))
+                history = self._details.get("current_configuration_fold_history")
+                if isinstance(history, list):
+                    event_details.setdefault(
+                        "fold_history",
+                        [dict(item) for item in history if isinstance(item, Mapping)],
                     )
                 self._details[start_key] = None
-                # A completed configuration is not an active configuration. Retaining its
-                # parameters as ``current`` would make the live dashboard misleading.
+                self._details["current_configuration_fold_history"] = []
+                self._details["current_inner_fold_started_at"] = None
                 self._details["current_trial_parameters"] = None
                 self._details["current_trial_number"] = None
                 self._details["partial_mean_average_precision"] = None
@@ -857,10 +1277,24 @@ class TaskProgressReporter:
                 self._details["completed_inner_folds"] = 0
                 self._details["inner_fold_index"] = None
                 self._details["inner_fold_total"] = None
+                for key in (
+                    "current_trial_number",
+                    "current_trial_parameters",
+                    "parameters",
+                    "configuration_started_at",
+                    "fold_history",
+                ):
+                    sidecar_details.pop(key, None)
 
-            if event_details:
-                self._details.update(event_details)
+            if sidecar_details:
+                self._details.update(sidecar_details)
         self._write_progress()
+        if outer_fit_completion is not None:
+            self.emit_event(
+                "outer_fit_completed",
+                message="Selected configuration fit completed.",
+                details=outer_fit_completion,
+            )
         if event_name is not None and not is_non_durable_task_event(event_name):
             self.emit_event(
                 event_name,
@@ -881,6 +1315,19 @@ class TaskProgressReporter:
     ) -> None:
         """Persist terminal worker telemetry and stop background heartbeat refreshes."""
         self._stop_heartbeat()
+        with self._lock:
+            active_stage = self._stage
+            has_active_configuration = isinstance(
+                self._details.get("current_trial_parameters"), Mapping
+            )
+        if final_stage == "failed" and active_stage == "stage_b" and has_active_configuration:
+            self.update(
+                stage="stage_b",
+                message="Stage B configuration failed before confirmation completed.",
+                event_name="stage_b_configuration_failed",
+                failure_type=(str(message).split(":", 1)[0] if message else None),
+                failure_message=message,
+            )
         self.update(stage=final_stage, message=message, **details)
         self.emit_event(
             f"task_{final_stage}",
@@ -1499,17 +1946,14 @@ def render_run_status(
                 if not isinstance(parameters, Mapping):
                     parameters = details_map.get("selected_parameters")
             if isinstance(parameters, Mapping):
-                lines.append(
-                    "  parameters: "
-                    + format_parameter_summary(parameters, max_items=7, max_value_length=36)
-                )
+                lines.append("  parameters:")
+                for key, value in sorted(parameters.items(), key=lambda pair: str(pair[0])):
+                    lines.append(f"    {key}: {_format_scalar(value, max_length=120)}")
             if details:
                 message = task.progress.get("message") if task.progress else None
                 if message:
                     lines.append(f"  message: {message}")
-                if isinstance(parameters, Mapping):
-                    for key, value in sorted(parameters.items(), key=lambda pair: str(pair[0])):
-                        lines.append(f"    {key}: {_format_scalar(value, max_length=120)}")
+                lines.extend(_render_recent_history_for_task(snapshot, task))
 
     if other_tasks:
         lines.extend(["", "OTHER OUTSTANDING TASKS"])
@@ -1568,6 +2012,13 @@ def render_task_details(snapshot: RunStatusSnapshot, task_key: str) -> str:
                         lines.append(f"    {parameter}: {_format_scalar(parameter_value, max_length=160)}")
                 else:
                     lines.append(f"  {key}: {_format_scalar(value, max_length=160)}")
+    history_text = render_configuration_history(
+        snapshot.run_directory,
+        task_key=task.task_key,
+        limit=12,
+        detailed=True,
+    )
+    lines.extend(["", history_text])
     if task.error_text:
         lines.append("Task error or interruption reason:")
         lines.extend(f"  {line}" for line in task.error_text.rstrip().splitlines())

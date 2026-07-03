@@ -29,9 +29,13 @@ from telco_churn.experiment_progress import (  # noqa: E402
     TaskProgressReporter,
     clear_graceful_stop_request,
     collect_run_status,
+    configuration_history_jsonl_path,
+    configuration_history_log_path,
     format_human_event_line,
     format_terminal_event_line,
     progress_path,
+    _read_configuration_history_records,
+    render_configuration_history,
     render_event_log,
     render_run_status,
     request_graceful_stop,
@@ -208,6 +212,8 @@ def _assert_reporter_heartbeat_and_events(store: ExperimentStore) -> None:
         completed_inner_folds=1,
         inner_fold_index=1,
         inner_fold_total=2,
+        fold_average_precision=0.5,
+        fold_duration_seconds=0.25,
         partial_mean_average_precision=0.5,
     )
     active_payload = json.loads(reporter.path.read_text(encoding="utf-8"))
@@ -240,6 +246,14 @@ def _assert_reporter_heartbeat_and_events(store: ExperimentStore) -> None:
     duration = terminal.get("details", {}).get("trial_duration_seconds")
     if duration is None or float(duration) < 0.0:
         raise AssertionError("Stage-A completion did not include a non-negative trial duration.")
+    terminal_details = terminal.get("details", {})
+    if terminal_details.get("parameters") != {"alpha": 0.1}:
+        raise AssertionError("Stage-A completion did not preserve the tested parameters.")
+    fold_history = terminal_details.get("fold_history")
+    if not isinstance(fold_history, list) or not fold_history:
+        raise AssertionError("Stage-A completion did not preserve per-fold telemetry history.")
+    if fold_history[0].get("duration_seconds") != 0.25:
+        raise AssertionError("Stage-A completion did not preserve the inner-fold duration.")
     final_payload = json.loads(reporter.path.read_text(encoding="utf-8"))
     final_details = final_payload.get("details", {})
     if final_details.get("current_trial_started_at") is not None:
@@ -464,6 +478,54 @@ def _assert_read_only_dashboard_and_run_log(store: ExperimentStore) -> None:
     rendered_events = render_event_log(store.run_directory, limit=3, color=False)
     if "RUN" not in rendered_events:
         raise AssertionError("Color-capable event-log view did not render coordinator events.")
+
+    history_task = ExperimentTask(
+        task_key="configuration_history_smoke",
+        candidate_id="MONITORING_SMOKE",
+        repeat_index=0,
+        fold_index=7,
+        split_hash="configuration-history-smoke",
+        payload={},
+    )
+    logger.emit(
+        "stage_a_trial_terminal",
+        message="Synthetic Stage-A trial completed.",
+        task=history_task,
+        details={
+            "current_trial_number": 3,
+            "trial_state": "complete",
+            "last_trial_average_precision": 0.625,
+            "best_stage_a_average_precision": 0.625,
+            "completed_trials": 4,
+            "target_completed_trials": 12,
+            "configuration_started_at": "2026-07-03T09:00:00+00:00",
+            "trial_duration_seconds": 85.0,
+            "parameters": {"alpha": 0.2, "feature_policy": "F1_DOMAIN_ENRICHED"},
+            "fold_history": [
+                {"fold_index": 1, "fold_total": 3, "average_precision": 0.61, "duration_seconds": 25.0},
+                {"fold_index": 2, "fold_total": 3, "average_precision": 0.63, "duration_seconds": 30.0},
+                {"fold_index": 3, "fold_total": 3, "average_precision": 0.635, "duration_seconds": 30.0},
+            ],
+        },
+    )
+    if not configuration_history_jsonl_path(store.run_directory).exists():
+        raise AssertionError("Structured configuration history was not written.")
+    if not configuration_history_log_path(store.run_directory).exists():
+        raise AssertionError("Readable configuration history was not written.")
+    rendered_history = render_configuration_history(store.run_directory, task_key=history_task.task_key, detailed=True)
+    for required in ("Optuna ID 3", "duration: 1m 25s", "parameters:", "fold 1/3"):
+        if required not in rendered_history:
+            raise AssertionError(f"Configuration history omitted required content: {required}")
+    filtered_full_scan = _read_configuration_history_records(
+        store.run_directory,
+        task_key=history_task.task_key,
+        limit=1,
+        max_bytes=1,
+    )
+    if len(filtered_full_scan) != 1 or filtered_full_scan[0].get("task_key") != history_task.task_key:
+        raise AssertionError(
+            "Task-specific configuration history did not scan older records beyond the live tail."
+        )
 
 def main() -> None:
     """Run all disposable monitoring and event-log integration checks."""

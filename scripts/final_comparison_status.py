@@ -21,6 +21,7 @@ if str(SRC_DIR) not in sys.path:
 from telco_churn.experiment_progress import (  # noqa: E402
     collect_run_status,
     colorize_dashboard,
+    render_configuration_history,
     render_event_log,
     render_run_status,
     render_task_details,
@@ -75,6 +76,17 @@ def parse_arguments() -> argparse.Namespace:
         help="Number of recent coordinator events to display with --events. Defaults to 40.",
     )
     parser.add_argument(
+        "--history",
+        action="store_true",
+        help="Show durable per-configuration timing, score, and parameter history.",
+    )
+    parser.add_argument(
+        "--history-lines",
+        type=int,
+        default=50,
+        help="Number of recent configuration-history rows to display. Defaults to 50.",
+    )
+    parser.add_argument(
         "--show-completed",
         action="store_true",
         help="Include completed task rows in the outstanding-work table.",
@@ -87,7 +99,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--details",
         action="store_true",
-        help="Show full active-task parameter telemetry in the dashboard.",
+        help="Show active-task messages and recent completed configuration history.",
     )
     parser.add_argument(
         "--task-key",
@@ -104,6 +116,16 @@ def render_once(arguments: argparse.Namespace) -> str:
         return render_event_log(
             run_directory,
             limit=int(arguments.event_lines),
+            color=color,
+        )
+    if arguments.history:
+        return colorize_dashboard(
+            render_configuration_history(
+                run_directory,
+                task_key=arguments.task_key,
+                limit=int(arguments.history_lines),
+                detailed=bool(arguments.task_key),
+            ),
             color=color,
         )
     snapshot = collect_run_status(run_directory)
@@ -134,8 +156,12 @@ def main() -> None:
         raise SystemExit("--interval-seconds must be positive.")
     if arguments.event_lines < 1:
         raise SystemExit("--event-lines must be positive.")
-    if arguments.task_key and arguments.watch:
-        raise SystemExit("--task-key and --watch cannot be combined.")
+    if arguments.history_lines < 1:
+        raise SystemExit("--history-lines must be positive.")
+    if arguments.events and arguments.history:
+        raise SystemExit("--events and --history cannot be combined.")
+    if arguments.task_key and arguments.watch and not arguments.history:
+        raise SystemExit("--task-key and --watch can be combined only with --history.")
     if arguments.task_key and arguments.events:
         raise SystemExit("--task-key and --events cannot be combined.")
 

@@ -316,7 +316,12 @@ def run_nested_hpo_outer_task(task: ExperimentTask) -> Mapping[str, Any]:
             }:
                 # Fold events update the atomic sidecar for the live dashboard only. They
                 # intentionally do not become append-only task or coordinator log entries.
-                reporter.update(stage=stage, message=message, **payload)
+                reporter.update(
+                    stage=stage,
+                    message=message,
+                    event_name=event_name,
+                    **payload,
+                )
             else:
                 reporter.update(
                     stage=stage,
