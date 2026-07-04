@@ -377,6 +377,49 @@ single-threaded native estimators inside process-level outer parallelism
 training-only smoke tests for every major reusable component
 ```
 
+## Operational pilot and monitoring status
+
+After Phase 8B, the project moved into realistic persistent-run pilots for the final-comparison runner. These pilots are operational validation runs, not final model-selection evidence.
+
+The current pilot lineage is:
+
+```text
+v1:
+    first full-development pilot runner with six representative candidate families.
+
+v2:
+    monitorable persistent runner with progress sidecars, task registry inspection,
+    and clean pause behaviour.
+
+v3 and v4:
+    progressively improved live dashboards, coordinator logs, event views, colours,
+    alternate-screen watching, and clearer Stage-A/Stage-B telemetry.
+
+v5:
+    configuration-history monitoring with one-parameter-per-line dashboard output,
+    recent completed-configuration history, and durable configuration_history log files.
+```
+
+The fresh v5 monitoring-pilot identifier is:
+
+```text
+pilot_pruned_f2_v5_history
+```
+
+The pilot remains deliberately smaller than the master comparison:
+
+```text
+6 representative candidate families
+3 outer folds x 1 repeat
+3-fold Stage A
+3-fold Stage B
+12 valid Stage-A configurations per outer task
+top 3 Stage-A configurations confirmed in Stage B
+```
+
+The v4 pilot exposed a Windows-specific monitoring-side reliability issue: a progress-sidecar atomic replacement can fail with `PermissionError: [WinError 5] Access denied` when the progress JSON target is briefly locked. That failure affected monitoring persistence, not model-quality evidence. Before the master repeated nested-CV comparison, progress-sidecar writing must become best effort and must not be able to fail an otherwise successful modelling task.
+
+
 ## Cross-cutting modelling policies before final evaluation
 
 ### Feature policies
@@ -438,20 +481,22 @@ The intended sequence is:
 
 ```text
 1. Resolve the final F2 feature-policy review and freeze all candidate contracts.
-2. Run a realistic persistent-run pilot and inspect artifacts, runtimes, resume behavior,
-   warnings, and failures.
-3. Freeze the master comparison revision.
-4. Run the 5 outer-fold x 10-repeat nested-CV comparison using average precision as the
+2. Finish the realistic persistent-run pilot cycle and inspect artifacts, runtimes,
+   selected configurations, resume behavior, diagnostics, and failures.
+3. Fix operational reliability issues that the pilot exposed, especially progress-sidecar
+   writes that can fail under transient Windows file locks.
+4. Freeze the master comparison revision.
+5. Run the 5 outer-fold x 10-repeat nested-CV comparison using average precision as the
    primary ranking metric.
-5. Analyze outer-fold stability, paired differences, practical equivalence, runtime, and
+6. Analyze outer-fold stability, paired differences, practical equivalence, runtime, and
    selected-configuration stability.
-6. Define a defensible finalist set using training-only evidence.
-7. Compare calibration only when probability outputs are operationally relevant.
-8. Perform cross-fitted threshold, capacity, cost, and intervention-volume analysis.
-9. Consider stacking only after constituent procedures and out-of-fold evidence are frozen.
-10. Select one final procedure or justified stack.
-11. Rerun the frozen search on all 5,634 development rows and fit the complete pipeline.
-12. Evaluate once on the untouched test set and report final metrics with uncertainty where
+7. Define a defensible finalist set using training-only evidence.
+8. Compare calibration only when probability outputs are operationally relevant.
+9. Perform cross-fitted threshold, capacity, cost, and intervention-volume analysis.
+10. Consider stacking only after constituent procedures and out-of-fold evidence are frozen.
+11. Select one final procedure or justified stack.
+12. Rerun the frozen search on all 5,634 development rows and fit the complete pipeline.
+13. Evaluate once on the untouched test set and report final metrics with uncertainty where
     feasible.
 ```
 
