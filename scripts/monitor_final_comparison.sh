@@ -9,6 +9,7 @@ INTERVAL_SECONDS="10"
 EVENT_LINES="15"
 HISTORY_LINES="50"
 TASK_KEY=""
+WATCH_MODE=1
 
 usage() {
   cat <<'USAGE'
@@ -27,6 +28,7 @@ Options:
   --event-lines N      Number of recent events in events mode. Defaults to 15.
   --history-lines N    Number of recent configuration records in history mode. Defaults to 50.
   --task-key KEY       Filter history mode to one exact outer-task key and show full records.
+  --once               Print one scrollable snapshot and exit.
   --help               Show this help text.
 
 Examples:
@@ -64,6 +66,10 @@ while [[ $# -gt 0 ]]; do
       TASK_KEY="${2:?Missing value after --task-key}"
       shift 2
       ;;
+    --once)
+      WATCH_MODE=0
+      shift
+      ;;
     --help|-h)
       usage
       exit 0
@@ -87,6 +93,32 @@ REPOSITORY_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
 }
 
 cd "$REPOSITORY_ROOT"
+
+if [[ "$WATCH_MODE" -eq 0 ]]; then
+  SNAPSHOT_COMMAND=(
+    python scripts/final_comparison_status.py
+    --run-id "$RUN_ID"
+  )
+
+  case "$MODE" in
+    dashboard)
+      ;;
+    details)
+      SNAPSHOT_COMMAND+=(--details)
+      ;;
+    events)
+      SNAPSHOT_COMMAND+=(--events --event-lines "$EVENT_LINES")
+      ;;
+    history)
+      SNAPSHOT_COMMAND+=(--history --history-lines "$HISTORY_LINES")
+      if [[ -n "$TASK_KEY" ]]; then
+        SNAPSHOT_COMMAND+=(--task-key "$TASK_KEY")
+      fi
+      ;;
+  esac
+
+  exec "${SNAPSHOT_COMMAND[@]}"
+fi
 
 COMMAND=(
   python scripts/final_comparison_status.py
