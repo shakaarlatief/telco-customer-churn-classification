@@ -29,6 +29,7 @@ from sklearn.base import clone
 from sklearn.metrics import average_precision_score
 from sklearn.model_selection import StratifiedKFold
 
+from telco_churn.atomic_io import replace_file_with_retry
 from telco_churn.candidates import (
     CandidateRegistryError,
     build_candidate_pipeline,
@@ -85,34 +86,43 @@ def _sha256_payload(payload: Mapping[str, Any]) -> str:
 
 
 def _atomic_pickle(path: Path, value: Any) -> None:
-    """Atomically persist a Python object beside its SQLite study database."""
+    """Persist one sampler/pruner checkpoint through bounded lock-aware replacement.
+
+    Sampler and pruner checkpoints are durability artifacts rather than monitoring. A
+    persistent failure therefore remains visible to the caller after bounded retries,
+    but a temporary Windows sharing lock no longer turns a healthy HPO trial into an
+    avoidable task failure.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(
-        mode="wb",
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-        dir=path.parent,
-        delete=False,
-    ) as temporary_file:
-        temporary_path = Path(temporary_file.name)
-        try:
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            dir=path.parent,
+            delete=False,
+        ) as temporary_file:
+            temporary_path = Path(temporary_file.name)
             pickle.dump(value, temporary_file, protocol=pickle.HIGHEST_PROTOCOL)
             temporary_file.flush()
             os.fsync(temporary_file.fileno())
-        except BaseException:
-            temporary_path.unlink(missing_ok=True)
-            raise
-    os.replace(temporary_path, path)
+        replace_file_with_retry(temporary_path, path)
+    finally:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def _atomic_json(path: Path, payload: Mapping[str, Any]) -> None:
-    """Atomically persist small stage-confirmation artifacts.
+    """Persist a Stage-B checkpoint through bounded lock-aware atomic replacement.
 
-    The temporary file is opened for writing, flushed, and synchronized before the
-    atomic replacement. On Windows, ``os.fsync`` on a read-only file descriptor can
-    raise ``OSError: [Errno 9] Bad file descriptor``. Synchronizing the active
-    write descriptor therefore matters for both durability and platform
-    compatibility.
+    Confirmation records remain an essential incremental-resume artifact. A persistent
+    write error therefore still reaches the caller after bounded retries, preserving a
+    truthful durability contract. Temporary Windows sharing/access failures are retried
+    before a task is allowed to fail.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path: Path | None = None
@@ -135,10 +145,13 @@ def _atomic_json(path: Path, payload: Mapping[str, Any]) -> None:
             file_handle.flush()
             os.fsync(file_handle.fileno())
 
-        os.replace(temporary_path, path)
+        replace_file_with_retry(temporary_path, path)
     finally:
         if temporary_path is not None:
-            temporary_path.unlink(missing_ok=True)
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 @dataclass(frozen=True)

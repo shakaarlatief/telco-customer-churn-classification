@@ -132,7 +132,7 @@ STAGE_B_N_SPLITS = 3
 STAGE_A_N_TRIALS = 12
 CONFIRMATION_TOP_K = 3
 SEARCH_PROFILE = "full"
-DEFAULT_RUN_ID = "pilot_pruned_f2_v5_history"
+DEFAULT_RUN_ID = "pilot_pruned_f2_v6_io_resilient"
 ARTIFACTS_ROOT = PROJECT_ROOT / "artifacts" / "final_comparison"
 
 

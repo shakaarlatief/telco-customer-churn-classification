@@ -31,6 +31,8 @@ import tempfile
 from typing import Any, Iterable, Mapping
 from uuid import uuid4
 
+from telco_churn.atomic_io import replace_file_with_retry
+
 
 class UnsafeResumeError(RuntimeError):
     """Raised when an existing run is incompatible with a requested resume."""
@@ -97,10 +99,12 @@ def atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
             file_handle.write("\n")
             file_handle.flush()
             os.fsync(file_handle.fileno())
-        os.replace(temporary_path, path)
+        replace_file_with_retry(temporary_path, path)
     finally:
-        if temporary_path.exists():
+        try:
             temporary_path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 @dataclass(frozen=True)

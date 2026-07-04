@@ -29,6 +29,8 @@ import tempfile
 import threading
 from typing import Any, Mapping, Sequence
 
+from telco_churn.atomic_io import replace_file_with_retry
+
 
 class GracefulStopRequested(RuntimeError):
     """Signal that a worker observed a clean pause request at a durable boundary."""
@@ -89,10 +91,13 @@ def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary_path, path)
+        replace_file_with_retry(temporary_path, path)
     finally:
         if temporary_path is not None:
-            temporary_path.unlink(missing_ok=True)
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def _append_text_line(path: Path, line: str) -> None:
@@ -1002,8 +1007,19 @@ class RunEventLogger:
             # Monitoring sidecars must not compromise model execution if a transient local
             # filesystem problem prevents a best-effort status refresh.
             pass
-        _append_jsonl(coordinator_event_jsonl_path(self.run_directory), record)
-        _append_text_line(coordinator_log_path(self.run_directory), format_human_event_line(record))
+        try:
+            _append_jsonl(coordinator_event_jsonl_path(self.run_directory), record)
+        except OSError:
+            # Combined coordinator telemetry is operational observability, not model logic.
+            pass
+        try:
+            _append_text_line(
+                coordinator_log_path(self.run_directory),
+                format_human_event_line(record),
+            )
+        except OSError:
+            # Keep a task result independent from a transient local log-file lock.
+            pass
         history_record = _configuration_history_record(record)
         if history_record is not None:
             try:
@@ -1079,11 +1095,23 @@ class TaskProgressReporter:
     def _write_progress(self) -> None:
         _atomic_write_json(self.path, self._progress_payload())
 
+    def _write_progress_best_effort(self) -> None:
+        """Attempt telemetry persistence without letting a filesystem lock fail modelling.
+
+        Progress sidecars are operational liveness data only. A later heartbeat or stage
+        transition can refresh a stale sidecar after a temporary Windows sharing lock has
+        cleared, while the underlying model fit remains unaffected.
+        """
+        try:
+            self._write_progress()
+        except OSError:
+            return
+
     def _heartbeat_loop(self) -> None:
         """Refresh only liveness telemetry until this task closes."""
         while not self._heartbeat_stop.wait(self.heartbeat_interval_seconds):
             try:
-                self._write_progress()
+                self._write_progress_best_effort()
             except Exception:
                 # Monitoring must never terminate a model fitting operation because of a
                 # transient filesystem issue. A later heartbeat can recover naturally.
@@ -1132,8 +1160,18 @@ class TaskProgressReporter:
             "message": str(message),
             "details": dict(details or {}),
         }
-        _append_jsonl(task_event_jsonl_path(self.run_directory, self.task_key), record)
-        _append_text_line(task_log_path(self.run_directory, self.task_key), format_human_event_line(record))
+        try:
+            _append_jsonl(task_event_jsonl_path(self.run_directory, self.task_key), record)
+        except OSError:
+            # Task-local event logs are telemetry only and must not fail model fitting.
+            pass
+        try:
+            _append_text_line(
+                task_log_path(self.run_directory, self.task_key),
+                format_human_event_line(record),
+            )
+        except OSError:
+            pass
         return record
 
     def start(
@@ -1288,7 +1326,7 @@ class TaskProgressReporter:
 
             if sidecar_details:
                 self._details.update(sidecar_details)
-        self._write_progress()
+        self._write_progress_best_effort()
         if outer_fit_completion is not None:
             self.emit_event(
                 "outer_fit_completed",
@@ -1833,6 +1871,21 @@ def _estimate_remaining_seconds(
     return serial_work / max(1, capacity)
 
 
+def summarize_task_failure_reason(error_text: str | None) -> str:
+    """Extract the useful root-cause line from a worker or process-pool traceback."""
+    if not error_text:
+        return "No persisted error text is available."
+    lines = [line.strip() for line in str(error_text).splitlines() if line.strip()]
+    exception_lines = [
+        line
+        for line in lines
+        if re.match(r"^[A-Za-z_][A-Za-z0-9_.]*(?:Error|Exception):", line)
+    ]
+    if exception_lines:
+        return exception_lines[-1]
+    return lines[0] if lines else "No persisted error text is available."
+
+
 def _truncate(value: str, width: int) -> str:
     """Truncate a display value without splitting the terminal table."""
     if len(value) <= width:
@@ -1968,7 +2021,19 @@ def render_run_status(
                 f"{_truncate(_task_progress_label(task), 52):52}"
             )
             if task.status in {"failed", "interrupted"} and task.error_text:
-                lines.append(f"  reason: {task.error_text.strip().splitlines()[0]}")
+                lines.append(f"  reason: {summarize_task_failure_reason(task.error_text)}")
+                lines.append(
+                    "  task log: "
+                    + f"logs/tasks/{task.task_key}.log"
+                )
+                lines.append(
+                    "  inspect: python scripts/final_comparison_status.py "
+                    + f"--run-id {snapshot.run_id} --task-key {task.task_key}"
+                )
+                if task.status == "failed":
+                    lines.append(
+                        "  retry: resolve the root cause, then resume with --retry-failed."
+                    )
             if task.study.error:
                 lines.append(f"  study: {task.study.error}")
 

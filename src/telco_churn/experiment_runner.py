@@ -252,7 +252,9 @@ def _refresh_monitored_progress_heartbeats(
         sidecar = Path(progress_directory) / f"{task.task_key}.json"
         try:
             mtime_ns = sidecar.stat().st_mtime_ns
-        except FileNotFoundError:
+        except OSError:
+            # Progress telemetry is best effort. A short-lived reader lock must not
+            # interrupt the coordinator while a worker continues fitting normally.
             continue
         if observed_mtimes.get(task.task_key) == mtime_ns:
             continue
@@ -447,8 +449,9 @@ def execute_monitored_registered_tasks(
                     message="No new task will be submitted. The active task was interrupted.",
                 )
                 break
-            except BaseException:
-                store.fail_task(task.task_key, traceback.format_exc())
+            except BaseException as exc:
+                error_text = traceback.format_exc()
+                store.fail_task(task.task_key, error_text)
                 summary["failed"] += 1
                 _emit_monitored_event(
                     event_callback,
@@ -457,6 +460,8 @@ def execute_monitored_registered_tasks(
                     elapsed_seconds=time.perf_counter() - started,
                     task_position=task_position,
                     task_total=total_tasks,
+                    failure_type=type(exc).__name__,
+                    failure_message=str(exc),
                 )
 
             if stop_after_completed is not None and summary["completed"] >= stop_after_completed:
@@ -648,8 +653,9 @@ def execute_monitored_registered_tasks(
                         task_position=task_position,
                         task_total=total_tasks,
                     )
-                except BaseException:
-                    store.fail_task(task.task_key, traceback.format_exc())
+                except BaseException as exc:
+                    error_text = traceback.format_exc()
+                    store.fail_task(task.task_key, error_text)
                     summary["failed"] += 1
                     _emit_monitored_event(
                         event_callback,
@@ -658,6 +664,8 @@ def execute_monitored_registered_tasks(
                         elapsed_seconds=elapsed_seconds,
                         task_position=task_position,
                         task_total=total_tasks,
+                        failure_type=type(exc).__name__,
+                        failure_message=str(exc),
                     )
 
             if not stop_requested:

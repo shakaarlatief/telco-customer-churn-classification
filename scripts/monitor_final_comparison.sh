@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DEFAULT_RUN_ID="pilot_pruned_f2_v5_history"
+DEFAULT_RUN_ID="pilot_pruned_f2_v6_io_resilient"
 
 MODE="dashboard"
 RUN_ID="$DEFAULT_RUN_ID"
@@ -23,7 +23,7 @@ Modes:
   history              Durable configuration timing, score, and parameter history.
 
 Options:
-  --run-id ID          Run identifier. Defaults to pilot_pruned_f2_v5_history.
+  --run-id ID          Run identifier. Defaults to pilot_pruned_f2_v6_io_resilient.
   --interval SECONDS   Refresh interval. Defaults to 10.
   --event-lines N      Number of recent events in events mode. Defaults to 15.
   --history-lines N    Number of recent configuration records in history mode. Defaults to 50.
