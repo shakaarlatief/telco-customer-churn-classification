@@ -24,9 +24,9 @@ docs/knowledge_notes/methodology/final_comparison_protocol_v1.md
 
 ## Latest confirmed checkpoint
 
-### Remote baseline
+### Last substantive runner-code baseline
 
-The filesystem-resilience implementation is committed on remote `main` as:
+The most recent remote commit that changed final-comparison runner behaviour is:
 
 ```text
 b174372f7b623595c4915116c477de9febc4ffd7
@@ -34,6 +34,8 @@ Harden final comparison filesystem persistence
 ```
 
 That revision makes atomic artifact replacement resilient to transient Windows file-lock errors and ensures monitoring telemetry cannot terminate an otherwise valid modelling task.
+
+Documentation commits made after this revision do not change runner behaviour, candidate builders, search spaces, experiment artifacts, or the held-out-test policy.
 
 ### Operational pilot outcome
 
@@ -68,9 +70,9 @@ Operational result:
 
 This v6 result resolves the earlier Windows filesystem-persistence blocker observed in v4 and left unresolved in v5. It is an operational and search-budget pilot only. Its AP values, runtime values, and sampled candidates are not master-selection evidence and must not be used to include or exclude candidate families.
 
-### Local pre-master workflow state
+### Reviewed local pre-master change set
 
-The local working tree contains uncommitted pre-master workflow additions and the associated SQLite-cleanup correction:
+A reviewed local change set was prepared for the following pre-master workflow files:
 
 ```text
 src/telco_churn/pre_master_workflows.py
@@ -80,13 +82,13 @@ scripts/audit_final_comparison_run.py
 scripts/smoke_test_pre_master_workflows.py
 ```
 
-The structural smoke test passed after the explicit Windows SQLite-handle cleanup correction:
+Its structural smoke test passed after an explicit Windows SQLite-handle cleanup correction:
 
 ```text
 Pre-master workflow structural smoke test passed.
 ```
 
-These local additions have not yet been committed to remote `main`. They must be reviewed against the updated candidate-status scope before any real pre-master experiment is launched.
+This is local working-tree state, not a permanent remote-repository fact. Before relying on these files, inspect the local tree, confirm the files and diff are present, and preserve any unrelated uncommitted work. The change set must be reconciled with the final admitted-candidate scope before a real pre-master experiment is launched.
 
 ## Project state
 
@@ -200,25 +202,136 @@ The existing final-comparison implementation provides:
 - monitoring, progress telemetry, artifact auditing, and filesystem-resilience coverage
 ```
 
-The feature-policy direction remains:
+### Implementation provenance and provisional master-design reference
+
+The current infrastructure was built in the following reusable phases:
+
+```text
+Phase 1:
+    protocol foundations, deterministic repeated outer splits, SQLite task coordination,
+    atomic artifacts, fingerprints, and resume protections
+
+Phase 2:
+    persistent two-stage Optuna HPO and interrupted/resumed execution coverage
+
+Phase 3:
+    the current 17-family implemented candidate registry and single-native-worker contract
+
+Phases 4 to 6:
+    deterministic F0/F1/F2 feature policies and candidate-compatible S0/S1/S2 routing
+
+Phases 7 to 8B:
+    fold-safe I0-I4 imbalance primitives, fit-time sampling/weight handling,
+    and candidate-specific imbalance routing
+```
+
+Until protocol v2 is frozen, the following is inherited from protocol v1 as a planning reference, not an already-approved master configuration:
+
+```text
+Outer evaluation:
+    5 stratified folds x 10 repeats
+
+Stage A:
+    candidate-specific Optuna exploration using 3-fold inner CV
+
+Stage B:
+    confirmation of the strongest Stage-A configurations using 5-fold inner CV
+
+Primary ranking metric:
+    average precision
+```
+
+### Current policy reference for the existing 17-candidate registry
 
 ```text
 F0_RAW:
     raw cleaned predictors
 
 F1_DOMAIN_ENRICHED:
-    predeclared target-free service aggregates, tenure summaries, and selected interactions
+    predeclared target-free service aggregates, tenure summaries, selected interactions,
+    and one categorical contract-by-payment interaction
 
 F2_LINEAR_EXPANDED:
     controlled regularized-linear nonlinear and interaction basis for Ridge and logistic
     regression only
+
+S0_NONE:
+    no feature selection
+
+S1_VARIANCE_MUTUAL_INFO:
+    variance filtering followed by mutual-information SelectKBest
+
+S2_L1_LOGISTIC_SELECT_FROM_MODEL:
+    embedded L1-logistic feature selection
+
+I0_NONE:
+    preserve the observed fitting-fold class distribution
+
+I1_CLASS_WEIGHT_BALANCED:
+    fold-local balanced sample weighting
+
+I2_RANDOM_OVERSAMPLING:
+    fit-time-only random minority oversampling
+
+I3_RANDOM_UNDERSAMPLING:
+    fit-time-only random majority undersampling
+
+I4_SMOTENC:
+    raw-feature mixed-data synthetic oversampling before one-hot encoding
 ```
 
-F2 has been pruned during pilot work. Its final contract, together with search budgets and Stage-B confirmation depth, must be explicitly frozen in protocol v2 before the master comparison.
+Feature selection is restricted to candidate families for which it has a coherent role. Tree and native-categorical boosting procedures retain no-selection variants as their primary route. I4 remains available only with F0 raw features because derived F1/F2 columns could become internally inconsistent after synthetic sampling.
+
+The existing Phase-8B imbalance compatibility reference applies only to the 17 currently implemented candidates:
+
+```text
+Ridge and logistic regression:
+    I0, I1, I2, I3, I4 with F0
+    I0, I1, I2, I3 with F1 or F2
+
+Linear SVM, RBF SVM, and MLP:
+    I0, I1, I2, I3, I4 with F0
+    I0, I1, I2, I3 with F1
+
+kNN and hybrid Gaussian-Bernoulli Naive Bayes:
+    I0, I2, I3, I4 with F0
+    I0, I2, I3 with F1
+
+Decision tree, Extra Trees, bagging, random forest, AdaBoost,
+GradientBoostingClassifier, HistGradientBoostingClassifier,
+XGBoost, LightGBM, and CatBoost:
+    I0, I1
+```
+
+F2 has been pruned during pilot work. Its final contract, together with search budgets and Stage-B confirmation depth, must be explicitly frozen in protocol v2 before the master comparison. The six pending conventional candidates and any admitted advanced candidates require their own explicit compatibility records before inclusion.
 
 ## Current experiment gate
 
 Do not launch either real pre-master workflow yet.
+
+### Historical monitoring provenance and local operational inspection
+
+The v1-v5 monitoring history, including the original v4 Windows progress-sidecar failure and the v5 observability work, is retained in:
+
+```text
+docs/knowledge_notes/context_history/telco_churn_chat_handoff_context_7.md
+```
+
+That handoff is historical provenance only. It must not be treated as the live next-action document because its v5 instructions predate the completed v6 filesystem-resilient pilot.
+
+Use the following commands to inspect the current local environment before any later experiment:
+
+```bash
+git status --short
+bash scripts/monitor_final_comparison.sh --help
+python scripts/final_comparison_status.py --help
+```
+
+When the reviewed local audit script is present, it can inspect a completed run without fitting models:
+
+```bash
+python scripts/audit_final_comparison_run.py --run-id <run_id>
+```
 
 The pre-master scripts were intentionally designed around the 17 currently implemented candidates. The project now has an explicit record that the documented C01-C28 universe is broader. The correct next phase is candidate-completeness and admission work, not another score-producing run.
 
@@ -274,7 +387,7 @@ git fetch origin
 git log --oneline HEAD..origin/main
 ```
 
-The local pre-master additions are currently uncommitted. Do not overwrite them. Review the remote documentation update and integrate it with the local working tree deliberately before staging any project changes.
+The exact local working tree is user-controlled. Preserve any uncommitted files, inspect `git status`, and do not infer that a reviewed local change set is already tracked merely because it is described in this status file.
 
 ## Subsequent selection sequence
 

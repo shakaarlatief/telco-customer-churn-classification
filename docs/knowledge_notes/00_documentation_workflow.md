@@ -22,6 +22,9 @@ stable workflow rules:
 strategic modelling roadmap:
     01_model_inventory_and_roadmap.md
 
+candidate-universe and admission status:
+    02_candidate_status_register.md
+
 current tactical status and next actions:
     current_project_status_and_next_actions.md
 
@@ -111,6 +114,31 @@ It should not contain:
 - temporary instructions for the next chat
 - local compile troubleshooting
 ```
+
+## 1.1 Candidate universe and admission register
+
+Candidate inclusion is a governance decision that should not be inferred from an incomplete
+implementation registry or from pilot metric values. The candidate-status register records:
+
+```text
+- the documented candidate universe;
+- which candidates are implemented and runnable;
+- which candidates remain pending conventional implementation;
+- which advanced candidates require package, licence, hardware, reproducibility,
+  preprocessing, and resume admission checks;
+- which candidates are formally admitted to a frozen master protocol;
+- technical exclusions and their recorded reasons.
+```
+
+Current register:
+
+```text
+docs/knowledge_notes/02_candidate_status_register.md
+```
+
+The register is not a day-to-day task list, a score table, or a final-ranking document. Use
+the current status file for immediate actions and the final-comparison protocol version for
+the frozen master design.
 
 ## 2. Current project status and next actions
 
@@ -475,6 +503,7 @@ The stable documentation layout is:
 docs/knowledge_notes/
     00_documentation_workflow.md
     01_model_inventory_and_roadmap.md
+    02_candidate_status_register.md
     current_project_status_and_next_actions.md
     current_notebook_documentation_audit.md
 
@@ -495,6 +524,9 @@ Use the live coordination documents for current inventory and progress:
 completed and remaining model-family inventory:
     01_model_inventory_and_roadmap.md
 
+candidate implementation, admission, exclusion, and master-freeze state:
+    02_candidate_status_register.md
+
 immediate current work:
     current_project_status_and_next_actions.md
 
@@ -509,6 +541,9 @@ Use this rule:
 ```text
 Strategic future modelling sequence:
     01_model_inventory_and_roadmap.md
+
+Candidate implementation, admission, technical exclusion, and master-freeze state:
+    02_candidate_status_register.md
 
 Immediate next actions:
     current_project_status_and_next_actions.md
