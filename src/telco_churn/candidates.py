@@ -121,13 +121,18 @@ class CandidateDefinition:
 
 CANDIDATE_RIDGE_CLASSIFIER = "C01_RIDGE_CLASSIFIER"
 CANDIDATE_LOGISTIC_REGRESSION = "C02_LOGISTIC_REGRESSION"
+CANDIDATE_SPLINE_LOGISTIC_REGRESSION = "C03_SPLINE_LOGISTIC_REGRESSION"
+CANDIDATE_SHRINKAGE_LDA = "C04_SHRINKAGE_LDA"
+CANDIDATE_REGULARIZED_QDA = "C05_REGULARIZED_QDA"
 CANDIDATE_KNN = "C06_K_NEAREST_NEIGHBOURS"
 CANDIDATE_HYBRID_NAIVE_BAYES = "C07_HYBRID_NAIVE_BAYES"
 CANDIDATE_DECISION_TREE = "C08_DECISION_TREE"
 CANDIDATE_EXTRA_TREES = "C09_EXTRA_TREES"
 CANDIDATE_BAGGING = "C10_BAGGING"
 CANDIDATE_RANDOM_FOREST = "C11_RANDOM_FOREST"
+CANDIDATE_BALANCED_RANDOM_FOREST = "C12_BALANCED_RANDOM_FOREST"
 CANDIDATE_ADABOOST = "C13_ADABOOST"
+CANDIDATE_RUSBOOST = "C14_RUSBOOST"
 CANDIDATE_GRADIENT_BOOSTING = "C15_GRADIENT_BOOSTING"
 CANDIDATE_HIST_GRADIENT_BOOSTING = "C16_HIST_GRADIENT_BOOSTING"
 CANDIDATE_XGBOOST = "C17_XGBOOST"
@@ -155,13 +160,21 @@ FEATURE_POLICIES_REGULARIZED_LINEAR: tuple[FeaturePolicyId, ...] = (
 FEATURE_POLICIES_BY_CANDIDATE: dict[str, tuple[FeaturePolicyId, ...]] = {
     CANDIDATE_RIDGE_CLASSIFIER: FEATURE_POLICIES_REGULARIZED_LINEAR,
     CANDIDATE_LOGISTIC_REGRESSION: FEATURE_POLICIES_REGULARIZED_LINEAR,
+    # C03 keeps raw numeric inputs as its explicit spline-basis variables. F1 already
+    # contains selected nonlinear summaries and interactions, so adding splines to F1
+    # would blur the intended additive-nonlinear comparison.
+    CANDIDATE_SPLINE_LOGISTIC_REGRESSION: (FEATURE_POLICY_RAW,),
+    CANDIDATE_SHRINKAGE_LDA: FEATURE_POLICIES_GENERAL,
+    CANDIDATE_REGULARIZED_QDA: FEATURE_POLICIES_GENERAL,
     CANDIDATE_KNN: FEATURE_POLICIES_GENERAL,
     CANDIDATE_HYBRID_NAIVE_BAYES: FEATURE_POLICIES_GENERAL,
     CANDIDATE_DECISION_TREE: FEATURE_POLICIES_GENERAL,
     CANDIDATE_EXTRA_TREES: FEATURE_POLICIES_GENERAL,
     CANDIDATE_BAGGING: FEATURE_POLICIES_GENERAL,
     CANDIDATE_RANDOM_FOREST: FEATURE_POLICIES_GENERAL,
+    CANDIDATE_BALANCED_RANDOM_FOREST: FEATURE_POLICIES_GENERAL,
     CANDIDATE_ADABOOST: FEATURE_POLICIES_GENERAL,
+    CANDIDATE_RUSBOOST: FEATURE_POLICIES_GENERAL,
     CANDIDATE_GRADIENT_BOOSTING: FEATURE_POLICIES_GENERAL,
     CANDIDATE_HIST_GRADIENT_BOOSTING: FEATURE_POLICIES_GENERAL,
     CANDIDATE_XGBOOST: FEATURE_POLICIES_GENERAL,
@@ -193,6 +206,11 @@ FEATURE_SELECTION_POLICIES_BY_CANDIDATE: dict[
 ] = {
     CANDIDATE_RIDGE_CLASSIFIER: FEATURE_SELECTION_POLICIES_REGULARIZED_LINEAR,
     CANDIDATE_LOGISTIC_REGRESSION: FEATURE_SELECTION_POLICIES_REGULARIZED_LINEAR,
+    # C03 already controls basis complexity through L1/L2/elastic-net logistic
+    # regularization. C04/C05 estimate covariance structure directly.
+    CANDIDATE_SPLINE_LOGISTIC_REGRESSION: FEATURE_SELECTION_POLICIES_NONE,
+    CANDIDATE_SHRINKAGE_LDA: FEATURE_SELECTION_POLICIES_NONE,
+    CANDIDATE_REGULARIZED_QDA: FEATURE_SELECTION_POLICIES_NONE,
     CANDIDATE_LINEAR_SVM: FEATURE_SELECTION_POLICIES_REGULARIZED_LINEAR,
     CANDIDATE_KNN: FEATURE_SELECTION_POLICIES_MUTUAL_INFO,
     CANDIDATE_RBF_SVM: FEATURE_SELECTION_POLICIES_MUTUAL_INFO,
@@ -202,7 +220,9 @@ FEATURE_SELECTION_POLICIES_BY_CANDIDATE: dict[
     CANDIDATE_EXTRA_TREES: FEATURE_SELECTION_POLICIES_NONE,
     CANDIDATE_BAGGING: FEATURE_SELECTION_POLICIES_NONE,
     CANDIDATE_RANDOM_FOREST: FEATURE_SELECTION_POLICIES_NONE,
+    CANDIDATE_BALANCED_RANDOM_FOREST: FEATURE_SELECTION_POLICIES_NONE,
     CANDIDATE_ADABOOST: FEATURE_SELECTION_POLICIES_NONE,
+    CANDIDATE_RUSBOOST: FEATURE_SELECTION_POLICIES_NONE,
     CANDIDATE_GRADIENT_BOOSTING: FEATURE_SELECTION_POLICIES_NONE,
     CANDIDATE_HIST_GRADIENT_BOOSTING: FEATURE_SELECTION_POLICIES_NONE,
     CANDIDATE_XGBOOST: FEATURE_SELECTION_POLICIES_NONE,
@@ -425,6 +445,24 @@ CORE_CANDIDATE_REGISTRY: tuple[CandidateDefinition, ...] = (
         representation="scaled one-hot features",
     ),
     CandidateDefinition(
+        candidate_id=CANDIDATE_SPLINE_LOGISTIC_REGRESSION,
+        display_name="Spline logistic regression",
+        score_kind="probability",
+        representation="dense B-spline numeric basis plus categorical indicators",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_SHRINKAGE_LDA,
+        display_name="Shrinkage linear discriminant analysis",
+        score_kind="probability",
+        representation="dense scaled one-hot features with reference categories dropped",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_REGULARIZED_QDA,
+        display_name="Regularized quadratic discriminant analysis",
+        score_kind="probability",
+        representation="dense scaled one-hot features with reference categories dropped",
+    ),
+    CandidateDefinition(
         candidate_id=CANDIDATE_KNN,
         display_name="k-nearest neighbours",
         score_kind="probability",
@@ -461,10 +499,22 @@ CORE_CANDIDATE_REGISTRY: tuple[CandidateDefinition, ...] = (
         representation="unscaled one-hot features",
     ),
     CandidateDefinition(
+        candidate_id=CANDIDATE_BALANCED_RANDOM_FOREST,
+        display_name="Balanced random forest",
+        score_kind="probability",
+        representation="unscaled one-hot features with intrinsic balanced samples",
+    ),
+    CandidateDefinition(
         candidate_id=CANDIDATE_ADABOOST,
         display_name="AdaBoost",
         score_kind="probability",
         representation="dense unscaled one-hot features",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_RUSBOOST,
+        display_name="RUSBoost",
+        score_kind="probability",
+        representation="unscaled one-hot features with intrinsic iterative undersampling",
     ),
     CandidateDefinition(
         candidate_id=CANDIDATE_GRADIENT_BOOSTING,

@@ -28,6 +28,11 @@ from telco_churn.candidates import (  # noqa: E402
     CANDIDATE_HYBRID_NAIVE_BAYES,
     CANDIDATE_KNN,
     CANDIDATE_LOGISTIC_REGRESSION,
+    CANDIDATE_SPLINE_LOGISTIC_REGRESSION,
+    CANDIDATE_SHRINKAGE_LDA,
+    CANDIDATE_REGULARIZED_QDA,
+    CANDIDATE_BALANCED_RANDOM_FOREST,
+    CANDIDATE_RUSBOOST,
     CANDIDATE_MLP,
     CANDIDATE_RIDGE_CLASSIFIER,
     CANDIDATE_RBF_SVM,
@@ -53,6 +58,7 @@ from telco_churn.imbalance_routing import suggest_imbalance_configuration  # noq
 from telco_churn.imbalance_policies import (  # noqa: E402
     BalancedSampleWeightClassifier,
     IMBALANCE_CLASS_WEIGHT_BALANCED,
+    IMBALANCE_NONE,
     IMBALANCE_RANDOM_OVERSAMPLING,
     IMBALANCE_RANDOM_UNDERSAMPLING,
     IMBALANCE_SMOTENC,
@@ -262,22 +268,22 @@ def main() -> None:
             seed=RANDOM_STATE + index,
         )
 
-    resampled_ids = (
-        CANDIDATE_RIDGE_CLASSIFIER,
-        CANDIDATE_LOGISTIC_REGRESSION,
-        CANDIDATE_KNN,
-        CANDIDATE_HYBRID_NAIVE_BAYES,
-        CANDIDATE_LINEAR_SVM,
-        CANDIDATE_RBF_SVM,
-        CANDIDATE_MLP,
+    resampled_secondary_policy = (
+        (CANDIDATE_RIDGE_CLASSIFIER, FEATURE_POLICY_LINEAR_EXPANDED),
+        (CANDIDATE_LOGISTIC_REGRESSION, FEATURE_POLICY_LINEAR_EXPANDED),
+        # C03 intentionally permits only F0 because its raw numeric columns define
+        # the spline basis. C04/C05 use the ordinary F1 domain representation.
+        (CANDIDATE_SPLINE_LOGISTIC_REGRESSION, FEATURE_POLICY_RAW),
+        (CANDIDATE_SHRINKAGE_LDA, FEATURE_POLICY_DOMAIN),
+        (CANDIDATE_REGULARIZED_QDA, FEATURE_POLICY_DOMAIN),
+        (CANDIDATE_KNN, FEATURE_POLICY_DOMAIN),
+        (CANDIDATE_HYBRID_NAIVE_BAYES, FEATURE_POLICY_DOMAIN),
+        (CANDIDATE_LINEAR_SVM, FEATURE_POLICY_DOMAIN),
+        (CANDIDATE_RBF_SVM, FEATURE_POLICY_DOMAIN),
+        (CANDIDATE_MLP, FEATURE_POLICY_DOMAIN),
     )
     cases: list[tuple[str, str, str]] = []
-    for candidate_id in resampled_ids:
-        expanded = candidate_id in {
-            CANDIDATE_RIDGE_CLASSIFIER,
-            CANDIDATE_LOGISTIC_REGRESSION,
-        }
-        secondary_policy = FEATURE_POLICY_LINEAR_EXPANDED if expanded else FEATURE_POLICY_DOMAIN
+    for candidate_id, secondary_policy in resampled_secondary_policy:
         cases.append((candidate_id, secondary_policy, IMBALANCE_RANDOM_OVERSAMPLING))
         cases.append((candidate_id, secondary_policy, IMBALANCE_RANDOM_UNDERSAMPLING))
         cases.append((candidate_id, FEATURE_POLICY_RAW, IMBALANCE_SMOTENC))
@@ -296,6 +302,32 @@ def main() -> None:
             y_train=y_train,
             X_validation=X_validation,
             seed=RANDOM_STATE + 100 + index,
+        )
+
+    intrinsic_imbalance_ids = (
+        CANDIDATE_BALANCED_RANDOM_FOREST,
+        CANDIDATE_RUSBOOST,
+    )
+    print("Checking intrinsic-imbalance candidates expose only I0...", flush=True)
+    for index, candidate_id in enumerate(intrinsic_imbalance_ids, start=1):
+        policies = supported_imbalance_policies(
+            candidate_id,
+            FEATURE_POLICY_RAW,
+            FEATURE_SELECTION_NONE,
+        )
+        if policies != (IMBALANCE_NONE,):
+            raise AssertionError(
+                f"{candidate_id} must expose only I0 because balancing is intrinsic, "
+                f"observed {policies!r}."
+            )
+        fit_and_check(
+            candidate_id=candidate_id,
+            feature_policy=FEATURE_POLICY_RAW,
+            imbalance_policy=IMBALANCE_NONE,
+            X_train=X_train,
+            y_train=y_train,
+            X_validation=X_validation,
+            seed=RANDOM_STATE + 500 + index,
         )
 
     invalid_parameters = parameters_for_route(

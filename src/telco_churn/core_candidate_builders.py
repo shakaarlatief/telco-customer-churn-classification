@@ -66,6 +66,12 @@ from telco_churn.feature_policy_pipelines import (
     REPRESENTATION_SPARSE_UNSCALED,
     make_feature_policy_classifier_pipeline,
 )
+from telco_churn.conventional_core_candidates import (
+    CONVENTIONAL_CORE_EXPANSION_CANDIDATE_IDS,
+    build_conventional_core_candidate_pipeline,
+    declared_conventional_single_thread_parameter,
+    suggest_conventional_core_candidate_parameters,
+)
 from telco_churn.models import HybridGaussianBernoulliNB, make_kernel_svc_classifier
 
 
@@ -91,7 +97,7 @@ CORE_EXTENSION_CANDIDATE_IDS = frozenset(
         CANDIDATE_CATBOOST,
         CANDIDATE_RBF_SVM,
     }
-)
+) | CONVENTIONAL_CORE_EXPANSION_CANDIDATE_IDS
 
 
 def _decode_class_weight(value: object) -> str | None:
@@ -180,6 +186,13 @@ def suggest_core_candidate_parameters(
         raise CoreCandidateBuilderError(f"Unsupported search profile: {profile!r}")
     if candidate_id not in CORE_EXTENSION_CANDIDATE_IDS:
         raise CoreCandidateBuilderError(f"Unknown core extension candidate: {candidate_id!r}")
+
+    if candidate_id in CONVENTIONAL_CORE_EXPANSION_CANDIDATE_IDS:
+        return suggest_conventional_core_candidate_parameters(
+            trial,
+            candidate_id=candidate_id,
+            profile=profile,
+        )
 
     if candidate_id == CANDIDATE_RIDGE_CLASSIFIER:
         return {
@@ -519,6 +532,16 @@ def build_core_candidate_pipeline(
     if candidate_id not in CORE_EXTENSION_CANDIDATE_IDS:
         raise CoreCandidateBuilderError(f"Unknown core extension candidate: {candidate_id!r}")
     parameters = dict(parameters)
+    if candidate_id in CONVENTIONAL_CORE_EXPANSION_CANDIDATE_IDS:
+        return build_conventional_core_candidate_pipeline(
+            candidate_id,
+            parameters,
+            random_state=int(random_state),
+            feature_policy=feature_policy,
+            feature_selection_policy=feature_selection_policy,
+            feature_selection_parameters=feature_selection_parameters,
+        )
+
     make_routed_pipeline = partial(
         make_feature_policy_classifier_pipeline,
         policy_id=feature_policy,
@@ -720,6 +743,13 @@ def declared_single_thread_parameter(
     pipelines. Returning a value rather than printing from model constructors keeps
     worker output concise in the actual long-running experiment.
     """
+    conventional = declared_conventional_single_thread_parameter(
+        candidate_id,
+        classifier,
+    )
+    if conventional is not None:
+        return conventional
+
     if candidate_id in {
         CANDIDATE_EXTRA_TREES,
         CANDIDATE_KNN,
