@@ -36,6 +36,7 @@ from telco_churn.candidates import (
     CANDIDATE_BAGGING,
     CANDIDATE_CATBOOST,
     CANDIDATE_DECISION_TREE,
+    CANDIDATE_EXPLAINABLE_BOOSTING_MACHINE,
     CANDIDATE_EXTRA_TREES,
     CANDIDATE_GRADIENT_BOOSTING,
     CANDIDATE_HIST_GRADIENT_BOOSTING,
@@ -95,6 +96,7 @@ CORE_EXTENSION_CANDIDATE_IDS = frozenset(
         CANDIDATE_XGBOOST,
         CANDIDATE_LIGHTGBM,
         CANDIDATE_CATBOOST,
+        CANDIDATE_EXPLAINABLE_BOOSTING_MACHINE,
         CANDIDATE_RBF_SVM,
     }
 ) | CONVENTIONAL_CORE_EXPANSION_CANDIDATE_IDS
@@ -390,6 +392,45 @@ def suggest_core_candidate_parameters(
             ),
         }
 
+    if candidate_id == CANDIDATE_EXPLAINABLE_BOOSTING_MACHINE:
+        if profile == "smoke":
+            return {
+                "interactions": trial.suggest_categorical("interactions", [0]),
+                "max_rounds": int(trial.suggest_categorical("max_rounds", [64])),
+                "outer_bags": int(trial.suggest_categorical("outer_bags", [1])),
+                "learning_rate": float(
+                    trial.suggest_categorical("learning_rate", [0.03])
+                ),
+                "max_leaves": int(trial.suggest_categorical("max_leaves", [2])),
+                "min_samples_leaf": int(
+                    trial.suggest_categorical("min_samples_leaf", [4])
+                ),
+                "early_stopping_rounds": int(
+                    trial.suggest_categorical("early_stopping_rounds", [10])
+                ),
+            }
+        return {
+            "interactions": trial.suggest_categorical(
+                "interactions",
+                [0, 5, 10],
+            ),
+            "max_rounds": int(trial.suggest_categorical("max_rounds", [2_000])),
+            "outer_bags": int(trial.suggest_categorical("outer_bags", [4])),
+            "learning_rate": float(
+                trial.suggest_categorical(
+                    "learning_rate",
+                    [0.01, 0.03, 0.05],
+                )
+            ),
+            "max_leaves": int(trial.suggest_categorical("max_leaves", [2, 3])),
+            "min_samples_leaf": int(
+                trial.suggest_categorical("min_samples_leaf", [2, 4, 8, 16])
+            ),
+            "early_stopping_rounds": int(
+                trial.suggest_categorical("early_stopping_rounds", [100])
+            ),
+        }
+
     if candidate_id == CANDIDATE_RBF_SVM:
         return {
             "C": float(trial.suggest_float("C", 1e-4, 1e3, log=True)),
@@ -509,6 +550,48 @@ def _make_lightgbm_classifier(parameters: Mapping[str, Any], *, random_state: in
         random_state=int(random_state),
         n_jobs=1,
         verbosity=-1,
+    )
+
+
+def _make_explainable_boosting_classifier(
+    parameters: Mapping[str, Any],
+    *,
+    random_state: int,
+    feature_policy: FeaturePolicyId,
+):
+    """Create a one-thread EBM with explicit native categorical feature types."""
+    try:
+        from interpret.glassbox import ExplainableBoostingClassifier
+    except ImportError as exc:
+        raise ImportError(
+            "interpret-core is required for C20_EXPLAINABLE_BOOSTING_MACHINE. "
+            "Install the project requirements."
+        ) from exc
+
+    numeric_features = tuple(feature_policy_numeric_features(feature_policy))
+    categorical_features = tuple(feature_policy_categorical_features(feature_policy))
+    feature_names = [*numeric_features, *categorical_features]
+    feature_types = ["continuous"] * len(numeric_features) + ["nominal"] * len(
+        categorical_features
+    )
+    return ExplainableBoostingClassifier(
+        feature_names=feature_names,
+        feature_types=feature_types,
+        max_bins=1024,
+        max_interaction_bins=64,
+        interactions=parameters["interactions"],
+        validation_size=0.15,
+        outer_bags=int(parameters["outer_bags"]),
+        inner_bags=0,
+        learning_rate=float(parameters["learning_rate"]),
+        max_rounds=int(parameters["max_rounds"]),
+        early_stopping_rounds=int(parameters["early_stopping_rounds"]),
+        early_stopping_tolerance=1e-5,
+        min_samples_leaf=int(parameters["min_samples_leaf"]),
+        max_leaves=int(parameters["max_leaves"]),
+        objective="log_loss",
+        n_jobs=1,
+        random_state=int(random_state),
     )
 
 
@@ -717,6 +800,17 @@ def build_core_candidate_pipeline(
             ),
         )
 
+    if candidate_id == CANDIDATE_EXPLAINABLE_BOOSTING_MACHINE:
+        return make_routed_pipeline(
+            policy_id=feature_policy,
+            representation=REPRESENTATION_NATIVE_CATEGORICAL_STRING,
+            classifier=_make_explainable_boosting_classifier(
+                parameters,
+                random_state=random_state,
+                feature_policy=feature_policy,
+            ),
+        )
+
     if candidate_id == CANDIDATE_RBF_SVM:
         return make_routed_pipeline(
             policy_id=feature_policy,
@@ -757,6 +851,7 @@ def declared_single_thread_parameter(
         CANDIDATE_RANDOM_FOREST,
         CANDIDATE_XGBOOST,
         CANDIDATE_LIGHTGBM,
+        CANDIDATE_EXPLAINABLE_BOOSTING_MACHINE,
     }:
         return "n_jobs", int(classifier.get_params()["n_jobs"])
     if candidate_id == CANDIDATE_CATBOOST:
