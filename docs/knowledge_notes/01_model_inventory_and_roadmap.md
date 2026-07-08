@@ -341,27 +341,41 @@ The MLP is a legitimate finalist family but does not establish a material advant
 
 ## Core candidate library and final-comparison infrastructure
 
-The individual educational workflows now transition into a systematic final-selection stage. The implemented core registry contains 17 candidate families from the documented C01-C23 universe:
+The individual educational workflows now transition into a systematic final-selection stage. The implemented final-comparison core registry now contains 23 candidate families covering C01 through C23:
 
 ```text
 C01  Ridge classifier
 C02  Regularized logistic regression
+C03  Spline logistic regression
+C04  Shrinkage linear discriminant analysis
+C05  Regularized quadratic discriminant analysis
 C06  k-nearest neighbours
 C07  Hybrid Gaussian-Bernoulli Naive Bayes
 C08  Decision tree
 C09  Extra Trees
 C10  Bagging
 C11  Random forest
+C12  Balanced random forest
 C13  AdaBoost
+C14  RUSBoost
 C15  GradientBoostingClassifier
 C16  HistGradientBoostingClassifier
 C17  XGBoost
 C18  LightGBM
 C19  CatBoost
+C20  Explainable Boosting Machine
 C21  Linear SVM
 C22  RBF SVM
 C23  Dense multilayer perceptron
 ```
+
+The latest pushed implementation checkpoint is:
+
+```text
+d5d34cf Add explainable boosting machine candidate
+```
+
+C20 Explainable Boosting Machine adds an interpretable nonlinear additive comparator between regularized logistic models and less transparent boosting systems. It uses `interpret-core==0.7.8`, native categorical string preprocessing, F0/F1 feature policies, S0-only feature selection, weighted-only I0/I1 imbalance routing, bounded smoke/full search spaces, and `n_jobs=1`.
 
 The registry compares complete procedures, not bare estimator names. A procedure includes its feature policy, preprocessing representation, feature-selection policy where compatible, imbalance treatment, model hyperparameters, and random-state contract.
 
@@ -377,48 +391,63 @@ single-threaded native estimators inside process-level outer parallelism
 training-only smoke tests for every major reusable component
 ```
 
-## Operational pilot and monitoring status
+## Operational pilot, monitoring status, and candidate-completeness status
 
-After Phase 8B, the project moved into realistic persistent-run pilots for the final-comparison runner. These pilots are operational validation runs, not final model-selection evidence.
+The final-comparison runner has already passed realistic persistent-run operational pilots. These pilots are operational validation runs, not final model-selection evidence.
 
-The current pilot lineage is:
-
-```text
-v1:
-    first full-development pilot runner with six representative candidate families.
-
-v2:
-    monitorable persistent runner with progress sidecars, task registry inspection,
-    and clean pause behaviour.
-
-v3 and v4:
-    progressively improved live dashboards, coordinator logs, event views, colours,
-    alternate-screen watching, and clearer Stage-A/Stage-B telemetry.
-
-v5:
-    configuration-history monitoring with one-parameter-per-line dashboard output,
-    recent completed-configuration history, and durable configuration_history log files.
-```
-
-The fresh v5 monitoring-pilot identifier is:
+The completed operational pilot is:
 
 ```text
-pilot_pruned_f2_v5_history
+pilot_pruned_f2_v6_io_resilient
 ```
 
-The pilot remains deliberately smaller than the master comparison:
+Its scope and result were:
 
 ```text
-6 representative candidate families
-3 outer folds x 1 repeat
-3-fold Stage A
-3-fold Stage B
-12 valid Stage-A configurations per outer task
-top 3 Stage-A configurations confirmed in Stage B
+Candidates:
+    C01 Ridge classifier
+    C02 Regularized logistic regression
+    C07 Hybrid Gaussian-Bernoulli Naive Bayes
+    C08 Regularized decision tree
+    C19 CatBoost
+    C23 Dense multilayer perceptron
+
+Outer evaluation:
+    3 outer folds x 1 repeat
+
+Inner HPO per outer task:
+    Stage A: 12 valid configurations x 3 folds
+    Stage B: top 3 Stage-A configurations x 3 folds
+
+Operational result:
+    18 submitted, 18 completed, 0 failed, 0 interrupted, 0 skipped
+    all persisted result artifacts passed checksum validation
 ```
 
-The v4 pilot exposed a Windows-specific monitoring-side reliability issue: a progress-sidecar atomic replacement can fail with `PermissionError: [WinError 5] Access denied` when the progress JSON target is briefly locked. That failure affected monitoring persistence, not model-quality evidence. Before the master repeated nested-CV comparison, progress-sidecar writing must become best effort and must not be able to fail an otherwise successful modelling task.
+The v6 result resolves the earlier Windows filesystem-persistence blocker observed in v4. It remains an operational and search-budget pilot only. Its AP values, runtime values, and sampled candidates are not master-selection evidence and must not be used to include or exclude candidate families.
 
+After the C03-C20 implementation work, the conventional C01-C23 core registry is implemented. The remaining candidate-completeness decision is the conditional advanced tabular group:
+
+```text
+C24 TabNet:
+    package/API smoke feasible; not implemented yet
+
+C25 FT-Transformer:
+    use official rtdl_revisiting_models route;
+    PyTorch Tabular route rejected because of dependency conflict;
+    not implemented yet
+
+C26 TabM:
+    package/API smoke feasible; not implemented yet
+
+C27 TabPFN:
+    deferred because of CPU practicality and model-weight/licence constraints
+
+C28 AutoGluon:
+    deferred because the resolver would downgrade the numerical stack
+```
+
+No model is master-admitted yet. Protocol v2 remains unfrozen. The held-out test set remains untouched.
 
 ## Cross-cutting modelling policies before final evaluation
 

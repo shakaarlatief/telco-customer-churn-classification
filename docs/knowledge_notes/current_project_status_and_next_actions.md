@@ -24,18 +24,32 @@ docs/knowledge_notes/methodology/final_comparison_protocol_v1.md
 
 ## Latest confirmed checkpoint
 
-### Last substantive runner-code baseline
+### Latest candidate-registry implementation checkpoint
 
-The most recent remote commit that changed final-comparison runner behaviour is:
+The latest pushed candidate-registry commit is:
+
+```text
+d5d34cf Add explainable boosting machine candidate
+```
+
+This commit adds C20 Explainable Boosting Machine to the final-comparison candidate system. It uses `interpret-core==0.7.8`, native categorical string preprocessing, bounded C20 search spaces, and one-thread estimator execution.
+
+The preceding conventional candidate expansion commit is:
+
+```text
+98eeec006e69b6871f08874f398de75169ca81c0 Add conventional core candidate expansion
+```
+
+Together, these commits make the implemented final-comparison core registry cover C01 through C23.
+
+The most recent remote commit that changed final-comparison runner filesystem behaviour remains:
 
 ```text
 b174372f7b623595c4915116c477de9febc4ffd7
 Harden final comparison filesystem persistence
 ```
 
-That revision makes atomic artifact replacement resilient to transient Windows file-lock errors and ensures monitoring telemetry cannot terminate an otherwise valid modelling task.
-
-Documentation commits made after this revision do not change runner behaviour, candidate builders, search spaces, experiment artifacts, or the held-out-test policy.
+That runner revision makes atomic artifact replacement resilient to transient Windows file-lock errors and ensures monitoring telemetry cannot terminate an otherwise valid modelling task. The C03-C20 candidate additions change candidate builders, search spaces, dependencies, routing, and smoke coverage, but they do not use the held-out test set and do not freeze protocol v2.
 
 ### Operational pilot outcome
 
@@ -130,8 +144,8 @@ The held-out test set remains untouched for model-family selection, preprocessin
 Documented protocol universe:
     C01 through C28
 
-Currently implemented registry:
-    17 candidate families
+Currently implemented final-comparison core registry:
+    23 candidate families, C01 through C23
 
 Candidates currently master-admitted:
     none
@@ -140,37 +154,95 @@ Master protocol:
     protocol v2 has not been frozen
 ```
 
-The 17 implemented candidates are:
+The 23 implemented core candidates are:
 
 ```text
 C01  Ridge classifier
 C02  Regularized logistic regression
+C03  Spline logistic regression
+C04  Shrinkage linear discriminant analysis
+C05  Regularized quadratic discriminant analysis
 C06  k-nearest neighbours
 C07  Hybrid Gaussian-Bernoulli Naive Bayes
 C08  Regularized decision tree
 C09  Extra Trees
 C10  Bagged decision trees
 C11  Random forest
+C12  Balanced random forest
 C13  AdaBoost
+C14  RUSBoost
 C15  GradientBoostingClassifier
 C16  HistGradientBoostingClassifier
 C17  XGBoost
 C18  LightGBM
 C19  CatBoost
+C20  Explainable Boosting Machine
 C21  Linear SVM
 C22  RBF-kernel SVM
 C23  Dense multilayer perceptron
 ```
 
-The following documented conventional core candidates remain unimplemented:
+C20 validation passed after implementation:
 
 ```text
-C03  Spline logistic regression
-C04  Shrinkage linear discriminant analysis
-C05  Regularized quadratic discriminant analysis
-C12  Balanced random forest
-C14  RUSBoost or EasyEnsemble
-C20  Explainable Boosting Machine
+compile check:
+    passed
+
+dedicated C20 EBM smoke:
+    passed
+
+complete core candidate registry smoke:
+    passed, 23/23 candidates
+
+feature-policy routing smoke:
+    passed, 47/47 routes
+
+feature-selection routing smoke:
+    passed, 22/22 nontrivial selector routes
+
+imbalance-routing smoke:
+    passed
+
+pip check:
+    passed
+
+git diff --check:
+    passed
+```
+
+C20's current candidate contract is:
+
+```text
+package:
+    interpret-core==0.7.8
+
+estimator:
+    interpret.glassbox.ExplainableBoostingClassifier
+
+representation:
+    native categorical string columns
+
+feature policies:
+    F0_RAW
+    F1_DOMAIN_ENRICHED
+
+excluded feature policy:
+    F2_LINEAR_EXPANDED
+
+feature selection:
+    S0_NONE only
+
+imbalance policies:
+    I0_NONE
+    I1_CLASS_WEIGHT_BALANCED
+
+excluded imbalance policies:
+    I2_RANDOM_OVERSAMPLING
+    I3_RANDOM_UNDERSAMPLING
+    I4_SMOTENC
+
+resource policy:
+    n_jobs=1
 ```
 
 The following documented advanced or external candidates remain subject to explicit technical admission:
@@ -183,7 +255,29 @@ C27  TabPFN
 C28  AutoML tabular ensemble
 ```
 
-The complete implementation and admission matrix, including the required checks, is maintained in `02_candidate_status_register.md`. No item in that register is silently excluded merely because it is not part of the current 17-model code registry.
+Current advanced-candidate admission state:
+
+```text
+C24 TabNet:
+    package/API smoke feasible; not implemented in the final-comparison registry yet
+
+C25 FT-Transformer:
+    use the official rtdl_revisiting_models route;
+    PyTorch Tabular route rejected because of dependency conflict;
+    not implemented in the final-comparison registry yet
+
+C26 TabM:
+    package/API smoke feasible; not implemented in the final-comparison registry yet
+
+C27 TabPFN:
+    deferred because current CPU practicality and model-weight/licence constraints make it
+    unsuitable for this project stage
+
+C28 AutoGluon:
+    deferred because the resolver would downgrade the numerical stack
+```
+
+The complete implementation and admission matrix, including the required checks, is maintained in `02_candidate_status_register.md`. No candidate is master-admitted until protocol v2 is explicitly frozen.
 
 ## Current final-comparison infrastructure
 
@@ -333,35 +427,43 @@ When the reviewed local audit script is present, it can inspect a completed run 
 python scripts/audit_final_comparison_run.py --run-id <run_id>
 ```
 
-The pre-master scripts were intentionally designed around the 17 currently implemented candidates. The project now has an explicit record that the documented C01-C28 universe is broader. The correct next phase is candidate-completeness and admission work, not another score-producing run.
-
-The required order is:
+The local pre-master workflow files remain intentionally untracked and must be preserved:
 
 ```text
-1. Preserve the current 17-model pre-master tooling as a validated operational baseline.
+scripts/audit_final_comparison_run.py
+scripts/run_final_comparison_admission_smoke.py
+scripts/run_final_comparison_search_budget_calibration.py
+scripts/smoke_test_pre_master_workflows.py
+src/telco_churn/pre_master_workflows.py
+```
 
-2. Implement and smoke-test the six missing conventional core candidates:
-       C03, C04, C05, C12, C14, C20.
+Those files were reviewed as a local operational baseline before the final C03-C20 candidate-completeness work. They must be reconciled with the current 23-candidate registry and any later C24-C26 decisions before a real pre-master run is launched.
 
-3. Conduct explicit admission reviews for C24-C28:
-       installation,
-       licence and model-weight terms where applicable,
-       reproducible fit/predict,
-       fold-safe preprocessing,
-       checkpoint/resume,
-       CPU or GPU scheduling,
-       bounded runtime and search-budget feasibility.
+The required order is now:
 
-4. Record every pass, deferral, or technical exclusion in the candidate-status register.
+```text
+1. Preserve the local pre-master workflow files and do not stage them accidentally.
+
+2. Decide whether to proceed with advanced tabular implementation for:
+       C24 TabNet,
+       C25 FT-Transformer through rtdl_revisiting_models,
+       C26 TabM.
+
+3. Keep C27 TabPFN and C28 AutoGluon deferred unless their package, licence,
+   resource, and dependency constraints materially change.
+
+4. If C24-C26 are implemented, smoke-test them with the same no-test-set boundary.
 
 5. Update the all-candidate admission smoke so its scope covers every candidate admitted
-   at that point, not merely the original 17 implemented candidates.
+   at that point, not merely the earlier 17-candidate baseline.
 
 6. Run the real all-admitted-candidate admission smoke.
 
 7. Run the representative search-budget calibration.
 
-8. Freeze protocol v2:
+8. Audit the resulting run artifacts and runtime profile.
+
+9. Freeze protocol v2:
        master candidate registry,
        candidate contracts,
        feature policies,
@@ -373,7 +475,7 @@ The required order is:
        resource policy,
        audit and resume contract.
 
-9. Only then launch the repeated nested-CV master comparison on development data.
+10. Only then launch the repeated nested-CV master comparison on development data.
 ```
 
 ## Immediate local checks

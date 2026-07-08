@@ -57,7 +57,7 @@ Documented candidate universe:
     C01 through C28
 
 Currently implemented registry:
-    17 candidate families
+    23 candidate families, C01 through C23
 
 Current master-admitted registry:
     none; protocol v2 has not been frozen
@@ -95,24 +95,24 @@ Not master-admitted:
 |---|---|---|---|---|
 | C01 | Ridge classifier | Implemented | Admission pending; not master-admitted | Existing fold-safe linear baseline. |
 | C02 | Regularized logistic regression | Implemented | Admission pending; not master-admitted | Includes the existing regularization and feature-policy routing. |
-| C03 | Spline logistic regression | Planned conventional core; not implemented | Cannot enter admission smoke yet | Requires numeric B-spline bases, categorical indicators, regularized logistic output, and fold-safe routing. |
-| C04 | Shrinkage linear discriminant analysis | Planned conventional core; not implemented | Cannot enter admission smoke yet | Requires an explicit shrinkage-LDA implementation and compatible preprocessing contract. |
-| C05 | Regularized quadratic discriminant analysis | Planned conventional core; not implemented | Cannot enter admission smoke yet | Requires a numerically stable regularized-QDA implementation and compatible preprocessing contract. |
+| C03 | Spline logistic regression | Implemented | Admission pending; not master-admitted | Uses fold-safe spline-style nonlinear logistic modelling with bounded search. |
+| C04 | Shrinkage linear discriminant analysis | Implemented | Admission pending; not master-admitted | Uses a shrinkage-LDA contract with compatible preprocessing and routing. |
+| C05 | Regularized quadratic discriminant analysis | Implemented | Admission pending; not master-admitted | Uses a regularized-QDA contract for numerically stable class-conditional covariance estimation. |
 | C06 | k-nearest neighbours | Implemented | Admission pending; not master-admitted | Existing scaled one-hot local-learning procedure. |
 | C07 | Hybrid Gaussian-Bernoulli Naive Bayes | Implemented | Admission pending; not master-admitted | Existing mixed-likelihood generative procedure. |
 | C08 | Regularized decision tree | Implemented | Admission pending; not master-admitted | Existing pruned-tree procedure. |
 | C09 | Extra Trees | Implemented | Admission pending; not master-admitted | Existing randomized-tree ensemble. |
 | C10 | Bagged decision trees | Implemented | Admission pending; not master-admitted | Existing bagging procedure. |
 | C11 | Random forest | Implemented | Admission pending; not master-admitted | Existing random-forest procedure. |
-| C12 | Balanced random forest | Planned conventional core; not implemented | Cannot enter admission smoke yet | Must be evaluated as a distinct imbalance-aware procedure rather than treated as ordinary random forest. |
+| C12 | Balanced random forest | Implemented | Admission pending; not master-admitted | Distinct imbalance-aware random-forest procedure; routed as its own candidate rather than ordinary random forest. |
 | C13 | AdaBoost | Implemented | Admission pending; not master-admitted | Existing boosting procedure. |
-| C14 | RUSBoost or EasyEnsemble | Planned conventional core; not implemented | Cannot enter admission smoke yet | Exactly one documented imbalance-aware ensemble procedure is to be selected after package and reproducibility checks. |
+| C14 | RUSBoost | Implemented | Admission pending; not master-admitted | Choice resolved in favor of RUSBoost as the bounded imbalance-aware boosting candidate. |
 | C15 | GradientBoostingClassifier | Implemented | Admission pending; not master-admitted | Existing scikit-learn gradient boosting procedure. |
 | C16 | HistGradientBoostingClassifier | Implemented | Admission pending; not master-admitted | Existing histogram-based gradient boosting procedure. |
 | C17 | XGBoost | Implemented | Admission pending; not master-admitted | Existing external boosting procedure. |
 | C18 | LightGBM | Implemented | Admission pending; not master-admitted | Existing external boosting procedure. |
 | C19 | CatBoost | Implemented | Admission pending; not master-admitted | Existing native-categorical boosting procedure. |
-| C20 | Explainable Boosting Machine | Planned conventional core; not implemented | Cannot enter admission smoke yet | Interpretable nonlinear additive comparator; requires a package and fold-safe pipeline contract. |
+| C20 | Explainable Boosting Machine | Implemented | Admission pending; not master-admitted | Uses interpret-core, native categorical strings, F0/F1, S0 only, and weighted-only I0/I1 routing. |
 | C21 | Linear SVM | Implemented | Admission pending; not master-admitted | Existing margin-based linear procedure. |
 | C22 | RBF-kernel SVM | Implemented | Admission pending; not master-admitted | Existing nonlinear kernel procedure. |
 | C23 | Dense multilayer perceptron | Implemented | Admission pending; not master-admitted | Existing dense neural-network procedure. |
@@ -131,9 +131,9 @@ These candidates are documented because they represent modern tabular-learning o
 
 ## Required admission checks
 
-### Conventional pending core candidates: C03, C04, C05, C12, C14, and C20
+### Conventional core candidates C01-C23
 
-Before these candidates can join an all-admitted-candidate pre-master smoke, each needs:
+C01 through C23 are now implemented in the final-comparison core registry. Before any implemented candidate can join a frozen protocol-v2 master comparison, it still needs:
 
 ```text
 1. a reproducible candidate-builder implementation;
@@ -144,7 +144,7 @@ Before these candidates can join an all-admitted-candidate pre-master smoke, eac
 6. inclusion in the generic status, audit, and admission-workflow infrastructure.
 ```
 
-C14 additionally requires a documented choice between RUSBoost and EasyEnsemble. The choice must be made through package and reproducibility checks, not through informal test-set comparison.
+C14's documented imbalance-aware ensemble choice has been resolved in favor of RUSBoost. C20 has been added with a bounded EBM contract using `interpret-core==0.7.8`, native categorical string representation, F0/F1 feature policies, S0-only feature selection, and weighted-only I0/I1 imbalance routing.
 
 ### Advanced candidates: C24-C28
 
@@ -165,20 +165,34 @@ For TabPFN, the package version, model-weight terms, and hardware guidance must 
 
 ## Pre-master and master implications
 
-The current pre-master workflow additions were designed around the 17 currently implemented candidates. They should be treated as a validated implementation baseline, not as evidence that the other documented candidates have been dropped.
+The current local pre-master workflow additions were originally reviewed before the registry reached 23 implemented core candidates. They should be treated as a validated operational baseline, not as a final candidate-admission scope. The files remain intentionally untracked locally and must be reconciled with the 23-candidate registry and any later C24-C26 decisions before a real pre-master run.
 
 The correct order is:
 
 ```text
-1. Keep the 17-model pre-master tooling as a working operational baseline.
-2. Implement and smoke-test the six pending conventional core candidates.
-3. Perform explicit advanced-candidate admission reviews for C24-C28.
-4. Update the all-candidate admission workflow to cover every candidate admitted at that point.
-5. Run the actual all-admitted-candidate admission smoke.
-6. Run the representative search-budget calibration.
-7. Freeze protocol v2, including the master registry, search budgets, top-K confirmation rule,
-   feature contracts, and resource policy.
-8. Start the repeated nested-CV master comparison only after that freeze.
+1. Preserve the local pre-master workflow files and avoid accidental staging.
+
+2. Treat C01-C23 as implemented but still admission pending and not master-admitted.
+
+3. Decide whether to implement/admit C24-C26:
+       C24 TabNet,
+       C25 FT-Transformer through rtdl_revisiting_models,
+       C26 TabM.
+
+4. Keep C27 TabPFN deferred because of CPU practicality and model-weight/licence constraints.
+
+5. Keep C28 AutoGluon deferred because its resolver would downgrade the numerical stack.
+
+6. Update the all-candidate admission workflow to cover every candidate admitted at that point.
+
+7. Run the actual all-admitted-candidate admission smoke.
+
+8. Run representative search-budget calibration.
+
+9. Freeze protocol v2, including the master registry, search budgets, top-K confirmation rule,
+   feature contracts, imbalance contracts, and resource policy.
+
+10. Start the repeated nested-CV master comparison only after that freeze.
 ```
 
 No model is being excluded by this sequence. It separates implementation completeness from a fair and reproducible master comparison.
