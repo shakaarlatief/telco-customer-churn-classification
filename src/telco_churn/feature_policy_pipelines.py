@@ -994,6 +994,453 @@ class CloneSafeFeaturePolicyFTTransformerClassifier(ClassifierMixin, BaseEstimat
         return float(loss.detach().cpu().item())
 
 
+class CloneSafeFeaturePolicyTabMClassifier(ClassifierMixin, BaseEstimator):
+    """Clone-safe TabM wrapper with fold-local numeric/category state."""
+
+    def __init__(
+        self,
+        *,
+        arch_type: str,
+        n_blocks: int,
+        d_block: int,
+        dropout: float,
+        k: int,
+        learning_rate: float,
+        weight_decay: float,
+        max_epochs: int,
+        patience: int,
+        batch_size: int,
+        numeric_features: tuple[str, ...],
+        categorical_features: tuple[str, ...],
+        random_state: int,
+        activation: str = "ReLU",
+        start_scaling_init: str = "random-signs",
+        device_name: str = "cpu",
+        num_workers: int = 0,
+    ) -> None:
+        self.arch_type = arch_type
+        self.n_blocks = n_blocks
+        self.d_block = d_block
+        self.dropout = dropout
+        self.k = k
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.max_epochs = max_epochs
+        self.patience = patience
+        self.batch_size = batch_size
+        self.numeric_features = numeric_features
+        self.categorical_features = categorical_features
+        self.random_state = random_state
+        self.activation = activation
+        self.start_scaling_init = start_scaling_init
+        self.device_name = device_name
+        self.num_workers = num_workers
+
+    def fit(
+        self,
+        X: pd.DataFrame,
+        y: pd.Series | np.ndarray,
+        sample_weight=None,
+    ):
+        """Fit TabM with preprocessing learned only from this fitting fold."""
+        try:
+            import inspect
+
+            import torch
+            from torch.utils.data import DataLoader, TensorDataset
+            from tabm import TabM, make_tabm_backbone
+        except ImportError as exc:
+            raise ImportError(
+                "tabm and torch are required for C26_TABM. Install the project "
+                "requirements."
+            ) from exc
+
+        if str(self.device_name) != "cpu":
+            raise FeaturePolicyPipelineError("C26_TABM supports CPU only.")
+        if int(self.num_workers) != 0:
+            raise FeaturePolicyPipelineError("C26_TABM requires num_workers=0.")
+
+        X_frame = self._validate_input(X)
+        target = np.asarray(y)
+        if target.ndim != 1 or len(target) != len(X_frame):
+            raise FeaturePolicyPipelineError(
+                "TabM requires a one-dimensional target aligned with X."
+            )
+        if not np.isin(target, [0, 1]).all():
+            raise FeaturePolicyPipelineError(
+                "TabM requires binary labels encoded as 0 and 1."
+            )
+        target_float = target.astype(np.float32)
+
+        weights = np.ones(len(target_float), dtype=np.float32)
+        if sample_weight is not None:
+            weights = np.asarray(sample_weight, dtype=np.float32)
+            if weights.shape != (len(target_float),):
+                raise FeaturePolicyPipelineError(
+                    "TabM sample_weight must be a one-dimensional array aligned with X."
+                )
+            if not np.isfinite(weights).all():
+                raise FeaturePolicyPipelineError("TabM sample_weight must be finite.")
+            if np.any(weights < 0.0):
+                raise FeaturePolicyPipelineError(
+                    "TabM sample_weight must be non-negative."
+                )
+
+        self._fit_numeric_state(X_frame)
+        self.category_mappings_ = self._fit_category_mappings(X_frame)
+        self.cat_cardinalities_ = [
+            len(self.category_mappings_[column]) + 1
+            for column in self.categorical_features
+        ]
+        self.feature_names_in_ = np.asarray(
+            [*self.numeric_features, *self.categorical_features],
+            dtype=object,
+        )
+        self.n_features_in_ = len(self.feature_names_in_)
+
+        x_num = self._transform_numeric(X_frame)
+        x_cat = self._transform_categorical(X_frame)
+        train_indices, validation_indices = self._make_fit_split_indices(target)
+
+        torch.manual_seed(int(self.random_state))
+        try:
+            torch.use_deterministic_algorithms(True, warn_only=True)
+        except TypeError:
+            try:
+                torch.use_deterministic_algorithms(True)
+            except RuntimeError:
+                pass
+        except (AttributeError, RuntimeError):
+            pass
+
+        model_kwargs = self._make_model_kwargs(
+            TabM=TabM,
+            make_tabm_backbone=make_tabm_backbone,
+            inspect_module=inspect,
+        )
+        self.model_ = TabM.make(**model_kwargs)
+        self.model_.to("cpu")
+        optimizer = torch.optim.AdamW(
+            self.model_.parameters(),
+            lr=float(self.learning_rate),
+            weight_decay=float(self.weight_decay),
+        )
+        loss_fn = torch.nn.BCEWithLogitsLoss(reduction="none")
+
+        train_dataset = TensorDataset(
+            torch.as_tensor(x_num[train_indices], dtype=torch.float32),
+            torch.as_tensor(x_cat[train_indices], dtype=torch.int64),
+            torch.as_tensor(target_float[train_indices], dtype=torch.float32),
+            torch.as_tensor(weights[train_indices], dtype=torch.float32),
+        )
+        generator = torch.Generator()
+        generator.manual_seed(int(self.random_state))
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=int(self.batch_size),
+            shuffle=True,
+            num_workers=0,
+            generator=generator,
+            pin_memory=False,
+        )
+
+        validation_tensors = None
+        if validation_indices.size:
+            validation_tensors = (
+                torch.as_tensor(x_num[validation_indices], dtype=torch.float32),
+                torch.as_tensor(x_cat[validation_indices], dtype=torch.int64),
+                torch.as_tensor(target_float[validation_indices], dtype=torch.float32),
+            )
+
+        best_loss = np.inf
+        best_epoch = -1
+        best_state: dict[str, object] | None = None
+        epochs_without_improvement = 0
+
+        previous_threads = None
+        try:
+            previous_threads = int(torch.get_num_threads())
+            torch.set_num_threads(1)
+        except (AttributeError, RuntimeError, ValueError):
+            previous_threads = None
+        try:
+            for epoch in range(int(self.max_epochs)):
+                self.model_.train()
+                epoch_losses: list[float] = []
+                for batch_num, batch_cat, batch_y, batch_weight in train_loader:
+                    optimizer.zero_grad(set_to_none=True)
+                    logits = self._forward_logits(self.model_, batch_num, batch_cat)
+                    per_row_loss = self._per_row_loss(loss_fn, logits, batch_y)
+                    weight_sum = batch_weight.sum().clamp_min(1e-12)
+                    loss = (per_row_loss * batch_weight).sum() / weight_sum
+                    loss.backward()
+                    optimizer.step()
+                    epoch_losses.append(float(loss.detach().cpu().item()))
+
+                if validation_tensors is not None:
+                    monitored_loss = self._validation_loss(
+                        torch,
+                        loss_fn,
+                        *validation_tensors,
+                    )
+                else:
+                    monitored_loss = float(np.mean(epoch_losses))
+
+                if monitored_loss < best_loss - 1e-6:
+                    best_loss = monitored_loss
+                    best_epoch = epoch
+                    best_state = {
+                        name: parameter.detach().cpu().clone()
+                        for name, parameter in self.model_.state_dict().items()
+                    }
+                    epochs_without_improvement = 0
+                else:
+                    epochs_without_improvement += 1
+                    if epochs_without_improvement >= int(self.patience):
+                        break
+        finally:
+            if previous_threads is not None:
+                try:
+                    torch.set_num_threads(previous_threads)
+                except (RuntimeError, ValueError):
+                    pass
+
+        if best_state is not None:
+            self.model_.load_state_dict(best_state)
+        self.model_.eval()
+        self.classes_ = np.asarray([0, 1], dtype=int)
+        self.best_epoch_ = int(best_epoch)
+        self.best_validation_loss_ = float(best_loss)
+        self.device_ = "cpu"
+        self.num_workers_ = 0
+        self.ensemble_size_ = int(self.k)
+        return self
+
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        """Predict binary labels from averaged class-one probabilities."""
+        probabilities = self.predict_proba(X)[:, 1]
+        return (probabilities >= 0.5).astype(int)
+
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        """Return two-column class probabilities from averaged TabM outputs."""
+        check_is_fitted(self, ("model_", "category_mappings_", "numeric_mean_"))
+        try:
+            import torch
+        except ImportError as exc:
+            raise ImportError("torch is required for fitted C26_TABM predictions.") from exc
+
+        X_frame = self._validate_input(X)
+        x_num = torch.as_tensor(self._transform_numeric(X_frame), dtype=torch.float32)
+        x_cat = torch.as_tensor(self._transform_categorical(X_frame), dtype=torch.int64)
+        self.model_.eval()
+        with torch.no_grad():
+            logits = self._forward_logits(self.model_, x_num, x_cat)
+            member_probabilities = torch.sigmoid(logits)
+            if member_probabilities.ndim == 2:
+                class_one = member_probabilities.mean(dim=1)
+            elif member_probabilities.ndim == 1:
+                class_one = member_probabilities
+            else:
+                raise FeaturePolicyPipelineError(
+                    "TabM returned an invalid probability tensor shape."
+                )
+            class_one_array = class_one.detach().cpu().numpy().astype(float)
+        if class_one_array.shape != (len(X_frame),):
+            raise FeaturePolicyPipelineError(
+                f"TabM returned invalid probability shape {class_one_array.shape!r}."
+            )
+        if not np.isfinite(class_one_array).all():
+            raise FeaturePolicyPipelineError("TabM returned non-finite probabilities.")
+        class_one_array = np.clip(class_one_array, 0.0, 1.0)
+        return np.column_stack([1.0 - class_one_array, class_one_array])
+
+    def _validate_input(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Validate and order the native-categorical frame expected by TabM."""
+        if not isinstance(X, pd.DataFrame):
+            raise TypeError("TabM native preprocessing expects a pandas DataFrame.")
+        expected = [*self.numeric_features, *self.categorical_features]
+        missing = [column for column in expected if column not in X.columns]
+        if missing:
+            raise FeaturePolicyPipelineError(
+                f"TabM input is missing declared columns: {missing!r}."
+            )
+        return X.loc[:, expected].copy()
+
+    def _fit_numeric_state(self, X: pd.DataFrame) -> None:
+        """Learn fold-local numeric centering and scaling state."""
+        if not self.numeric_features:
+            self.numeric_mean_ = np.asarray([], dtype=np.float32)
+            self.numeric_scale_ = np.asarray([], dtype=np.float32)
+            return
+        numeric = X.loc[:, list(self.numeric_features)].apply(
+            pd.to_numeric,
+            errors="coerce",
+        )
+        values = numeric.to_numpy(dtype=np.float32)
+        if not np.isfinite(values).all():
+            raise FeaturePolicyPipelineError("TabM numeric inputs must be finite.")
+        mean = values.mean(axis=0, dtype=np.float64).astype(np.float32)
+        scale = values.std(axis=0, dtype=np.float64).astype(np.float32)
+        scale[~np.isfinite(scale) | (scale < 1e-6)] = 1.0
+        self.numeric_mean_ = mean
+        self.numeric_scale_ = scale
+
+    def _transform_numeric(self, X: pd.DataFrame) -> np.ndarray:
+        """Apply fitted numeric scaling without refitting on new rows."""
+        if not self.numeric_features:
+            return np.empty((len(X), 0), dtype=np.float32)
+        numeric = X.loc[:, list(self.numeric_features)].apply(
+            pd.to_numeric,
+            errors="coerce",
+        )
+        values = numeric.to_numpy(dtype=np.float32)
+        if not np.isfinite(values).all():
+            raise FeaturePolicyPipelineError("TabM numeric inputs must be finite.")
+        return ((values - self.numeric_mean_) / self.numeric_scale_).astype(np.float32)
+
+    def _fit_category_mappings(self, X: pd.DataFrame) -> dict[str, dict[str, int]]:
+        """Learn deterministic fold-local mappings, reserving zero for unknowns."""
+        mappings: dict[str, dict[str, int]] = {}
+        for column in self.categorical_features:
+            values = X[column].astype("string").dropna().astype(str)
+            categories = sorted(values.unique().tolist())
+            mappings[column] = {
+                category: index
+                for index, category in enumerate(categories, start=1)
+            }
+        return mappings
+
+    def _transform_categorical(self, X: pd.DataFrame) -> np.ndarray:
+        """Encode new rows with fitted mappings without learning new categories."""
+        if not self.categorical_features:
+            return np.empty((len(X), 0), dtype=np.int64)
+        encoded_columns = []
+        for column in self.categorical_features:
+            mapping = self.category_mappings_[column]
+            encoded = (
+                X[column]
+                .astype("string")
+                .astype(str)
+                .map(mapping)
+                .fillna(0)
+                .astype(np.int64)
+                .to_numpy()
+            )
+            encoded_columns.append(encoded.reshape(-1, 1))
+        return np.hstack(encoded_columns).astype(np.int64)
+
+    def _make_fit_split_indices(self, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Create a fold-internal validation split for early stopping."""
+        indices = np.arange(len(y))
+        unique, counts = np.unique(y, return_counts=True)
+        can_split = len(y) >= 40 and len(unique) == 2 and np.min(counts) >= 2
+        if not can_split:
+            return indices, np.asarray([], dtype=int)
+        train_indices, validation_indices = train_test_split(
+            indices,
+            test_size=0.15,
+            stratify=y,
+            random_state=int(self.random_state),
+        )
+        return train_indices, validation_indices
+
+    def _make_model_kwargs(
+        self,
+        *,
+        TabM,
+        make_tabm_backbone,
+        inspect_module,
+    ) -> dict[str, object]:
+        """Create and validate local-API TabM.make kwargs."""
+        tabm_parameters = set(inspect_module.signature(TabM).parameters)
+        constructor_args = {
+            "n_num_features",
+            "cat_cardinalities",
+            "d_out",
+        }
+        missing_constructor = sorted(constructor_args.difference(tabm_parameters))
+        if missing_constructor:
+            raise FeaturePolicyPipelineError(
+                "Local TabM constructor does not accept planned arguments: "
+                f"{missing_constructor!r}."
+            )
+
+        backbone_parameters = set(inspect_module.signature(make_tabm_backbone).parameters)
+        backbone_args = {
+            "n_blocks",
+            "d_block",
+            "dropout",
+            "activation",
+            "k",
+            "arch_type",
+            "start_scaling_init",
+        }
+        missing_backbone = sorted(backbone_args.difference(backbone_parameters))
+        if missing_backbone:
+            raise FeaturePolicyPipelineError(
+                "Local TabM backbone does not accept planned arguments: "
+                f"{missing_backbone!r}."
+            )
+        if int(self.k) < 1:
+            raise FeaturePolicyPipelineError("TabM k must be positive.")
+        if int(self.n_blocks) < 1:
+            raise FeaturePolicyPipelineError("TabM n_blocks must be positive.")
+        if int(self.d_block) < 1:
+            raise FeaturePolicyPipelineError("TabM d_block must be positive.")
+        if not (0.0 <= float(self.dropout) < 1.0):
+            raise FeaturePolicyPipelineError("TabM dropout must be in [0, 1).")
+
+        start_scaling_init = (
+            None if str(self.arch_type) == "tabm-packed" else str(self.start_scaling_init)
+        )
+        return {
+            "n_num_features": len(self.numeric_features),
+            "cat_cardinalities": list(self.cat_cardinalities_),
+            "d_out": 1,
+            "n_blocks": int(self.n_blocks),
+            "d_block": int(self.d_block),
+            "dropout": float(self.dropout),
+            "activation": str(self.activation),
+            "k": int(self.k),
+            "arch_type": str(self.arch_type),
+            "start_scaling_init": start_scaling_init,
+        }
+
+    def _forward_logits(self, model, x_num, x_cat):
+        """Run TabM and return handled logit shapes."""
+        x_num_arg = None if x_num.shape[1] == 0 else x_num
+        x_cat_arg = None if x_cat.shape[1] == 0 else x_cat
+        output = model(x_num_arg, x_cat_arg)
+        if output.ndim == 3 and output.shape[2] == 1:
+            return output[:, :, 0]
+        if output.ndim == 2:
+            if output.shape[1] == 1:
+                return output[:, 0]
+            return output
+        raise FeaturePolicyPipelineError(
+            f"TabM returned invalid logit shape {tuple(output.shape)!r}."
+        )
+
+    def _per_row_loss(self, loss_fn, logits, y_true):
+        """Reduce optional ensemble-member losses to one loss per row."""
+        if logits.ndim == 2:
+            losses = loss_fn(logits, y_true.unsqueeze(1).expand_as(logits))
+            return losses.mean(dim=1)
+        if logits.ndim == 1:
+            return loss_fn(logits, y_true)
+        raise FeaturePolicyPipelineError(
+            f"TabM returned invalid logit shape {tuple(logits.shape)!r}."
+        )
+
+    def _validation_loss(self, torch, loss_fn, x_num, x_cat, y_true) -> float:
+        """Evaluate unweighted validation loss for early stopping."""
+        self.model_.eval()
+        with torch.no_grad():
+            logits = self._forward_logits(self.model_, x_num, x_cat)
+            loss = self._per_row_loss(loss_fn, logits, y_true).mean()
+        return float(loss.detach().cpu().item())
+
+
 def make_feature_policy_classifier_pipeline(
     *,
     policy_id: FeaturePolicyId = FEATURE_POLICY_RAW,

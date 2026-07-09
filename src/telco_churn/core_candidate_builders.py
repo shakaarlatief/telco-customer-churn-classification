@@ -48,6 +48,7 @@ from telco_churn.candidates import (
     CANDIDATE_RBF_SVM,
     CANDIDATE_RIDGE_CLASSIFIER,
     CANDIDATE_TABNET,
+    CANDIDATE_TABM,
     CANDIDATE_XGBOOST,
 )
 from telco_churn.feature_selection import (
@@ -62,6 +63,7 @@ from telco_churn.feature_policies import (
 )
 from telco_churn.feature_policy_pipelines import (
     CloneSafeFeaturePolicyFTTransformerClassifier,
+    CloneSafeFeaturePolicyTabMClassifier,
     CloneSafeFeaturePolicyCatBoostClassifier,
     CloneSafeFeaturePolicyTabNetClassifier,
     REPRESENTATION_DENSE_UNSCALED,
@@ -104,6 +106,7 @@ CORE_EXTENSION_CANDIDATE_IDS = frozenset(
         CANDIDATE_RBF_SVM,
         CANDIDATE_TABNET,
         CANDIDATE_FT_TRANSFORMER,
+        CANDIDATE_TABM,
     }
 ) | CONVENTIONAL_CORE_EXPANSION_CANDIDATE_IDS
 
@@ -566,6 +569,44 @@ def suggest_core_candidate_parameters(
             "batch_size": int(trial.suggest_categorical("batch_size", [128, 256])),
         }
 
+    if candidate_id == CANDIDATE_TABM:
+        if profile == "smoke":
+            return {
+                "arch_type": trial.suggest_categorical("arch_type", ["tabm-mini"]),
+                "n_blocks": int(trial.suggest_categorical("n_blocks", [1])),
+                "d_block": int(trial.suggest_categorical("d_block", [32])),
+                "dropout": float(trial.suggest_categorical("dropout", [0.0])),
+                "k": int(trial.suggest_categorical("k", [4])),
+                "learning_rate": float(
+                    trial.suggest_categorical("learning_rate", [0.001])
+                ),
+                "weight_decay": float(
+                    trial.suggest_categorical("weight_decay", [0.00001])
+                ),
+                "max_epochs": int(trial.suggest_categorical("max_epochs", [8])),
+                "patience": int(trial.suggest_categorical("patience", [3])),
+                "batch_size": int(trial.suggest_categorical("batch_size", [128])),
+            }
+        return {
+            "arch_type": trial.suggest_categorical(
+                "arch_type",
+                ["tabm-mini", "tabm"],
+            ),
+            "n_blocks": int(trial.suggest_categorical("n_blocks", [1, 2, 3])),
+            "d_block": int(trial.suggest_categorical("d_block", [32, 64, 128])),
+            "dropout": float(trial.suggest_categorical("dropout", [0.0, 0.05, 0.1])),
+            "k": int(trial.suggest_categorical("k", [4, 8, 16])),
+            "learning_rate": float(
+                trial.suggest_categorical("learning_rate", [0.0003, 0.001, 0.003])
+            ),
+            "weight_decay": float(
+                trial.suggest_categorical("weight_decay", [0.0, 0.00001, 0.0001])
+            ),
+            "max_epochs": int(trial.suggest_categorical("max_epochs", [200])),
+            "patience": int(trial.suggest_categorical("patience", [20])),
+            "batch_size": int(trial.suggest_categorical("batch_size", [128, 256])),
+        }
+
     raise CoreCandidateBuilderError(f"No search space for {candidate_id!r}")
 
 
@@ -995,6 +1036,31 @@ def build_core_candidate_pipeline(
                 ffn_d_hidden_multiplier=float(parameters["ffn_d_hidden_multiplier"]),
                 ffn_dropout=float(parameters["ffn_dropout"]),
                 residual_dropout=float(parameters["residual_dropout"]),
+                learning_rate=float(parameters["learning_rate"]),
+                weight_decay=float(parameters["weight_decay"]),
+                max_epochs=int(parameters["max_epochs"]),
+                patience=int(parameters["patience"]),
+                batch_size=int(parameters["batch_size"]),
+                numeric_features=tuple(feature_policy_numeric_features(feature_policy)),
+                categorical_features=tuple(
+                    feature_policy_categorical_features(feature_policy)
+                ),
+                random_state=int(random_state),
+                device_name="cpu",
+                num_workers=0,
+            ),
+        )
+
+    if candidate_id == CANDIDATE_TABM:
+        return make_routed_pipeline(
+            policy_id=feature_policy,
+            representation=REPRESENTATION_NATIVE_CATEGORICAL_STRING,
+            classifier=CloneSafeFeaturePolicyTabMClassifier(
+                arch_type=str(parameters["arch_type"]),
+                n_blocks=int(parameters["n_blocks"]),
+                d_block=int(parameters["d_block"]),
+                dropout=float(parameters["dropout"]),
+                k=int(parameters["k"]),
                 learning_rate=float(parameters["learning_rate"]),
                 weight_decay=float(parameters["weight_decay"]),
                 max_epochs=int(parameters["max_epochs"]),
