@@ -38,6 +38,7 @@ from telco_churn.candidates import (
     CANDIDATE_DECISION_TREE,
     CANDIDATE_EXPLAINABLE_BOOSTING_MACHINE,
     CANDIDATE_EXTRA_TREES,
+    CANDIDATE_FT_TRANSFORMER,
     CANDIDATE_GRADIENT_BOOSTING,
     CANDIDATE_HIST_GRADIENT_BOOSTING,
     CANDIDATE_HYBRID_NAIVE_BAYES,
@@ -60,6 +61,7 @@ from telco_churn.feature_policies import (
     feature_policy_numeric_features,
 )
 from telco_churn.feature_policy_pipelines import (
+    CloneSafeFeaturePolicyFTTransformerClassifier,
     CloneSafeFeaturePolicyCatBoostClassifier,
     CloneSafeFeaturePolicyTabNetClassifier,
     REPRESENTATION_DENSE_UNSCALED,
@@ -101,6 +103,7 @@ CORE_EXTENSION_CANDIDATE_IDS = frozenset(
         CANDIDATE_EXPLAINABLE_BOOSTING_MACHINE,
         CANDIDATE_RBF_SVM,
         CANDIDATE_TABNET,
+        CANDIDATE_FT_TRANSFORMER,
     }
 ) | CONVENTIONAL_CORE_EXPANSION_CANDIDATE_IDS
 
@@ -496,6 +499,71 @@ def suggest_core_candidate_parameters(
                 trial.suggest_categorical("virtual_batch_size", [64])
             ),
             "mask_type": trial.suggest_categorical("mask_type", ["sparsemax", "entmax"]),
+        }
+
+    if candidate_id == CANDIDATE_FT_TRANSFORMER:
+        if profile == "smoke":
+            return {
+                "n_blocks": int(trial.suggest_categorical("n_blocks", [1])),
+                "d_block": int(trial.suggest_categorical("d_block", [32])),
+                "attention_n_heads": int(
+                    trial.suggest_categorical("attention_n_heads", [4])
+                ),
+                "attention_dropout": float(
+                    trial.suggest_categorical("attention_dropout", [0.0])
+                ),
+                "ffn_d_hidden_multiplier": float(
+                    trial.suggest_categorical(
+                        "ffn_d_hidden_multiplier",
+                        [4.0 / 3.0],
+                    )
+                ),
+                "ffn_dropout": float(
+                    trial.suggest_categorical("ffn_dropout", [0.0])
+                ),
+                "residual_dropout": float(
+                    trial.suggest_categorical("residual_dropout", [0.0])
+                ),
+                "learning_rate": float(
+                    trial.suggest_categorical("learning_rate", [0.001])
+                ),
+                "weight_decay": float(
+                    trial.suggest_categorical("weight_decay", [0.00001])
+                ),
+                "max_epochs": int(trial.suggest_categorical("max_epochs", [8])),
+                "patience": int(trial.suggest_categorical("patience", [3])),
+                "batch_size": int(trial.suggest_categorical("batch_size", [128])),
+            }
+        return {
+            "n_blocks": int(trial.suggest_categorical("n_blocks", [1, 2, 3])),
+            "d_block": int(trial.suggest_categorical("d_block", [32, 64, 96])),
+            "attention_n_heads": int(
+                trial.suggest_categorical("attention_n_heads", [4, 8])
+            ),
+            "attention_dropout": float(
+                trial.suggest_categorical("attention_dropout", [0.0, 0.1, 0.2])
+            ),
+            "ffn_d_hidden_multiplier": float(
+                trial.suggest_categorical(
+                    "ffn_d_hidden_multiplier",
+                    [1.0, 4.0 / 3.0, 2.0],
+                )
+            ),
+            "ffn_dropout": float(
+                trial.suggest_categorical("ffn_dropout", [0.0, 0.05, 0.1, 0.2])
+            ),
+            "residual_dropout": float(
+                trial.suggest_categorical("residual_dropout", [0.0, 0.05, 0.1])
+            ),
+            "learning_rate": float(
+                trial.suggest_categorical("learning_rate", [0.0003, 0.001, 0.003])
+            ),
+            "weight_decay": float(
+                trial.suggest_categorical("weight_decay", [0.0, 0.00001, 0.0001])
+            ),
+            "max_epochs": int(trial.suggest_categorical("max_epochs", [200])),
+            "patience": int(trial.suggest_categorical("patience", [20])),
+            "batch_size": int(trial.suggest_categorical("batch_size", [128, 256])),
         }
 
     raise CoreCandidateBuilderError(f"No search space for {candidate_id!r}")
@@ -912,6 +980,33 @@ def build_core_candidate_pipeline(
                 device_name="cpu",
                 num_workers=0,
                 verbose=0,
+            ),
+        )
+
+    if candidate_id == CANDIDATE_FT_TRANSFORMER:
+        return make_routed_pipeline(
+            policy_id=feature_policy,
+            representation=REPRESENTATION_NATIVE_CATEGORICAL_STRING,
+            classifier=CloneSafeFeaturePolicyFTTransformerClassifier(
+                n_blocks=int(parameters["n_blocks"]),
+                d_block=int(parameters["d_block"]),
+                attention_n_heads=int(parameters["attention_n_heads"]),
+                attention_dropout=float(parameters["attention_dropout"]),
+                ffn_d_hidden_multiplier=float(parameters["ffn_d_hidden_multiplier"]),
+                ffn_dropout=float(parameters["ffn_dropout"]),
+                residual_dropout=float(parameters["residual_dropout"]),
+                learning_rate=float(parameters["learning_rate"]),
+                weight_decay=float(parameters["weight_decay"]),
+                max_epochs=int(parameters["max_epochs"]),
+                patience=int(parameters["patience"]),
+                batch_size=int(parameters["batch_size"]),
+                numeric_features=tuple(feature_policy_numeric_features(feature_policy)),
+                categorical_features=tuple(
+                    feature_policy_categorical_features(feature_policy)
+                ),
+                random_state=int(random_state),
+                device_name="cpu",
+                num_workers=0,
             ),
         )
 

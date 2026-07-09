@@ -163,7 +163,7 @@ def run_policy_routing_smoke(X: pd.DataFrame, y: pd.Series) -> None:
         for policy_id in supported_feature_policies(definition.candidate_id)
     ]
 
-    expected_route_count = 49
+    expected_route_count = 51
     if len(routes) != expected_route_count:
         raise AssertionError(
             f"Expected {expected_route_count} declared candidate-policy routes, "

@@ -143,6 +143,7 @@ CANDIDATE_LINEAR_SVM = "C21_LINEAR_SVM"
 CANDIDATE_RBF_SVM = "C22_RBF_SVM"
 CANDIDATE_MLP = "C23_MULTILAYER_PERCEPTRON"
 CANDIDATE_TABNET = "C24_TABNET"
+CANDIDATE_FT_TRANSFORMER = "C25_FT_TRANSFORMER"
 
 
 FEATURE_POLICIES_GENERAL: tuple[FeaturePolicyId, ...] = (
@@ -187,6 +188,7 @@ FEATURE_POLICIES_BY_CANDIDATE: dict[str, tuple[FeaturePolicyId, ...]] = {
     CANDIDATE_RBF_SVM: FEATURE_POLICIES_GENERAL,
     CANDIDATE_MLP: FEATURE_POLICIES_GENERAL,
     CANDIDATE_TABNET: FEATURE_POLICIES_GENERAL,
+    CANDIDATE_FT_TRANSFORMER: FEATURE_POLICIES_GENERAL,
 }
 
 FEATURE_SELECTION_POLICIES_NONE: tuple[FeatureSelectionPolicyId, ...] = (
@@ -234,6 +236,7 @@ FEATURE_SELECTION_POLICIES_BY_CANDIDATE: dict[
     CANDIDATE_CATBOOST: FEATURE_SELECTION_POLICIES_NONE,
     CANDIDATE_EXPLAINABLE_BOOSTING_MACHINE: FEATURE_SELECTION_POLICIES_NONE,
     CANDIDATE_TABNET: FEATURE_SELECTION_POLICIES_NONE,
+    CANDIDATE_FT_TRANSFORMER: FEATURE_SELECTION_POLICIES_NONE,
 }
 
 
@@ -581,6 +584,12 @@ CORE_CANDIDATE_REGISTRY: tuple[CandidateDefinition, ...] = (
         display_name="TabNet",
         score_kind="probability",
         representation="native TabNet categorical embeddings",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_FT_TRANSFORMER,
+        display_name="FT-Transformer",
+        score_kind="probability",
+        representation="native FT-Transformer continuous and categorical embeddings",
     ),
 )
 
