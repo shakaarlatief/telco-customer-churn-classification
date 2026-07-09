@@ -142,6 +142,7 @@ CANDIDATE_EXPLAINABLE_BOOSTING_MACHINE = "C20_EXPLAINABLE_BOOSTING_MACHINE"
 CANDIDATE_LINEAR_SVM = "C21_LINEAR_SVM"
 CANDIDATE_RBF_SVM = "C22_RBF_SVM"
 CANDIDATE_MLP = "C23_MULTILAYER_PERCEPTRON"
+CANDIDATE_TABNET = "C24_TABNET"
 
 
 FEATURE_POLICIES_GENERAL: tuple[FeaturePolicyId, ...] = (
@@ -185,6 +186,7 @@ FEATURE_POLICIES_BY_CANDIDATE: dict[str, tuple[FeaturePolicyId, ...]] = {
     CANDIDATE_LINEAR_SVM: FEATURE_POLICIES_GENERAL,
     CANDIDATE_RBF_SVM: FEATURE_POLICIES_GENERAL,
     CANDIDATE_MLP: FEATURE_POLICIES_GENERAL,
+    CANDIDATE_TABNET: FEATURE_POLICIES_GENERAL,
 }
 
 FEATURE_SELECTION_POLICIES_NONE: tuple[FeatureSelectionPolicyId, ...] = (
@@ -231,6 +233,7 @@ FEATURE_SELECTION_POLICIES_BY_CANDIDATE: dict[
     CANDIDATE_LIGHTGBM: FEATURE_SELECTION_POLICIES_NONE,
     CANDIDATE_CATBOOST: FEATURE_SELECTION_POLICIES_NONE,
     CANDIDATE_EXPLAINABLE_BOOSTING_MACHINE: FEATURE_SELECTION_POLICIES_NONE,
+    CANDIDATE_TABNET: FEATURE_SELECTION_POLICIES_NONE,
 }
 
 
@@ -572,6 +575,12 @@ CORE_CANDIDATE_REGISTRY: tuple[CandidateDefinition, ...] = (
         display_name="Multilayer perceptron",
         score_kind="probability",
         representation="dense scaled one-hot features",
+    ),
+    CandidateDefinition(
+        candidate_id=CANDIDATE_TABNET,
+        display_name="TabNet",
+        score_kind="probability",
+        representation="native TabNet categorical embeddings",
     ),
 )
 

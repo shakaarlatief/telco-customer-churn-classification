@@ -24,6 +24,7 @@ import pandas as pd
 from sklearn.base import BaseEstimator, ClassifierMixin, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
+from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.utils.validation import check_is_fitted
@@ -297,6 +298,282 @@ class CloneSafeFeaturePolicyCatBoostClassifier(ClassifierMixin, BaseEstimator):
         """Predict class probabilities after policy-aware native preprocessing."""
         check_is_fitted(self, "model_")
         return np.asarray(self.model_.predict_proba(X), dtype=float)
+
+
+class CloneSafeFeaturePolicyTabNetClassifier(ClassifierMixin, BaseEstimator):
+    """Clone-safe TabNet wrapper with fold-local categorical integer mappings."""
+
+    def __init__(
+        self,
+        *,
+        n_d: int,
+        n_a: int,
+        n_steps: int,
+        gamma: float,
+        cat_emb_dim: int,
+        n_independent: int,
+        n_shared: int,
+        lambda_sparse: float,
+        learning_rate: float,
+        weight_decay: float,
+        max_epochs: int,
+        patience: int,
+        batch_size: int,
+        virtual_batch_size: int,
+        mask_type: str,
+        numeric_features: tuple[str, ...],
+        categorical_features: tuple[str, ...],
+        random_state: int,
+        device_name: str = "cpu",
+        num_workers: int = 0,
+        verbose: int = 0,
+    ) -> None:
+        self.n_d = n_d
+        self.n_a = n_a
+        self.n_steps = n_steps
+        self.gamma = gamma
+        self.cat_emb_dim = cat_emb_dim
+        self.n_independent = n_independent
+        self.n_shared = n_shared
+        self.lambda_sparse = lambda_sparse
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.max_epochs = max_epochs
+        self.patience = patience
+        self.batch_size = batch_size
+        self.virtual_batch_size = virtual_batch_size
+        self.mask_type = mask_type
+        self.numeric_features = numeric_features
+        self.categorical_features = categorical_features
+        self.random_state = random_state
+        self.device_name = device_name
+        self.num_workers = num_workers
+        self.verbose = verbose
+
+    def fit(
+        self,
+        X: pd.DataFrame,
+        y: pd.Series | np.ndarray,
+        sample_weight=None,
+    ):
+        """Fit TabNet with categorical maps learned only from this fitting fold."""
+        try:
+            import torch
+            from pytorch_tabnet.tab_model import TabNetClassifier
+        except ImportError as exc:
+            raise ImportError(
+                "pytorch-tabnet is required for C24_TABNET. "
+                "Install the project requirements."
+            ) from exc
+
+        X_frame = self._validate_input(X)
+        target = np.asarray(y)
+        if target.ndim != 1 or len(target) != len(X_frame):
+            raise FeaturePolicyPipelineError(
+                "TabNet requires a one-dimensional target aligned with X."
+            )
+
+        self.category_mappings_ = self._fit_category_mappings(X_frame)
+        self.cat_idxs_ = list(
+            range(
+                len(self.numeric_features),
+                len(self.numeric_features) + len(self.categorical_features),
+            )
+        )
+        self.cat_dims_ = [
+            len(self.category_mappings_[column]) + 1
+            for column in self.categorical_features
+        ]
+        self.feature_names_in_ = np.asarray(
+            [*self.numeric_features, *self.categorical_features],
+            dtype=object,
+        )
+        self.n_features_in_ = len(self.feature_names_in_)
+        X_encoded = self._transform_with_mappings(X_frame)
+
+        weights = 0
+        if sample_weight is not None:
+            weights = np.asarray(sample_weight, dtype=float)
+            if weights.shape != (len(target),):
+                raise FeaturePolicyPipelineError(
+                    "TabNet sample_weight must be a one-dimensional array aligned with X."
+                )
+            if not np.isfinite(weights).all():
+                raise FeaturePolicyPipelineError("TabNet sample_weight must be finite.")
+
+        fit_X, eval_X, fit_y, eval_y, fit_weights = self._make_fit_split(
+            X_encoded,
+            target,
+            weights,
+        )
+        fit_kwargs = {
+            "weights": fit_weights,
+            "max_epochs": int(self.max_epochs),
+            "patience": int(self.patience),
+            "batch_size": int(self.batch_size),
+            "virtual_batch_size": int(self.virtual_batch_size),
+            "num_workers": int(self.num_workers),
+            "drop_last": False,
+            "pin_memory": False,
+            "compute_importance": False,
+        }
+        if eval_X is not None:
+            fit_kwargs["eval_set"] = [(eval_X, eval_y)]
+            fit_kwargs["eval_name"] = ["validation"]
+            fit_kwargs["eval_metric"] = ["auc"]
+
+        self.model_ = TabNetClassifier(
+            n_d=int(self.n_d),
+            n_a=int(self.n_a),
+            n_steps=int(self.n_steps),
+            gamma=float(self.gamma),
+            cat_idxs=list(self.cat_idxs_),
+            cat_dims=list(self.cat_dims_),
+            cat_emb_dim=int(self.cat_emb_dim),
+            n_independent=int(self.n_independent),
+            n_shared=int(self.n_shared),
+            lambda_sparse=float(self.lambda_sparse),
+            seed=int(self.random_state),
+            verbose=int(self.verbose),
+            optimizer_params={
+                "lr": float(self.learning_rate),
+                "weight_decay": float(self.weight_decay),
+            },
+            mask_type=str(self.mask_type),
+            device_name=str(self.device_name),
+        )
+
+        previous_threads = None
+        try:
+            previous_threads = int(torch.get_num_threads())
+            torch.set_num_threads(1)
+        except (AttributeError, RuntimeError, ValueError):
+            previous_threads = None
+        try:
+            try:
+                self.model_.fit(fit_X, fit_y, **fit_kwargs)
+            except (TypeError, ValueError) as exc:
+                if sample_weight is not None:
+                    raise FeaturePolicyPipelineError(
+                        "TabNet rejected the per-row sample_weight array passed "
+                        "through I1_CLASS_WEIGHT_BALANCED."
+                    ) from exc
+                raise
+        finally:
+            if previous_threads is not None:
+                try:
+                    torch.set_num_threads(previous_threads)
+                except (RuntimeError, ValueError):
+                    pass
+
+        classes = getattr(self.model_, "classes_", None)
+        if classes is None:
+            raise FeaturePolicyPipelineError("Fitted TabNet model did not expose classes_.")
+        self.classes_ = np.asarray(classes)
+        return self
+
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        """Predict binary labels using fixed fold-local categorical mappings."""
+        check_is_fitted(self, ("model_", "category_mappings_"))
+        return np.asarray(self.model_.predict(self._transform_with_mappings(X)))
+
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        """Predict class probabilities using fixed fold-local categorical mappings."""
+        check_is_fitted(self, ("model_", "category_mappings_"))
+        probabilities = np.asarray(
+            self.model_.predict_proba(self._transform_with_mappings(X)),
+            dtype=float,
+        )
+        if probabilities.ndim != 2:
+            raise FeaturePolicyPipelineError(
+                f"TabNet returned invalid probability shape {probabilities.shape!r}."
+            )
+        return probabilities
+
+    def _validate_input(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Validate and order the native-categorical frame expected by TabNet."""
+        if not isinstance(X, pd.DataFrame):
+            raise TypeError("TabNet native preprocessing expects a pandas DataFrame.")
+        expected = [*self.numeric_features, *self.categorical_features]
+        missing = [column for column in expected if column not in X.columns]
+        if missing:
+            raise FeaturePolicyPipelineError(
+                f"TabNet input is missing declared columns: {missing!r}."
+            )
+        return X.loc[:, expected].copy()
+
+    def _fit_category_mappings(self, X: pd.DataFrame) -> dict[str, dict[str, int]]:
+        """Learn deterministic fold-local mappings, reserving zero for unknowns."""
+        mappings: dict[str, dict[str, int]] = {}
+        for column in self.categorical_features:
+            values = X[column].astype("string").dropna().astype(str)
+            categories = sorted(values.unique().tolist())
+            mappings[column] = {
+                category: index
+                for index, category in enumerate(categories, start=1)
+            }
+        return mappings
+
+    def _transform_with_mappings(self, X: pd.DataFrame) -> np.ndarray:
+        """Encode new data with fitted mappings without learning new categories."""
+        X_frame = self._validate_input(X)
+        numeric = X_frame.loc[:, list(self.numeric_features)].apply(
+            pd.to_numeric,
+            errors="coerce",
+        )
+        numeric_array = numeric.to_numpy(dtype=np.float32)
+        if not np.isfinite(numeric_array).all():
+            raise FeaturePolicyPipelineError("TabNet numeric inputs must be finite.")
+
+        encoded_columns = []
+        for column in self.categorical_features:
+            mapping = self.category_mappings_[column]
+            encoded = (
+                X_frame[column]
+                .astype("string")
+                .astype(str)
+                .map(mapping)
+                .fillna(0)
+                .astype(np.int64)
+                .to_numpy()
+            )
+            encoded_columns.append(encoded.reshape(-1, 1))
+        if encoded_columns:
+            categorical_array = np.hstack(encoded_columns).astype(np.float32)
+            return np.hstack([numeric_array, categorical_array]).astype(np.float32)
+        return numeric_array.astype(np.float32)
+
+    def _make_fit_split(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        weights,
+    ) -> tuple[np.ndarray, np.ndarray | None, np.ndarray, np.ndarray | None, object]:
+        """Create a fold-internal validation split for TabNet early stopping."""
+        unique, counts = np.unique(y, return_counts=True)
+        can_split = len(y) >= 40 and len(unique) == 2 and np.min(counts) >= 2
+        if not can_split:
+            return X, None, y, None, weights
+
+        indices = np.arange(len(y))
+        train_indices, validation_indices = train_test_split(
+            indices,
+            test_size=0.15,
+            stratify=y,
+            random_state=int(self.random_state),
+        )
+        split_weights = (
+            0
+            if isinstance(weights, int)
+            else np.asarray(weights, dtype=float)[train_indices]
+        )
+        return (
+            X[train_indices],
+            X[validation_indices],
+            y[train_indices],
+            y[validation_indices],
+            split_weights,
+        )
 
 
 def make_feature_policy_classifier_pipeline(

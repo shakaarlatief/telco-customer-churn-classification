@@ -89,6 +89,7 @@ pure_eval==0.2.3
 pycparser==3.0
 Pygments==2.20.0
 pyparsing==3.3.2
+pytorch-tabnet==4.1.0
 python-dateutil==2.9.0.post0
 python-json-logger==4.1.0
 pywinpty==3.0.3

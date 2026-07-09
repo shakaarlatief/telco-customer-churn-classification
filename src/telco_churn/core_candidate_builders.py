@@ -46,6 +46,7 @@ from telco_churn.candidates import (
     CANDIDATE_RANDOM_FOREST,
     CANDIDATE_RBF_SVM,
     CANDIDATE_RIDGE_CLASSIFIER,
+    CANDIDATE_TABNET,
     CANDIDATE_XGBOOST,
 )
 from telco_churn.feature_selection import (
@@ -60,6 +61,7 @@ from telco_churn.feature_policies import (
 )
 from telco_churn.feature_policy_pipelines import (
     CloneSafeFeaturePolicyCatBoostClassifier,
+    CloneSafeFeaturePolicyTabNetClassifier,
     REPRESENTATION_DENSE_UNSCALED,
     REPRESENTATION_NATIVE_CATEGORICAL_DTYPE,
     REPRESENTATION_NATIVE_CATEGORICAL_STRING,
@@ -98,6 +100,7 @@ CORE_EXTENSION_CANDIDATE_IDS = frozenset(
         CANDIDATE_CATBOOST,
         CANDIDATE_EXPLAINABLE_BOOSTING_MACHINE,
         CANDIDATE_RBF_SVM,
+        CANDIDATE_TABNET,
     }
 ) | CONVENTIONAL_CORE_EXPANSION_CANDIDATE_IDS
 
@@ -436,6 +439,63 @@ def suggest_core_candidate_parameters(
             "C": float(trial.suggest_float("C", 1e-4, 1e3, log=True)),
             "gamma": float(trial.suggest_float("gamma", 1e-5, 10.0, log=True)),
             "class_weight": "none",
+        }
+
+    if candidate_id == CANDIDATE_TABNET:
+        if profile == "smoke":
+            return {
+                "n_d": int(trial.suggest_categorical("n_d", [8])),
+                "n_a": int(trial.suggest_categorical("n_a", [8])),
+                "n_steps": int(trial.suggest_categorical("n_steps", [3])),
+                "gamma": float(trial.suggest_categorical("gamma", [1.3])),
+                "cat_emb_dim": int(trial.suggest_categorical("cat_emb_dim", [1])),
+                "n_independent": int(
+                    trial.suggest_categorical("n_independent", [1])
+                ),
+                "n_shared": int(trial.suggest_categorical("n_shared", [1])),
+                "lambda_sparse": float(
+                    trial.suggest_categorical("lambda_sparse", [0.001])
+                ),
+                "learning_rate": float(
+                    trial.suggest_categorical("learning_rate", [0.02])
+                ),
+                "weight_decay": float(
+                    trial.suggest_categorical("weight_decay", [0.0])
+                ),
+                "max_epochs": int(trial.suggest_categorical("max_epochs", [8])),
+                "patience": int(trial.suggest_categorical("patience", [3])),
+                "batch_size": int(trial.suggest_categorical("batch_size", [128])),
+                "virtual_batch_size": int(
+                    trial.suggest_categorical("virtual_batch_size", [64])
+                ),
+                "mask_type": trial.suggest_categorical("mask_type", ["sparsemax"]),
+            }
+        return {
+            "n_d": int(trial.suggest_categorical("n_d", [8, 16, 24])),
+            "n_a": int(trial.suggest_categorical("n_a", [8, 16, 24])),
+            "n_steps": int(trial.suggest_categorical("n_steps", [3, 4, 5])),
+            "gamma": float(trial.suggest_categorical("gamma", [1.1, 1.3, 1.5, 1.8])),
+            "cat_emb_dim": int(trial.suggest_categorical("cat_emb_dim", [1, 2, 4])),
+            "n_independent": int(
+                trial.suggest_categorical("n_independent", [1, 2])
+            ),
+            "n_shared": int(trial.suggest_categorical("n_shared", [1, 2])),
+            "lambda_sparse": float(
+                trial.suggest_categorical("lambda_sparse", [0.0001, 0.001, 0.01])
+            ),
+            "learning_rate": float(
+                trial.suggest_categorical("learning_rate", [0.005, 0.01, 0.02, 0.03])
+            ),
+            "weight_decay": float(
+                trial.suggest_categorical("weight_decay", [0.0, 0.00001, 0.0001])
+            ),
+            "max_epochs": int(trial.suggest_categorical("max_epochs", [200])),
+            "patience": int(trial.suggest_categorical("patience", [20])),
+            "batch_size": int(trial.suggest_categorical("batch_size", [128, 256, 512])),
+            "virtual_batch_size": int(
+                trial.suggest_categorical("virtual_batch_size", [64])
+            ),
+            "mask_type": trial.suggest_categorical("mask_type", ["sparsemax", "entmax"]),
         }
 
     raise CoreCandidateBuilderError(f"No search space for {candidate_id!r}")
@@ -821,6 +881,37 @@ def build_core_candidate_pipeline(
                 gamma=float(parameters["gamma"]),
                 class_weight=_decode_class_weight(parameters["class_weight"]),
                 random_state=int(random_state),
+            ),
+        )
+
+    if candidate_id == CANDIDATE_TABNET:
+        return make_routed_pipeline(
+            policy_id=feature_policy,
+            representation=REPRESENTATION_NATIVE_CATEGORICAL_STRING,
+            classifier=CloneSafeFeaturePolicyTabNetClassifier(
+                n_d=int(parameters["n_d"]),
+                n_a=int(parameters["n_a"]),
+                n_steps=int(parameters["n_steps"]),
+                gamma=float(parameters["gamma"]),
+                cat_emb_dim=int(parameters["cat_emb_dim"]),
+                n_independent=int(parameters["n_independent"]),
+                n_shared=int(parameters["n_shared"]),
+                lambda_sparse=float(parameters["lambda_sparse"]),
+                learning_rate=float(parameters["learning_rate"]),
+                weight_decay=float(parameters["weight_decay"]),
+                max_epochs=int(parameters["max_epochs"]),
+                patience=int(parameters["patience"]),
+                batch_size=int(parameters["batch_size"]),
+                virtual_batch_size=int(parameters["virtual_batch_size"]),
+                mask_type=str(parameters["mask_type"]),
+                numeric_features=tuple(feature_policy_numeric_features(feature_policy)),
+                categorical_features=tuple(
+                    feature_policy_categorical_features(feature_policy)
+                ),
+                random_state=int(random_state),
+                device_name="cpu",
+                num_workers=0,
+                verbose=0,
             ),
         )
 
