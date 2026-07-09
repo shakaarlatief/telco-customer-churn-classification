@@ -24,23 +24,27 @@ docs/knowledge_notes/methodology/final_comparison_protocol_v1.md
 
 ## Latest confirmed checkpoint
 
-### Latest candidate-registry implementation checkpoint
+### Latest workflow source-provenance checkpoint
 
-The latest pushed candidate-registry commit is:
+The source revision recorded by the completed admission-smoke workflow was:
 
 ```text
+62e52dad585eb92709ab6a5748cd8dc82f8b9755
+Add pre-master final-comparison workflows
+```
+
+This commit adds the pre-master final-comparison workflow layer used for admission smoke, representative search-budget calibration, and run auditing. It does not freeze protocol v2, does not master-admit any candidate, and does not access the held-out test set.
+
+The latest pushed candidate-family implementation checkpoints are:
+
+```text
+3d0a371 Add TabM final-comparison candidate
+8bb0b3c Add FT-Transformer final-comparison candidate
+2f422a2 Add TabNet final-comparison candidate
 d5d34cf Add explainable boosting machine candidate
 ```
 
-This commit adds C20 Explainable Boosting Machine to the final-comparison candidate system. It uses `interpret-core==0.7.8`, native categorical string preprocessing, bounded C20 search spaces, and one-thread estimator execution.
-
-The preceding conventional candidate expansion commit is:
-
-```text
-98eeec006e69b6871f08874f398de75169ca81c0 Add conventional core candidate expansion
-```
-
-Together, these commits make the implemented final-comparison core registry cover C01 through C23.
+Together, these commits make the implemented final-comparison registry cover C01 through C26. C27 TabPFN and C28 AutoGluon remain deferred.
 
 The most recent remote commit that changed final-comparison runner filesystem behaviour remains:
 
@@ -49,7 +53,7 @@ b174372f7b623595c4915116c477de9febc4ffd7
 Harden final comparison filesystem persistence
 ```
 
-That runner revision makes atomic artifact replacement resilient to transient Windows file-lock errors and ensures monitoring telemetry cannot terminate an otherwise valid modelling task. The C03-C20 candidate additions change candidate builders, search spaces, dependencies, routing, and smoke coverage, but they do not use the held-out test set and do not freeze protocol v2.
+That runner revision makes atomic artifact replacement resilient to transient Windows file-lock errors and ensures monitoring telemetry cannot terminate an otherwise valid modelling task. The C03-C26 candidate additions change candidate builders, search spaces, dependencies, routing, and smoke coverage, but they do not use the held-out test set and do not freeze protocol v2.
 
 ### Operational pilot outcome
 
@@ -84,25 +88,76 @@ Operational result:
 
 This v6 result resolves the earlier Windows filesystem-persistence blocker observed in v4 and left unresolved in v5. It is an operational and search-budget pilot only. Its AP values, runtime values, and sampled candidates are not master-selection evidence and must not be used to include or exclude candidate families.
 
-### Reviewed local pre-master change set
+### Completed pre-master admission smoke
 
-A reviewed local change set was prepared for the following pre-master workflow files:
-
-```text
-src/telco_churn/pre_master_workflows.py
-scripts/run_final_comparison_admission_smoke.py
-scripts/run_final_comparison_search_budget_calibration.py
-scripts/audit_final_comparison_run.py
-scripts/smoke_test_pre_master_workflows.py
-```
-
-Its structural smoke test passed after an explicit Windows SQLite-handle cleanup correction:
+The completed implementation-admission smoke run is:
 
 ```text
-Pre-master workflow structural smoke test passed.
+admission_smoke_c26_probe
 ```
 
-This is local working-tree state, not a permanent remote-repository fact. Before relying on these files, inspect the local tree, confirm the files and diff are present, and preserve any unrelated uncommitted work. The change set must be reconciled with the final admitted-candidate scope before a real pre-master experiment is launched.
+This was an implementation-admission validation only. It is not model-selection evidence, does not freeze protocol v2, does not master-admit any candidate, and does not use or reference the held-out test set.
+
+Run configuration:
+
+```text
+C01-C26 implemented candidate universe
+C27_TABPFN deferred
+C28_AUTOGLUON deferred
+development data only
+5634 development rows
+2 outer folds x 1 repeat
+Stage A: 3 valid trials per outer task
+Stage B: top 2 Stage-A configurations confirmed
+search_profile="smoke"
+max_workers=1 for the actual resumed chunks
+source revision recorded by workflow: 62e52dad585eb92709ab6a5748cd8dc82f8b9755
+working_tree_clean=True
+```
+
+Final result:
+
+```text
+registry tasks: 52
+completed: 52
+failed: 0
+interrupted: 0
+pending: 0
+checksum-verified completed result artifacts: 52
+integrity and task-level budget check passed
+every registry task reached its registered Stage-A and Stage-B budget
+git status was clean after completion
+```
+
+Runtime notes from the audit:
+
+```text
+total sum of per-task wall times: about 10m 17s
+C19_CATBOOST was the slowest smoke candidate: around 2m 33s mean task wall time
+C24_TABNET mean task wall time: around 19s
+C25_FT_TRANSFORMER mean task wall time: around 17s
+C26_TABM mean task wall time: around 6s
+```
+
+Warnings and cleanup items to resolve before protocol v2 freeze:
+
+```text
+C21_LINEAR_SVM:
+    Liblinear convergence warning recorded 3 times.
+    Later cleanup: increase max_iter or adjust solver/search-space settings.
+
+C24_TABNET:
+    Repeated warning: "Best weights from best epoch are automatically used!"
+    Treat as harmless but noisy unless further investigation suggests otherwise.
+    One SciPy sparse deprecation warning was also recorded.
+
+C13_ADABOOST:
+    Terminal-only Optuna warning appeared earlier:
+    distribution [25, 120] with step=25 is not divisible and is internally replaced
+    by [25, 100].
+    Later cleanup: adjust the upper bound to a step-aligned value before master
+    protocol freeze.
+```
 
 ## Project state
 
@@ -145,7 +200,7 @@ Documented protocol universe:
     C01 through C28
 
 Currently implemented final-comparison core registry:
-    23 candidate families, C01 through C23
+    26 candidate families, C01 through C26
 
 Candidates currently master-admitted:
     none
@@ -154,7 +209,7 @@ Master protocol:
     protocol v2 has not been frozen
 ```
 
-The 23 implemented core candidates are:
+The 26 implemented candidates are:
 
 ```text
 C01  Ridge classifier
@@ -180,34 +235,28 @@ C20  Explainable Boosting Machine
 C21  Linear SVM
 C22  RBF-kernel SVM
 C23  Dense multilayer perceptron
+C24  TabNet
+C25  FT-Transformer
+C26  TabM
 ```
 
-C20 validation passed after implementation:
+The C01-C26 pre-master admission smoke passed:
 
 ```text
-compile check:
-    passed
+run id:
+    admission_smoke_c26_probe
 
-dedicated C20 EBM smoke:
-    passed
+completed registry tasks:
+    52/52
 
-complete core candidate registry smoke:
-    passed, 23/23 candidates
+failed, interrupted, pending:
+    0/0/0
 
-feature-policy routing smoke:
-    passed, 47/47 routes
+artifact integrity:
+    52 checksum-verified completed result artifacts
 
-feature-selection routing smoke:
-    passed, 22/22 nontrivial selector routes
-
-imbalance-routing smoke:
-    passed
-
-pip check:
-    passed
-
-git diff --check:
-    passed
+budget integrity:
+    every registry task reached its registered Stage-A and Stage-B budget
 ```
 
 C20's current candidate contract is:
@@ -245,12 +294,9 @@ resource policy:
     n_jobs=1
 ```
 
-The following documented advanced or external candidates remain subject to explicit technical admission:
+The following documented advanced or external candidates remain outside the implemented C01-C26 admission-smoke universe:
 
 ```text
-C24  TabNet
-C25  FT-Transformer
-C26  TabM
 C27  TabPFN
 C28  AutoML tabular ensemble
 ```
@@ -259,15 +305,17 @@ Current advanced-candidate admission state:
 
 ```text
 C24 TabNet:
-    package/API smoke feasible; not implemented in the final-comparison registry yet
+    implemented; included in the completed pre-master admission smoke;
+    not master-admitted
 
 C25 FT-Transformer:
-    use the official rtdl_revisiting_models route;
-    PyTorch Tabular route rejected because of dependency conflict;
-    not implemented in the final-comparison registry yet
+    implemented through the official rtdl_revisiting_models route;
+    included in the completed pre-master admission smoke;
+    not master-admitted
 
 C26 TabM:
-    package/API smoke feasible; not implemented in the final-comparison registry yet
+    implemented; included in the completed pre-master admission smoke;
+    not master-admitted
 
 C27 TabPFN:
     deferred because current CPU practicality and model-weight/licence constraints make it
@@ -335,7 +383,7 @@ Primary ranking metric:
     average precision
 ```
 
-### Current policy reference for the existing 17-candidate registry
+### Current policy reference
 
 ```text
 F0_RAW:
@@ -376,7 +424,7 @@ I4_SMOTENC:
 
 Feature selection is restricted to candidate families for which it has a coherent role. Tree and native-categorical boosting procedures retain no-selection variants as their primary route. I4 remains available only with F0 raw features because derived F1/F2 columns could become internally inconsistent after synthetic sampling.
 
-The existing Phase-8B imbalance compatibility reference applies only to the 17 currently implemented candidates:
+The older Phase-8B imbalance compatibility reference is historical for the 17-candidate baseline:
 
 ```text
 Ridge and logistic regression:
@@ -397,11 +445,11 @@ XGBoost, LightGBM, and CatBoost:
     I0, I1
 ```
 
-F2 has been pruned during pilot work. Its final contract, together with search budgets and Stage-B confirmation depth, must be explicitly frozen in protocol v2 before the master comparison. The six pending conventional candidates and any admitted advanced candidates require their own explicit compatibility records before inclusion.
+F2 has been pruned during pilot work. Its final contract, together with search budgets and Stage-B confirmation depth, must be explicitly frozen in protocol v2 before the master comparison. C01-C26 now have implementation and admission-smoke coverage, but none of them is master-admitted.
 
 ## Current experiment gate
 
-Do not launch either real pre-master workflow yet.
+Do not interpret admission-smoke output as model-selection evidence. Protocol v2 is still unfrozen and no candidate is master-admitted.
 
 ### Historical monitoring provenance and local operational inspection
 
@@ -421,13 +469,13 @@ bash scripts/monitor_final_comparison.sh --help
 python scripts/final_comparison_status.py --help
 ```
 
-When the reviewed local audit script is present, it can inspect a completed run without fitting models:
+The tracked audit script can inspect a completed run without fitting models:
 
 ```bash
 python scripts/audit_final_comparison_run.py --run-id <run_id>
 ```
 
-The local pre-master workflow files remain intentionally untracked and must be preserved:
+The pre-master workflow files are now part of the pushed workflow checkpoint:
 
 ```text
 scripts/audit_final_comparison_run.py
@@ -437,33 +485,22 @@ scripts/smoke_test_pre_master_workflows.py
 src/telco_churn/pre_master_workflows.py
 ```
 
-Those files were reviewed as a local operational baseline before the final C03-C20 candidate-completeness work. They must be reconciled with the current 23-candidate registry and any later C24-C26 decisions before a real pre-master run is launched.
+Those files produced the completed C01-C26 admission-smoke run described above. Search-budget calibration remains separate and representative; it is not full-universe admission and must not be treated as candidate elimination.
 
 The required order is now:
 
 ```text
-1. Preserve the local pre-master workflow files and do not stage them accidentally.
-
-2. Decide whether to proceed with advanced tabular implementation for:
-       C24 TabNet,
-       C25 FT-Transformer through rtdl_revisiting_models,
-       C26 TabM.
-
-3. Keep C27 TabPFN and C28 AutoGluon deferred unless their package, licence,
+1. Keep C27 TabPFN and C28 AutoGluon deferred unless their package, licence,
    resource, and dependency constraints materially change.
 
-4. If C24-C26 are implemented, smoke-test them with the same no-test-set boundary.
+2. Clean up the warning-producing search-space/settings issues recorded by the
+   admission smoke, especially C21 Linear SVM, C24 TabNet warning noise, and
+   the C13 AdaBoost step alignment.
 
-5. Update the all-candidate admission smoke so its scope covers every candidate admitted
-   at that point, not merely the earlier 17-candidate baseline.
+3. Run or interpret representative search-budget calibration only after those
+   cleanup items are resolved.
 
-6. Run the real all-admitted-candidate admission smoke.
-
-7. Run the representative search-budget calibration.
-
-8. Audit the resulting run artifacts and runtime profile.
-
-9. Freeze protocol v2:
+4. Freeze protocol v2:
        master candidate registry,
        candidate contracts,
        feature policies,
@@ -475,7 +512,7 @@ The required order is now:
        resource policy,
        audit and resume contract.
 
-10. Only then launch the repeated nested-CV master comparison on development data.
+5. Only then launch the repeated nested-CV master comparison on development data.
 ```
 
 ## Immediate local checks
