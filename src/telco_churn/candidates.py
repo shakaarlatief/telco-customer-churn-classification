@@ -786,6 +786,7 @@ def suggest_candidate_parameters(
                 "C": float(trial.suggest_float("C", 1e-4, 1e3, log=True)),
                 "loss": trial.suggest_categorical("loss", ["hinge", "squared_hinge"]),
                 "class_weight": "none",
+                "max_iter": 100_000,
             },
             profile=profile,
         )
@@ -1005,6 +1006,7 @@ def _build_candidate_pipeline_without_imbalance(
             C=float(parameters["C"]),
             loss=str(parameters["loss"]),
             class_weight=_decode_class_weight(str(parameters["class_weight"])),
+            max_iter=int(parameters["max_iter"]),
             random_state=int(random_state),
         )
         return make_feature_policy_classifier_pipeline(

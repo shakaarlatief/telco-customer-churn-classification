@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -61,6 +62,10 @@ from telco_churn.imbalance_policies import (  # noqa: E402
 
 
 SAMPLE_SIZE = 300
+KNOWN_NOISY_TABNET_WARNING_SNIPPETS = (
+    "Best weights from best epoch are automatically used!",
+    "Please import `spmatrix` from the `scipy.sparse` namespace",
+)
 
 
 class DeterministicSmokeTrial:
@@ -222,6 +227,24 @@ def assert_tabnet_mechanics(
         raise AssertionError("C24 must encode unknown validation categories as zero.")
 
 
+def assert_no_known_noisy_warnings(caught_warnings: list[warnings.WarningMessage]) -> None:
+    """Ensure the wrapper suppresses only the known harmless TabNet warning noise."""
+    observed = [
+        f"{warning.category.__name__}: {warning.message}"
+        for warning in caught_warnings
+    ]
+    noisy = [
+        message
+        for message in observed
+        if any(snippet in message for snippet in KNOWN_NOISY_TABNET_WARNING_SNIPPETS)
+    ]
+    if noisy:
+        raise AssertionError(
+            "C24 TabNet smoke still recorded known noisy warnings: "
+            f"{noisy!r}."
+        )
+
+
 def fit_and_check(
     *,
     feature_policy: str,
@@ -240,7 +263,10 @@ def fit_and_check(
         ),
         random_state=seed,
     )
-    fitted_pipeline = clone(pipeline).fit(X_train, y_train)
+    with warnings.catch_warnings(record=True) as caught_warnings:
+        warnings.simplefilter("always")
+        fitted_pipeline = clone(pipeline).fit(X_train, y_train)
+    assert_no_known_noisy_warnings(caught_warnings)
     if imbalance_policy == IMBALANCE_CLASS_WEIGHT_BALANCED and not isinstance(
         fitted_pipeline.named_steps["classifier"],
         BalancedSampleWeightClassifier,

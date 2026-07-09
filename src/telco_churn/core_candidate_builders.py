@@ -296,7 +296,7 @@ def suggest_core_candidate_parameters(
         }
 
     if candidate_id == CANDIDATE_ADABOOST:
-        maximum_estimators = 120 if profile == "smoke" else 1_200
+        maximum_estimators = 100 if profile == "smoke" else 1_200
         return {
             "base_depth": int(trial.suggest_int("base_depth", 1, 4)),
             "n_estimators": int(

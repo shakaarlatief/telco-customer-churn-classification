@@ -38,6 +38,8 @@ if str(SRC_DIR) not in sys.path:
 
 
 from telco_churn.candidates import (  # noqa: E402
+    CANDIDATE_ADABOOST,
+    CANDIDATE_LINEAR_SVM,
     INITIAL_CANDIDATE_REGISTRY,
     build_candidate_pipeline,
     suggest_candidate_parameters,
@@ -63,6 +65,9 @@ class DeterministicSmokeTrial:
     while exercising every parameter decoder and pipeline builder.
     """
 
+    def __init__(self) -> None:
+        self.int_ranges: dict[str, list[tuple[int, int, int]]] = {}
+
     def suggest_categorical(self, name: str, choices):
         if not choices:
             raise AssertionError(f"Smoke trial received no choices for {name!r}.")
@@ -76,6 +81,15 @@ class DeterministicSmokeTrial:
     def suggest_int(self, name: str, low: int, high: int, **kwargs):
         if low > high:
             raise AssertionError(f"Invalid integer range for {name!r}: {low}, {high}.")
+        step = int(kwargs.get("step", 1))
+        if step < 1:
+            raise AssertionError(f"Invalid integer step for {name!r}: {step}.")
+        if (high - low) % step != 0:
+            raise AssertionError(
+                f"Integer range for {name!r} is not step-aligned: "
+                f"low={low}, high={high}, step={step}."
+            )
+        self.int_ranges.setdefault(name, []).append((int(low), int(high), step))
         return int(low)
 
 
@@ -121,9 +135,41 @@ def assert_valid_continuous_scores(
         raise AssertionError(f"{candidate_id} returned values outside [0, 1].")
 
 
+def assert_warning_cleanup_contracts() -> None:
+    """Verify targeted warning-cleanup contracts before fitting all candidates."""
+    trial = DeterministicSmokeTrial()
+    with warnings.catch_warnings(record=True) as caught_warnings:
+        warnings.simplefilter("always")
+        parameters = suggest_candidate_parameters(
+            trial,
+            candidate_id=CANDIDATE_ADABOOST,
+            profile="smoke",
+        )
+    if any("not divisible by `step`" in str(warning.message) for warning in caught_warnings):
+        raise AssertionError("C13 smoke n_estimators search space emitted a step warning.")
+    n_estimators_ranges = trial.int_ranges.get("n_estimators", [])
+    if n_estimators_ranges != [(25, 100, 25)]:
+        raise AssertionError(
+            "C13 smoke n_estimators range must remain the effective "
+            f"step-aligned range [(25, 100, 25)], got {n_estimators_ranges!r}."
+        )
+    if int(parameters["n_estimators"]) != 25:
+        raise AssertionError("C13 deterministic smoke trial should select 25 estimators.")
+
+
+def assert_linear_svm_max_iter_contract(parameters: dict[str, object], pipeline) -> None:
+    """Verify C21 exposes the increased Liblinear iteration budget."""
+    if int(parameters.get("max_iter", 0)) != 100_000:
+        raise AssertionError("C21 smoke parameters must include max_iter=100_000.")
+    classifier = pipeline.named_steps["classifier"]
+    if int(getattr(classifier, "max_iter", 0)) != 100_000:
+        raise AssertionError("C21 built classifier must expose max_iter=100_000.")
+
+
 def smoke_test_core_candidate_registry(X: pd.DataFrame, y: pd.Series) -> None:
     """Fit and score one representative training-only pipeline for every candidate."""
     validate_candidate_registry()
+    assert_warning_cleanup_contracts()
     X_train, X_validation, y_train, _ = train_test_split(
         X,
         y,
@@ -152,6 +198,8 @@ def smoke_test_core_candidate_registry(X: pd.DataFrame, y: pd.Series) -> None:
             parameters,
             random_state=RANDOM_STATE + index,
         )
+        if definition.candidate_id == CANDIDATE_LINEAR_SVM:
+            assert_linear_svm_max_iter_contract(parameters, pipeline)
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=ConvergenceWarning)

@@ -17,6 +17,7 @@ original raw table.
 from __future__ import annotations
 
 from typing import Final, Literal, Mapping
+import warnings
 
 from imblearn.pipeline import Pipeline as ImblearnPipeline
 import numpy as np
@@ -359,7 +360,18 @@ class CloneSafeFeaturePolicyTabNetClassifier(ClassifierMixin, BaseEstimator):
         """Fit TabNet with categorical maps learned only from this fitting fold."""
         try:
             import torch
-            from pytorch_tabnet.tab_model import TabNetClassifier
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message=(
+                        r"Please import `spmatrix` from the `scipy\.sparse` namespace; "
+                        r"the `scipy\.sparse\.base` namespace is deprecated and will "
+                        r"be removed in SciPy 2\.0\.0\."
+                    ),
+                    category=DeprecationWarning,
+                    module=r"pytorch_tabnet\.multiclass_utils",
+                )
+                from pytorch_tabnet.tab_model import TabNetClassifier
         except ImportError as exc:
             raise ImportError(
                 "pytorch-tabnet is required for C24_TABNET. "
@@ -451,7 +463,14 @@ class CloneSafeFeaturePolicyTabNetClassifier(ClassifierMixin, BaseEstimator):
             previous_threads = None
         try:
             try:
-                self.model_.fit(fit_X, fit_y, **fit_kwargs)
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "ignore",
+                        message=r"Best weights from best epoch are automatically used!",
+                        category=UserWarning,
+                        module=r"pytorch_tabnet\.callbacks",
+                    )
+                    self.model_.fit(fit_X, fit_y, **fit_kwargs)
             except (TypeError, ValueError) as exc:
                 if sample_weight is not None:
                     raise FeaturePolicyPipelineError(
