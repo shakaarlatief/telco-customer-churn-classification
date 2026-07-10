@@ -378,7 +378,7 @@ The latest pushed executable scaffold checkpoint is:
 b395ee9 Add executable protocol v2 base scaffold
 ```
 
-The executable protocol-v2 scaffold now exists, but its protocol declaration remains unfrozen with `freeze_state=draft_pending_review` and `is_frozen=false`. It can dry-run the C01-C26 official base-comparison task plan and encodes the draft CatBoost runtime-limited policy, but no official base comparison has run and no candidate is master-admitted.
+The executable protocol-v2 scaffold now exists, and its protocol declaration has been intentionally frozen with `freeze_state=frozen` and `is_frozen=true`. It can dry-run the C01-C26 official base-comparison task plan and encodes the CatBoost runtime-limited policy, but no official base comparison has run and no candidate is master-admitted.
 
 The registry compares complete procedures, not bare estimator names. A procedure includes its feature policy, preprocessing representation, feature-selection policy where compatible, imbalance treatment, model hyperparameters, and random-state contract.
 
@@ -429,7 +429,7 @@ Operational result:
 
 The v6 result resolves the earlier Windows filesystem-persistence blocker observed in v4. It remains an operational and search-budget pilot only. Its AP values, runtime values, and sampled candidates are not master-selection evidence and must not be used to include or exclude candidate families.
 
-The final-comparison implementation now covers C01-C26. C01-C26 have passed the warning-clean admission smoke, but no candidate is master-admitted and protocol v2 is not frozen. The remaining documented advanced candidates are deferred:
+The final-comparison implementation now covers C01-C26. C01-C26 have passed the warning-clean admission smoke, and protocol v2 base comparison is now frozen, but no official base comparison has run and no candidate is master-admitted. The remaining documented advanced candidates are deferred:
 
 ```text
 C24 TabNet:
@@ -449,7 +449,7 @@ C28 AutoGluon:
     deferred because the resolver would downgrade the numerical stack
 ```
 
-No model is master-admitted yet. Protocol v2 remains unfrozen. The held-out test set remains untouched.
+No model is master-admitted yet. The frozen protocol-v2 base comparison has not run. The held-out test set remains untouched.
 
 ## Cross-cutting modelling policies before final evaluation
 
@@ -511,10 +511,8 @@ The policies are mutually exclusive. The registry records compatibility explicit
 The intended sequence is:
 
 ```text
-1. Review the protocol-v2 draft and freeze the official base-comparison registry,
-   candidate contracts, feature policies, search budgets, runtime lanes, and CatBoost
-   runtime-limited treatment.
-2. Run the frozen official base comparison on development data only.
+1. Run the official protocol-v2 base-comparison dry-run once more for launch inspection.
+2. Intentionally execute the frozen official base comparison on development data only.
 3. Summarize completed-task artifacts with the read-only final-comparison analysis
    scaffold.
 4. Analyze outer-fold stability, paired differences, practical equivalence, runtime, and

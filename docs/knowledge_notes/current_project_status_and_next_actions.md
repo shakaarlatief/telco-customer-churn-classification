@@ -39,14 +39,14 @@ b395ee9
 Add executable protocol v2 base scaffold
 ```
 
-This commit adds the executable protocol-v2 base-comparison scaffold. The checked-in protocol declaration remains a draft freeze candidate:
+This commit added the executable protocol-v2 base-comparison scaffold. The protocol declaration has now been intentionally frozen:
 
 ```text
-freeze_state = draft_pending_review
-is_frozen = false
+freeze_state = frozen
+is_frozen = true
 ```
 
-The scaffold can dry-run the official base-comparison task plan, candidate budgets, and CatBoost runtime policy, but it refuses non-dry-run execution while protocol v2 is unfrozen. It does not mean that the official base comparison has run, does not master-admit any candidate, and does not access the held-out test set.
+The scaffold can dry-run the official base-comparison task plan, candidate budgets, and CatBoost runtime policy. Non-dry-run execution still requires an explicit confirmation flag. This freeze does not mean that the official base comparison has run, does not master-admit any candidate, and does not access the held-out test set.
 
 The prior read-only final-comparison analysis checkpoint remains:
 
@@ -256,7 +256,7 @@ Candidates currently master-admitted:
     none
 
 Master protocol:
-    protocol v2 has not been frozen
+    protocol v2 base comparison is frozen but has not run
 ```
 
 The 26 implemented candidates are:
@@ -379,7 +379,7 @@ C28 AutoGluon:
     deferred because the resolver would downgrade the numerical stack
 ```
 
-The complete implementation and admission matrix, including the required checks, is maintained in `02_candidate_status_register.md`. No candidate is master-admitted until protocol v2 is explicitly frozen.
+The complete implementation and admission matrix, including the required checks, is maintained in `02_candidate_status_register.md`. No candidate is master-admitted merely because protocol v2 is frozen; master admission still requires the official base-comparison and downstream training-only selection process.
 
 ## Current final-comparison infrastructure
 
@@ -415,16 +415,16 @@ The executable protocol-v2 base-comparison scaffold now provides:
 
 ```text
 - a JSON protocol declaration at protocols/final_comparison_protocol_v2_base.json
-- explicit draft freeze state: freeze_state=draft_pending_review and is_frozen=false
+- explicit frozen state: freeze_state=frozen and is_frozen=true
 - C01-C26 candidate universe with C27/C28 deferred
 - 5 folds x 3 repeats development-only outer CV design
 - candidate-specific cheap, medium, expensive, and CatBoost runtime-limited budget lanes
 - C19 CatBoost profile="catboost_v2" as an explicit runtime-limited draft policy
 - dry-run task-plan inspection for 390 official base-comparison tasks
-- non-dry-run refusal while protocol v2 remains unfrozen
+- explicit confirmation required for non-dry-run official execution
 ```
 
-This executable scaffold is preparation for protocol-v2 freeze review. It is not a completed official base comparison and does not generate model-selection evidence.
+This executable scaffold is now the frozen protocol-v2 base-comparison contract. It is not a completed official base comparison and has not generated model-selection evidence.
 
 ### Implementation provenance and provisional master-design reference
 
@@ -527,11 +527,11 @@ XGBoost, LightGBM, and CatBoost:
     I0, I1
 ```
 
-F2 has been pruned during pilot work. Its final contract, together with search budgets and Stage-B confirmation depth, must be explicitly frozen in protocol v2 before the master comparison. C01-C26 now have implementation and admission-smoke coverage, but none of them is master-admitted.
+F2 has been pruned during pilot work. Its final contract, together with search budgets and Stage-B confirmation depth, is now part of the frozen protocol-v2 base-comparison scaffold. C01-C26 have implementation and admission-smoke coverage, but none of them is master-admitted.
 
 ## Current experiment gate
 
-Do not interpret admission-smoke output as model-selection evidence. Protocol v2 is still unfrozen and no candidate is master-admitted.
+Do not interpret admission-smoke output as model-selection evidence. Protocol v2 base comparison is now frozen, but no official base comparison has run and no candidate is master-admitted.
 
 ### Historical monitoring provenance and local operational inspection
 
@@ -575,11 +575,11 @@ The required order is now:
 1. Keep C27 TabPFN and C28 AutoGluon deferred unless their package, licence,
    resource, and dependency constraints materially change.
 
-2. Review the executable protocol-v2 draft scaffold and freeze candidate-specific
-   search budgets, runtime lanes, and the explicit C19 CatBoost runtime-limited
-   treatment before launching any official base comparison.
+2. Run the official protocol-v2 base-comparison dry-run once more for launch
+   inspection, then intentionally execute the frozen official base comparison on
+   development data only.
 
-3. Freeze protocol v2:
+3. Preserve the frozen protocol-v2 contract:
        master candidate registry,
        candidate contracts,
        feature policies,
@@ -591,7 +591,8 @@ The required order is now:
        resource policy,
        audit and resume contract.
 
-4. Only then launch the repeated nested-CV official base comparison on development data.
+4. Treat any future change after official results exist as a new protocol version
+   or supplemental analysis, not a silent mutation of protocol v2.
 ```
 
 ## Immediate local checks

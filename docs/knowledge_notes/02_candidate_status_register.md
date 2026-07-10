@@ -60,7 +60,7 @@ Currently implemented registry:
     26 candidate families, C01 through C26
 
 Current master-admitted registry:
-    none; protocol v2 has not been frozen
+    none; protocol v2 base comparison is frozen but has not run
 
 Held-out test use:
     none for model selection, tuning, feature-policy choice, calibration,
@@ -80,14 +80,14 @@ b395ee9
 Add executable protocol v2 base scaffold
 ```
 
-Its protocol declaration remains unfrozen:
+Its protocol declaration has now been intentionally frozen:
 
 ```text
-freeze_state = draft_pending_review
-is_frozen = false
+freeze_state = frozen
+is_frozen = true
 ```
 
-No official base comparison has run, no candidate is master-admitted, and no model-selection evidence has been generated from the scaffold. The next gate is human protocol-v2 freeze review, not experiment execution.
+No official base comparison has run, no candidate is master-admitted, and no model-selection evidence has been generated from the scaffold. The next gate is an official protocol-v2 base-comparison dry-run and then intentional execution, not further protocol design.
 
 ## Status definitions used below
 
@@ -136,7 +136,7 @@ Not master-admitted:
 | C16 | HistGradientBoostingClassifier | Implemented | Warning-clean admission smoke passed; not master-admitted | Existing histogram-based gradient boosting procedure. |
 | C17 | XGBoost | Implemented | Warning-clean admission smoke passed; not master-admitted | Existing external boosting procedure. |
 | C18 | LightGBM | Implemented | Warning-clean admission smoke passed; not master-admitted | Existing external boosting procedure. |
-| C19 | CatBoost | Implemented | Warning-clean admission smoke passed; not master-admitted | Existing native-categorical boosting procedure; known runtime bottleneck. The draft executable scaffold keeps C19 included with runtime-limited `catboost_v2`, Stage-A 8, and Stage-B top 2; this is not model-selection evidence. |
+| C19 | CatBoost | Implemented | Warning-clean admission smoke passed; not master-admitted | Existing native-categorical boosting procedure; known runtime bottleneck. The frozen executable scaffold keeps C19 included with runtime-limited `catboost_v2`, Stage-A 8, and Stage-B top 2; this is not model-selection evidence. |
 | C20 | Explainable Boosting Machine | Implemented | Warning-clean admission smoke passed; not master-admitted | Uses interpret-core, native categorical strings, F0/F1, S0 only, and weighted-only I0/I1 routing. |
 | C21 | Linear SVM | Implemented | Warning-clean admission smoke passed; not master-admitted | Existing margin-based linear procedure; convergence warning resolved by restricting future search suggestions to squared_hinge loss. |
 | C22 | RBF-kernel SVM | Implemented | Warning-clean admission smoke passed; not master-admitted | Existing nonlinear kernel procedure. |
@@ -258,7 +258,7 @@ linear-SVM smoke mean:
 
 C01-C26 are implemented and have passed bounded warning-clean pre-master admission smoke. This confirms implementation-admission mechanics only. It does not select a model, exclude a candidate, freeze protocol v2, or master-admit any candidate.
 
-Implementation admission is complete for C01-C26, but protocol-v2 runtime and budget freeze is still pending. The executable protocol-v2 scaffold is available for dry-run review and encodes candidate-specific budget lanes plus CatBoost's runtime-limited draft policy, but the declaration is still `draft_pending_review` and `is_frozen=false`. The official base-comparison protocol must be explicitly frozen before any official base-comparison results are generated or inspected.
+Implementation admission is complete for C01-C26, and protocol-v2 runtime and budget policy is now frozen for the base comparison. The executable protocol-v2 scaffold is available for dry-run review and encodes candidate-specific budget lanes plus CatBoost's runtime-limited policy with `freeze_state=frozen` and `is_frozen=true`. No official base-comparison results have been generated or inspected yet.
 
 The correct order is:
 
@@ -267,11 +267,11 @@ The correct order is:
 
 2. Keep C28 AutoGluon deferred because its resolver would downgrade the numerical stack.
 
-3. Review and freeze the executable protocol-v2 scaffold, including the official
-   base-comparison registry, search budgets, runtime lanes, and explicit C19
-   CatBoost runtime policy.
+3. Run the official protocol-v2 base-comparison dry-run once more for launch
+   inspection, then intentionally execute the frozen official base comparison on
+   development data only.
 
-4. The frozen protocol v2 must include the master registry, search budgets, top-K confirmation rule,
+4. The frozen protocol v2 includes the base-comparison registry, search budgets, top-K confirmation rule,
    feature contracts, imbalance contracts, and resource policy.
 
 5. Start the repeated nested-CV master comparison only after that freeze.

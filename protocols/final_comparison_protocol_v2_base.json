@@ -1,8 +1,8 @@
 {
   "protocol_id": "telco_final_comparison_protocol_v2_base",
-  "protocol_version": "v2-draft-base-comparison",
-  "freeze_state": "draft_pending_review",
-  "is_frozen": false,
+  "protocol_version": "v2-base-comparison-frozen",
+  "freeze_state": "frozen",
+  "is_frozen": true,
   "evidence_role": "official_base_comparison_candidate_protocol",
   "development_data_policy": {
     "scope": "development_data_only",

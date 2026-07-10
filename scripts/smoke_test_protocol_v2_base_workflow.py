@@ -1,8 +1,8 @@
 """Structural smoke test for the protocol-v2 base-comparison scaffold.
 
 This test does not run experiments, fit models, resume workflows, or touch the held-out
-test set. It validates the draft declaration, the generated task plan, the CatBoost
-runtime policy, and the locked non-dry-run safety gate.
+test set. It validates the frozen declaration, the generated task plan, the CatBoost
+runtime policy, and the explicit non-dry-run confirmation gate.
 """
 
 from __future__ import annotations
@@ -68,10 +68,10 @@ class CapturingTrial:
 def assert_protocol_declaration_and_tasks() -> None:
     """Verify JSON protocol metadata and generated task payloads."""
     spec = load_protocol_v2_base_spec()
-    if spec.freeze_state != "draft_pending_review":
-        raise AssertionError("Protocol-v2 declaration must remain draft_pending_review.")
-    if spec.is_frozen:
-        raise AssertionError("Protocol-v2 declaration must not be frozen yet.")
+    if spec.freeze_state != "frozen":
+        raise AssertionError("Protocol-v2 declaration must be frozen.")
+    if not spec.is_frozen:
+        raise AssertionError("Protocol-v2 declaration must set is_frozen=true.")
 
     registry_ids = tuple(definition.candidate_id for definition in INITIAL_CANDIDATE_REGISTRY)
     if spec.candidate_ids != registry_ids:
@@ -93,8 +93,10 @@ def assert_protocol_declaration_and_tasks() -> None:
         {"git_revision": "smoke", "working_tree_clean": True},
     )
     metadata = protocol.metadata
-    if metadata.get("freeze_state") != "draft_pending_review":
-        raise AssertionError("Protocol metadata must preserve the draft freeze state.")
+    if metadata.get("freeze_state") != "frozen":
+        raise AssertionError("Protocol metadata must preserve the frozen state.")
+    if metadata.get("is_frozen") is not True:
+        raise AssertionError("Protocol metadata must preserve is_frozen=true.")
     if metadata.get("held_out_test_set_policy") != "not loaded or referenced":
         raise AssertionError("Protocol metadata must prohibit held-out test access.")
     if "non-selection" not in str(metadata.get("admission_smoke_evidence_role")):
@@ -172,15 +174,15 @@ def assert_catboost_v2_search_space() -> None:
 
 
 def assert_execution_guards_and_dry_run() -> None:
-    """Verify non-dry-run is blocked and CLI dry-run creates no artifact directory."""
+    """Verify non-dry-run confirmation is required and dry-run creates no artifacts."""
     blocked_run_id = "protocol_v2_base_smoke_blocked_non_dry_run"
     try:
         run_protocol_v2_base_workflow(["--run-id", blocked_run_id, "--max-workers", "1"])
     except ProtocolV2WorkflowConfigurationError as exc:
-        if "not frozen" not in str(exc):
+        if "--confirm-official-base-comparison" not in str(exc):
             raise AssertionError(f"Unexpected non-dry-run refusal: {exc}") from exc
     else:
-        raise AssertionError("Non-dry-run execution must be blocked while protocol is draft.")
+        raise AssertionError("Non-dry-run execution must require explicit confirmation.")
     if (DEFAULT_ARTIFACTS_ROOT / blocked_run_id).exists():
         raise AssertionError("Blocked non-dry-run must not create artifact directories.")
 
@@ -211,8 +213,10 @@ def assert_execution_guards_and_dry_run() -> None:
         )
     if "Candidate count: 26; total task count: 390." not in result.stdout:
         raise AssertionError("Dry-run output must report 26 candidates and 390 tasks.")
-    if "freeze_state: draft_pending_review" not in result.stdout:
-        raise AssertionError("Dry-run output must report draft freeze state.")
+    if "freeze_state: frozen" not in result.stdout:
+        raise AssertionError("Dry-run output must report frozen state.")
+    if "is_frozen: True" not in result.stdout:
+        raise AssertionError("Dry-run output must report is_frozen=True.")
     if dry_run_directory.exists():
         raise AssertionError("Dry-run must not create artifact directories.")
 
