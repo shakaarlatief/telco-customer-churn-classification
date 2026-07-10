@@ -784,7 +784,7 @@ def suggest_candidate_parameters(
             candidate_id=candidate_id,
             parameters={
                 "C": float(trial.suggest_float("C", 1e-4, 1e3, log=True)),
-                "loss": trial.suggest_categorical("loss", ["hinge", "squared_hinge"]),
+                "loss": trial.suggest_categorical("loss", ["squared_hinge"]),
                 "class_weight": "none",
                 "max_iter": 100_000,
             },

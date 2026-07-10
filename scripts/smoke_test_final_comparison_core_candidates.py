@@ -159,6 +159,8 @@ def assert_warning_cleanup_contracts() -> None:
 
 def assert_linear_svm_max_iter_contract(parameters: dict[str, object], pipeline) -> None:
     """Verify C21 exposes the increased Liblinear iteration budget."""
+    if parameters.get("loss") != "squared_hinge":
+        raise AssertionError("C21 search space must suggest only squared_hinge loss.")
     if int(parameters.get("max_iter", 0)) != 100_000:
         raise AssertionError("C21 smoke parameters must include max_iter=100_000.")
     classifier = pipeline.named_steps["classifier"]
