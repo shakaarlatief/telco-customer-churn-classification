@@ -1,0 +1,125 @@
+{
+  "protocol_id": "telco_final_comparison_fast_completion_v1",
+  "protocol_version": "fast-completion-v1-frozen",
+  "freeze_state": "frozen",
+  "is_frozen": true,
+  "evidence_role": "fast_completion_pipeline_evidence",
+  "fast_completion_warning": "This protocol is for quickly completing the full modelling pipeline. It includes all C01-C26 families but uses minimal search and repeat settings. It is not the robust protocol-v2 benchmark and must not be described as strong model-comparison evidence.",
+  "development_data_policy": {
+    "scope": "development_data_only",
+    "row_count": 5634,
+    "description": "Use all rows in data/processed/train.csv for a fast development-only completion run."
+  },
+  "held_out_test_policy": {
+    "state": "not_loaded_or_referenced",
+    "description": "The held-out test set is not loaded, referenced, scored, or used by this fast-completion protocol."
+  },
+  "candidate_universe": [
+    "C01_RIDGE_CLASSIFIER",
+    "C02_LOGISTIC_REGRESSION",
+    "C03_SPLINE_LOGISTIC_REGRESSION",
+    "C04_SHRINKAGE_LDA",
+    "C05_REGULARIZED_QDA",
+    "C06_K_NEAREST_NEIGHBOURS",
+    "C07_HYBRID_NAIVE_BAYES",
+    "C08_DECISION_TREE",
+    "C09_EXTRA_TREES",
+    "C10_BAGGING",
+    "C11_RANDOM_FOREST",
+    "C12_BALANCED_RANDOM_FOREST",
+    "C13_ADABOOST",
+    "C14_RUSBOOST",
+    "C15_GRADIENT_BOOSTING",
+    "C16_HIST_GRADIENT_BOOSTING",
+    "C17_XGBOOST",
+    "C18_LIGHTGBM",
+    "C19_CATBOOST",
+    "C20_EXPLAINABLE_BOOSTING_MACHINE",
+    "C21_LINEAR_SVM",
+    "C22_RBF_SVM",
+    "C23_MULTILAYER_PERCEPTRON",
+    "C24_TABNET",
+    "C25_FT_TRANSFORMER",
+    "C26_TABM"
+  ],
+  "deferred_candidates": [
+    {
+      "candidate_id": "C27_TABPFN",
+      "reason": "Deferred pending CPU, model-weight, package, and project-practicality review."
+    },
+    {
+      "candidate_id": "C28_AUTOGLUON",
+      "reason": "Deferred because its dependency stack conflicts with the current controlled numerical environment."
+    }
+  ],
+  "outer_cv": {
+    "n_splits": 2,
+    "n_repeats": 1
+  },
+  "stage_a_inner_cv": {
+    "n_splits": 2
+  },
+  "stage_b_confirmation_cv": {
+    "n_splits": 2
+  },
+  "primary_metric": "average_precision",
+  "secondary_evidence": [
+    "runtime",
+    "warnings",
+    "selected_parameters",
+    "outer_validation_metrics",
+    "failure_or_interruption_state"
+  ],
+  "candidate_budgets": [
+    {"candidate_id": "C01_RIDGE_CLASSIFIER", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C02_LOGISTIC_REGRESSION", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C03_SPLINE_LOGISTIC_REGRESSION", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C04_SHRINKAGE_LDA", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C05_REGULARIZED_QDA", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C06_K_NEAREST_NEIGHBOURS", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C07_HYBRID_NAIVE_BAYES", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C08_DECISION_TREE", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C09_EXTRA_TREES", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C10_BAGGING", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C11_RANDOM_FOREST", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C12_BALANCED_RANDOM_FOREST", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C13_ADABOOST", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C14_RUSBOOST", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C15_GRADIENT_BOOSTING", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C16_HIST_GRADIENT_BOOSTING", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C17_XGBOOST", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C18_LIGHTGBM", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C20_EXPLAINABLE_BOOSTING_MACHINE", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C21_LINEAR_SVM", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C22_RBF_SVM", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C23_MULTILAYER_PERCEPTRON", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C24_TABNET", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C25_FT_TRANSFORMER", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C26_TABM", "budget_lane": "fast_completion", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "full"},
+    {"candidate_id": "C19_CATBOOST", "budget_lane": "fast_completion_runtime_limited", "stage_a_n_trials": 2, "confirmation_top_k": 1, "search_profile": "catboost_v2"}
+  ],
+  "catboost_runtime_policy": {
+    "candidate_id": "C19_CATBOOST",
+    "evidence_source": "search_budget_calibration_v1_warning_clean",
+    "evidence_role": "runtime_evidence_only_not_model_selection",
+    "observed_issue": "Paused calibration showed C19 Stage-A trials taking multiple minutes each.",
+    "treatment": "C19 remains included with the runtime-limited catboost_v2 search profile.",
+    "catboost_v2_search_space": {
+      "iterations": {"low": 100, "high": 600, "step": 50},
+      "depth": {"low": 3, "high": 6},
+      "learning_rate": {"low": 0.003, "high": 0.2, "log": true},
+      "l2_leaf_reg": {"low": 0.001, "high": 100.0, "log": true}
+    }
+  },
+  "non_selection_evidence_sources": [
+    "admission_smoke_c26_warning_clean_v2",
+    "search_budget_calibration_v1_warning_clean",
+    "protocol_v2_base_official_v1"
+  ],
+  "downstream_stages": [
+    "fast_completion_candidate_summary",
+    "choose_one_final_pipeline_for_project_completion_using_training_only_evidence",
+    "fit_the_complete_frozen_final_pipeline_on_development_data",
+    "evaluate_one_frozen_pipeline_once_on_the_held_out_test_set"
+  ]
+}

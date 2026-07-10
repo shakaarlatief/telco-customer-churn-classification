@@ -73,11 +73,11 @@ The successful `admission_smoke_c26_warning_clean_v2` run was a warning-clean im
 
 The paused `search_budget_calibration_v1_warning_clean` run is runtime evidence only. It showed that C19 CatBoost is a protocol-level runtime bottleneck, but it must not be used to rank candidates, select candidates, eliminate candidates, or reinterpret admission status.
 
-The executable protocol-v2 base-comparison scaffold now exists at the latest pushed checkpoint:
+The latest pushed checkpoint records the frozen protocol-v2 base-comparison scaffold status:
 
 ```text
-b395ee9
-Add executable protocol v2 base scaffold
+05c6bdd
+Update status after protocol v2 scaffold
 ```
 
 Its protocol declaration has now been intentionally frozen:
@@ -87,7 +87,7 @@ freeze_state = frozen
 is_frozen = true
 ```
 
-No official base comparison has run, no candidate is master-admitted, and no model-selection evidence has been generated from the scaffold. The next gate is an official protocol-v2 base-comparison dry-run and then intentional execution, not further protocol design.
+No official base comparison has run, no candidate is master-admitted, and no model-selection evidence has been generated from the scaffold. The current local implementation adds a separate fast-completion protocol scaffold so the project pipeline can be finished quickly without mutating frozen protocol v2. The next gate is the fast-completion dry-run and then intentional fast-completion execution, not further protocol design.
 
 ## Status definitions used below
 
@@ -258,7 +258,7 @@ linear-SVM smoke mean:
 
 C01-C26 are implemented and have passed bounded warning-clean pre-master admission smoke. This confirms implementation-admission mechanics only. It does not select a model, exclude a candidate, freeze protocol v2, or master-admit any candidate.
 
-Implementation admission is complete for C01-C26, and protocol-v2 runtime and budget policy is now frozen for the base comparison. The executable protocol-v2 scaffold is available for dry-run review and encodes candidate-specific budget lanes plus CatBoost's runtime-limited policy with `freeze_state=frozen` and `is_frozen=true`. No official base-comparison results have been generated or inspected yet.
+Implementation admission is complete for C01-C26, and protocol-v2 runtime and budget policy is frozen for the base comparison. The executable protocol-v2 scaffold remains unchanged as the stronger benchmark contract. A separate fast-completion protocol now exists with C01-C26, 2 outer folds x 1 repeat, 2 Stage-A trials, Stage-B top 1, and C19 retained on `catboost_v2`. No official base-comparison results have been generated or inspected yet.
 
 The correct order is:
 
@@ -267,9 +267,8 @@ The correct order is:
 
 2. Keep C28 AutoGluon deferred because its resolver would downgrade the numerical stack.
 
-3. Run the official protocol-v2 base-comparison dry-run once more for launch
-   inspection, then intentionally execute the frozen official base comparison on
-   development data only.
+3. Run the fast-completion protocol dry-run, then intentionally execute the
+   fast-completion development-only workflow if the dry-run plan is acceptable.
 
 4. The frozen protocol v2 includes the base-comparison registry, search budgets, top-K confirmation rule,
    feature contracts, imbalance contracts, and resource policy.

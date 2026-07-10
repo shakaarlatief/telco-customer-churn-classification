@@ -1,10 +1,9 @@
-"""Executable draft scaffold for the protocol-v2 base comparison.
+"""Executable scaffolds for final-comparison protocol declarations.
 
-This module prepares the official base-comparison workflow without freezing or
-launching it. The checked-in JSON declaration is the reviewable source of truth;
-the Python layer validates it against the implemented registry and can produce a
-dry-run task plan. Non-dry-run execution is deliberately blocked while the
-declaration remains in draft state.
+This module prepares reviewed final-comparison workflow declarations without launching
+them by default. Checked-in JSON declarations are the reviewable source of truth; the
+Python layer validates them against the implemented registry and can produce dry-run
+task plans. Non-dry-run execution requires an explicit runner confirmation flag.
 """
 
 from __future__ import annotations
@@ -46,6 +45,11 @@ DEFAULT_ARTIFACTS_ROOT = PROJECT_ROOT / "artifacts" / "final_comparison"
 DEFERRED_CANDIDATE_IDS = ("C27_TABPFN", "C28_AUTOGLUON")
 EXPECTED_FREEZE_STATE_DRAFT = "draft_pending_review"
 FROZEN_FREEZE_STATES = frozenset({"frozen", "frozen_v2"})
+OFFICIAL_BASE_EVIDENCE_ROLE = "official_base_comparison_candidate_protocol"
+FAST_COMPLETION_EVIDENCE_ROLE = "fast_completion_pipeline_evidence"
+SUPPORTED_EVIDENCE_ROLES = frozenset(
+    {OFFICIAL_BASE_EVIDENCE_ROLE, FAST_COMPLETION_EVIDENCE_ROLE}
+)
 
 
 class ProtocolV2WorkflowConfigurationError(ValueError):
@@ -224,9 +228,9 @@ def load_protocol_v2_base_spec(
         raise ProtocolV2WorkflowConfigurationError(
             "A frozen freeze_state requires is_frozen=true."
         )
-    if evidence_role != "official_base_comparison_candidate_protocol":
+    if evidence_role not in SUPPORTED_EVIDENCE_ROLES:
         raise ProtocolV2WorkflowConfigurationError(
-            "Protocol evidence_role must identify the official base-comparison candidate protocol."
+            "Protocol evidence_role must identify a supported final-comparison protocol."
         )
 
     implemented_ids = _implemented_candidate_ids()
@@ -414,6 +418,11 @@ def make_protocol_v2_experiment_protocol(
     provenance: Mapping[str, object],
 ) -> ExperimentProtocol:
     """Build immutable manifest metadata for an official base-comparison run."""
+    workflow_role = (
+        "fast-completion pipeline scaffold"
+        if spec.evidence_role == FAST_COMPLETION_EVIDENCE_ROLE
+        else "official protocol-v2 base-comparison scaffold"
+    )
     return ExperimentProtocol(
         protocol_id=spec.protocol_id,
         version=spec.protocol_version,
@@ -430,9 +439,13 @@ def make_protocol_v2_experiment_protocol(
             "freeze_state": spec.freeze_state,
             "is_frozen": spec.is_frozen,
             "evidence_role": spec.evidence_role,
-            "workflow_role": "official protocol-v2 base-comparison scaffold",
+            "workflow_role": workflow_role,
             "development_data_scope": "all rows in data/processed/train.csv only",
             "held_out_test_set_policy": "not loaded or referenced",
+            "fast_completion_warning": spec.raw_protocol.get(
+                "fast_completion_warning",
+                "",
+            ),
             "deferred_candidate_ids": list(spec.deferred_candidate_ids),
             "admission_smoke_evidence_role": "non-selection implementation evidence only",
             "search_budget_calibration_evidence_role": (
@@ -474,7 +487,7 @@ def make_protocol_v2_tasks(
         for split in outer_splits:
             task_seed = derive_seed(
                 RANDOM_STATE,
-                "protocol_v2_base_comparison",
+                spec.protocol_id,
                 candidate_id,
                 split.repeat_index,
                 split.fold_index,
@@ -564,6 +577,7 @@ def print_protocol_v2_plan(
     print(f"Protocol declaration: {spec.protocol_path}", flush=True)
     print(f"Protocol ID: {spec.protocol_id}", flush=True)
     print(f"Protocol version: {spec.protocol_version}", flush=True)
+    print(f"Evidence role: {spec.evidence_role}", flush=True)
     print(f"freeze_state: {spec.freeze_state}", flush=True)
     print(f"is_frozen: {spec.is_frozen}", flush=True)
     print("Development data only.", flush=True)
@@ -580,6 +594,10 @@ def print_protocol_v2_plan(
     print("Budget lanes:", flush=True)
     for lane, count in summarize_budget_lanes(spec).items():
         print(f"  {lane}: {count} candidates", flush=True)
+    stage_a_trials = sorted({budget.stage_a_n_trials for budget in spec.candidate_budgets})
+    top_k_values = sorted({budget.confirmation_top_k for budget in spec.candidate_budgets})
+    print(f"Stage-A trials per task: {stage_a_trials}", flush=True)
+    print(f"Stage-B top-K per task: {top_k_values}", flush=True)
     catboost_budget = spec.budget_by_candidate[CANDIDATE_CATBOOST]
     print(
         "CatBoost policy: "
@@ -624,27 +642,24 @@ def _open_store(
     )
 
 
-def run_protocol_v2_base_workflow(argv: Sequence[str] | None = None) -> None:
-    """Inspect or execute the official base-comparison scaffold.
-
-    In the current repository state, the protocol declaration is intentionally
-    unfrozen. Therefore non-dry-run execution raises before artifact creation,
-    data fingerprinting, task registration, or model fitting.
-    """
-    arguments = parse_protocol_v2_workflow_arguments(argv)
-    spec = load_protocol_v2_base_spec()
-
+def run_declared_final_comparison_workflow(
+    *,
+    spec: ProtocolV2BaseWorkflowSpec,
+    arguments: ProtocolV2WorkflowArguments,
+    confirmation_flag_name: str,
+    confirmation_granted: bool,
+) -> None:
+    """Inspect or execute one validated final-comparison protocol declaration."""
     if not arguments.dry_run:
         if not spec.is_execution_frozen:
             raise ProtocolV2WorkflowConfigurationError(
-                "Refusing official base-comparison execution because protocol v2 is "
+                "Refusing final-comparison workflow execution because the protocol is "
                 f"not frozen: freeze_state={spec.freeze_state!r}, "
                 f"is_frozen={spec.is_frozen!r}. Use --dry-run for plan inspection."
             )
-        if not arguments.confirm_official_base_comparison:
+        if not confirmation_granted:
             raise ProtocolV2WorkflowConfigurationError(
-                "Non-dry-run official base comparison requires "
-                "--confirm-official-base-comparison."
+                f"Non-dry-run final-comparison workflow requires {confirmation_flag_name}."
             )
 
     train_df = load_train_data()
@@ -718,3 +733,15 @@ def run_protocol_v2_base_workflow(argv: Sequence[str] | None = None) -> None:
         print(f"Run directory: {store.run_directory}", flush=True)
     finally:
         store.close()
+
+
+def run_protocol_v2_base_workflow(argv: Sequence[str] | None = None) -> None:
+    """Inspect or execute the official protocol-v2 base-comparison scaffold."""
+    arguments = parse_protocol_v2_workflow_arguments(argv)
+    spec = load_protocol_v2_base_spec()
+    run_declared_final_comparison_workflow(
+        spec=spec,
+        arguments=arguments,
+        confirmation_flag_name="--confirm-official-base-comparison",
+        confirmation_granted=arguments.confirm_official_base_comparison,
+    )

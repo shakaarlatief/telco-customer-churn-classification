@@ -35,18 +35,20 @@ docs/knowledge_notes/methodology/final_comparison_protocol_v2_draft.md
 The latest pushed checkpoint is:
 
 ```text
-b395ee9
-Add executable protocol v2 base scaffold
+05c6bdd
+Update status after protocol v2 scaffold
 ```
 
-This commit added the executable protocol-v2 base-comparison scaffold. The protocol declaration has now been intentionally frozen:
+This commit records the frozen protocol-v2 base-comparison scaffold status. The frozen protocol-v2 declaration remains:
 
 ```text
 freeze_state = frozen
 is_frozen = true
 ```
 
-The scaffold can dry-run the official base-comparison task plan, candidate budgets, and CatBoost runtime policy. Non-dry-run execution still requires an explicit confirmation flag. This freeze does not mean that the official base comparison has run, does not master-admit any candidate, and does not access the held-out test set.
+The frozen protocol-v2 scaffold can dry-run the official base-comparison task plan, candidate budgets, and CatBoost runtime policy. Non-dry-run execution still requires an explicit confirmation flag. This freeze does not mean that the official base comparison has run, does not master-admit any candidate, and does not access the held-out test set.
+
+The current local implementation adds a separate fast-completion protocol scaffold for quickly finishing the complete project pipeline. It is not a mutation of frozen protocol v2 and is not intended as strong model-comparison evidence.
 
 The prior read-only final-comparison analysis checkpoint remains:
 
@@ -204,7 +206,7 @@ C19_CATBOOST:
 protocol implication:
     CatBoost remains implemented and admission-smoke-passed
     CatBoost must not be silently removed
-    the executable protocol-v2 draft scaffold encodes a runtime-limited C19 policy
+    the frozen protocol-v2 scaffold encodes a runtime-limited C19 policy
     with profile="catboost_v2", Stage-A 8, and Stage-B top 2
     no model-selection evidence has been generated from this policy
 ```
@@ -426,6 +428,23 @@ The executable protocol-v2 base-comparison scaffold now provides:
 
 This executable scaffold is now the frozen protocol-v2 base-comparison contract. It is not a completed official base comparison and has not generated model-selection evidence.
 
+The separate fast-completion protocol scaffold provides:
+
+```text
+- protocol declaration at protocols/final_comparison_fast_completion_v1.json
+- C01-C26 candidate universe with C27/C28 deferred
+- 2 folds x 1 repeat development-only outer CV design
+- Stage A: 2-fold inner CV with 2 trials per candidate task
+- Stage B: 2-fold confirmation with top 1 configuration
+- C19 CatBoost retained with profile="catboost_v2"
+- 52 total outer tasks
+- evidence_role=fast_completion_pipeline_evidence
+- explicit warning that this is not the robust protocol-v2 benchmark
+- non-dry-run confirmation required through --confirm-fast-completion-run
+```
+
+This fast-completion protocol is for finishing the portfolio project pipeline quickly. It must not be described as the robust frozen protocol-v2 benchmark.
+
 ### Implementation provenance and provisional master-design reference
 
 The current infrastructure was built in the following reusable phases:
@@ -531,7 +550,7 @@ F2 has been pruned during pilot work. Its final contract, together with search b
 
 ## Current experiment gate
 
-Do not interpret admission-smoke output as model-selection evidence. Protocol v2 base comparison is now frozen, but no official base comparison has run and no candidate is master-admitted.
+Do not interpret admission-smoke output or fast-completion output as robust protocol-v2 model-selection evidence. Protocol v2 base comparison is frozen but currently too slow for the immediate completion path. No official base comparison has run and no candidate is master-admitted.
 
 ### Historical monitoring provenance and local operational inspection
 
@@ -575,9 +594,8 @@ The required order is now:
 1. Keep C27 TabPFN and C28 AutoGluon deferred unless their package, licence,
    resource, and dependency constraints materially change.
 
-2. Run the official protocol-v2 base-comparison dry-run once more for launch
-   inspection, then intentionally execute the frozen official base comparison on
-   development data only.
+2. Run the fast-completion protocol dry-run, then intentionally execute the
+   fast-completion development-only workflow if the dry-run plan is acceptable.
 
 3. Preserve the frozen protocol-v2 contract:
        master candidate registry,

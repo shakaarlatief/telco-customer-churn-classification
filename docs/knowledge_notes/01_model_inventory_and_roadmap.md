@@ -375,10 +375,12 @@ C26  TabM
 The latest pushed executable scaffold checkpoint is:
 
 ```text
-b395ee9 Add executable protocol v2 base scaffold
+05c6bdd Update status after protocol v2 scaffold
 ```
 
 The executable protocol-v2 scaffold now exists, and its protocol declaration has been intentionally frozen with `freeze_state=frozen` and `is_frozen=true`. It can dry-run the C01-C26 official base-comparison task plan and encodes the CatBoost runtime-limited policy, but no official base comparison has run and no candidate is master-admitted.
+
+A separate fast-completion protocol scaffold now exists for finishing the complete portfolio pipeline quickly. It keeps all C01-C26 families, keeps C19 CatBoost on `catboost_v2`, uses 2 outer folds x 1 repeat, 2 Stage-A trials, and Stage-B top 1. Its evidence role is fast-completion pipeline evidence, not the robust protocol-v2 benchmark.
 
 The registry compares complete procedures, not bare estimator names. A procedure includes its feature policy, preprocessing representation, feature-selection policy where compatible, imbalance treatment, model hyperparameters, and random-state contract.
 
@@ -449,7 +451,7 @@ C28 AutoGluon:
     deferred because the resolver would downgrade the numerical stack
 ```
 
-No model is master-admitted yet. The frozen protocol-v2 base comparison has not run. The held-out test set remains untouched.
+No model is master-admitted yet. The frozen protocol-v2 base comparison has not run. The fast-completion protocol is a separate practical completion path. The held-out test set remains untouched.
 
 ## Cross-cutting modelling policies before final evaluation
 
@@ -511,8 +513,8 @@ The policies are mutually exclusive. The registry records compatibility explicit
 The intended sequence is:
 
 ```text
-1. Run the official protocol-v2 base-comparison dry-run once more for launch inspection.
-2. Intentionally execute the frozen official base comparison on development data only.
+1. Run the fast-completion protocol dry-run and inspect the 52-task plan.
+2. Intentionally execute the fast-completion development-only workflow if the dry-run is acceptable.
 3. Summarize completed-task artifacts with the read-only final-comparison analysis
    scaffold.
 4. Analyze outer-fold stability, paired differences, practical equivalence, runtime, and
@@ -530,7 +532,7 @@ The intended sequence is:
     feasible.
 ```
 
-The protocol-v2 draft currently recommends this practical official base-comparison route:
+The frozen protocol-v2 benchmark remains available for a later stronger rerun:
 
 ```text
 5 outer folds x 3 repeats
