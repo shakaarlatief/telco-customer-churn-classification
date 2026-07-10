@@ -30,16 +30,32 @@ docs/knowledge_notes/methodology/final_comparison_protocol_v2_draft.md
 
 ## Latest confirmed checkpoint
 
-### Latest pushed coordination and analysis checkpoint
+### Latest pushed coordination and scaffold checkpoint
 
 The latest pushed checkpoint is:
+
+```text
+b395ee9
+Add executable protocol v2 base scaffold
+```
+
+This commit adds the executable protocol-v2 base-comparison scaffold. The checked-in protocol declaration remains a draft freeze candidate:
+
+```text
+freeze_state = draft_pending_review
+is_frozen = false
+```
+
+The scaffold can dry-run the official base-comparison task plan, candidate budgets, and CatBoost runtime policy, but it refuses non-dry-run execution while protocol v2 is unfrozen. It does not mean that the official base comparison has run, does not master-admit any candidate, and does not access the held-out test set.
+
+The prior read-only final-comparison analysis checkpoint remains:
 
 ```text
 441f331
 Add read-only final-comparison analysis scaffold
 ```
 
-This commit adds read-only final-comparison artifact analysis tooling. It can summarize completed task artifacts, metrics, runtimes, warnings, selected parameters, and development-data out-of-fold predictions after a run. It does not fit models, resume workflows, select winners, freeze protocol v2, master-admit candidates, or access the held-out test set.
+That tooling can summarize completed task artifacts, metrics, runtimes, warnings, selected parameters, and development-data out-of-fold predictions after a future completed official run. It does not fit models, resume workflows, select winners, freeze protocol v2, master-admit candidates, or access the held-out test set.
 
 The source revision recorded by the completed warning-clean admission-smoke workflow remains:
 
@@ -188,7 +204,9 @@ C19_CATBOOST:
 protocol implication:
     CatBoost remains implemented and admission-smoke-passed
     CatBoost must not be silently removed
-    protocol v2 should define a bounded CatBoost profile or expensive-candidate lane
+    the executable protocol-v2 draft scaffold encodes a runtime-limited C19 policy
+    with profile="catboost_v2", Stage-A 8, and Stage-B top 2
+    no model-selection evidence has been generated from this policy
 ```
 
 ## Project state
@@ -393,6 +411,21 @@ The read-only final-comparison analysis scaffold now also provides:
 
 This scaffold is analysis tooling only. It does not select winners, freeze protocol v2, resume workflows, fit models, or inspect the held-out test set.
 
+The executable protocol-v2 base-comparison scaffold now provides:
+
+```text
+- a JSON protocol declaration at protocols/final_comparison_protocol_v2_base.json
+- explicit draft freeze state: freeze_state=draft_pending_review and is_frozen=false
+- C01-C26 candidate universe with C27/C28 deferred
+- 5 folds x 3 repeats development-only outer CV design
+- candidate-specific cheap, medium, expensive, and CatBoost runtime-limited budget lanes
+- C19 CatBoost profile="catboost_v2" as an explicit runtime-limited draft policy
+- dry-run task-plan inspection for 390 official base-comparison tasks
+- non-dry-run refusal while protocol v2 remains unfrozen
+```
+
+This executable scaffold is preparation for protocol-v2 freeze review. It is not a completed official base comparison and does not generate model-selection evidence.
+
 ### Implementation provenance and provisional master-design reference
 
 The current infrastructure was built in the following reusable phases:
@@ -542,9 +575,9 @@ The required order is now:
 1. Keep C27 TabPFN and C28 AutoGluon deferred unless their package, licence,
    resource, and dependency constraints materially change.
 
-2. Review the protocol-v2 draft and freeze the official base-comparison protocol,
-   including candidate-specific search budgets, runtime lanes, and the explicit
-   C19 CatBoost runtime-limited treatment.
+2. Review the executable protocol-v2 draft scaffold and freeze candidate-specific
+   search budgets, runtime lanes, and the explicit C19 CatBoost runtime-limited
+   treatment before launching any official base comparison.
 
 3. Freeze protocol v2:
        master candidate registry,
@@ -558,7 +591,7 @@ The required order is now:
        resource policy,
        audit and resume contract.
 
-4. Only then launch the repeated nested-CV master comparison on development data.
+4. Only then launch the repeated nested-CV official base comparison on development data.
 ```
 
 ## Immediate local checks

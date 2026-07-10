@@ -341,7 +341,7 @@ The MLP is a legitimate finalist family but does not establish a material advant
 
 ## Core candidate library and final-comparison infrastructure
 
-The individual educational workflows now transition into a systematic final-selection stage. The implemented final-comparison core registry now contains 23 candidate families covering C01 through C23:
+The individual educational workflows now transition into a systematic final-selection stage. The implemented final-comparison core registry now contains 26 candidate families covering C01 through C26:
 
 ```text
 C01  Ridge classifier
@@ -367,15 +367,18 @@ C20  Explainable Boosting Machine
 C21  Linear SVM
 C22  RBF SVM
 C23  Dense multilayer perceptron
+C24  TabNet
+C25  FT-Transformer
+C26  TabM
 ```
 
-The latest pushed implementation checkpoint is:
+The latest pushed executable scaffold checkpoint is:
 
 ```text
-d5d34cf Add explainable boosting machine candidate
+b395ee9 Add executable protocol v2 base scaffold
 ```
 
-C20 Explainable Boosting Machine adds an interpretable nonlinear additive comparator between regularized logistic models and less transparent boosting systems. It uses `interpret-core==0.7.8`, native categorical string preprocessing, F0/F1 feature policies, S0-only feature selection, weighted-only I0/I1 imbalance routing, bounded smoke/full search spaces, and `n_jobs=1`.
+The executable protocol-v2 scaffold now exists, but its protocol declaration remains unfrozen with `freeze_state=draft_pending_review` and `is_frozen=false`. It can dry-run the C01-C26 official base-comparison task plan and encodes the draft CatBoost runtime-limited policy, but no official base comparison has run and no candidate is master-admitted.
 
 The registry compares complete procedures, not bare estimator names. A procedure includes its feature policy, preprocessing representation, feature-selection policy where compatible, imbalance treatment, model hyperparameters, and random-state contract.
 
@@ -539,6 +542,10 @@ primary metric: average precision
 candidate-specific search budgets rather than one universal full budget
 explicit runtime-limited treatment for C19 CatBoost
 ```
+
+The executable scaffold encodes that CatBoost remains included through a draft
+`catboost_v2` runtime-limited profile with Stage-A 8 trials and Stage-B top 2. This
+policy is a protocol-design constraint, not model-selection evidence.
 
 ## Advanced-candidate admission rule
 
