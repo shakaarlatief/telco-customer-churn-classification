@@ -185,8 +185,12 @@ def suggest_imbalance_configuration(
     profile: str,
 ) -> dict[str, Any]:
     """Suggest one candidate-compatible imbalance branch and only its active controls."""
-    if profile not in {"smoke", "full"}:
+    if profile not in {"smoke", "full", "catboost_v2"}:
         raise ImbalanceRoutingError(f"Unsupported search profile {profile!r}.")
+    if profile == "catboost_v2" and candidate_id != _CANDIDATE_CATBOOST:
+        raise ImbalanceRoutingError(
+            f"Search profile {profile!r} is valid only for {_CANDIDATE_CATBOOST}."
+        )
     policy_parameter_name = _imbalance_policy_parameter_name(feature_policy)
     policy = trial.suggest_categorical(
         policy_parameter_name,

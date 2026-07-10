@@ -50,6 +50,7 @@ from telco_churn.candidates import (
     CANDIDATE_TABNET,
     CANDIDATE_TABM,
     CANDIDATE_XGBOOST,
+    SEARCH_PROFILE_CATBOOST_V2,
 )
 from telco_churn.feature_selection import (
     FEATURE_SELECTION_NONE,
@@ -193,8 +194,12 @@ def suggest_core_candidate_parameters(
     this function means search-space validation can run without importing XGBoost,
     LightGBM, or CatBoost before an actual estimator needs to be constructed.
     """
-    if profile not in {"smoke", "full"}:
+    if profile not in {"smoke", "full", SEARCH_PROFILE_CATBOOST_V2}:
         raise CoreCandidateBuilderError(f"Unsupported search profile: {profile!r}")
+    if profile == SEARCH_PROFILE_CATBOOST_V2 and candidate_id != CANDIDATE_CATBOOST:
+        raise CoreCandidateBuilderError(
+            f"Search profile {profile!r} is valid only for {CANDIDATE_CATBOOST}."
+        )
     if candidate_id not in CORE_EXTENSION_CANDIDATE_IDS:
         raise CoreCandidateBuilderError(f"Unknown core extension candidate: {candidate_id!r}")
 
@@ -387,17 +392,45 @@ def suggest_core_candidate_parameters(
         }
 
     if candidate_id == CANDIDATE_CATBOOST:
-        maximum_iterations = 250 if profile == "smoke" else 1_500
+        maximum_iterations = (
+            250
+            if profile == "smoke"
+            else 600
+            if profile == SEARCH_PROFILE_CATBOOST_V2
+            else 1_500
+        )
+        iteration_low = 100 if profile == SEARCH_PROFILE_CATBOOST_V2 else 50
+        iteration_step = 50 if profile == SEARCH_PROFILE_CATBOOST_V2 else 25
+        depth_high = 6 if profile == SEARCH_PROFILE_CATBOOST_V2 else 10
+        learning_rate_low = 0.003 if profile == SEARCH_PROFILE_CATBOOST_V2 else 1e-3
+        learning_rate_high = 0.2 if profile == SEARCH_PROFILE_CATBOOST_V2 else 0.3
+        l2_leaf_reg_low = 1e-3 if profile == SEARCH_PROFILE_CATBOOST_V2 else 1e-4
+        l2_leaf_reg_high = 1e2 if profile == SEARCH_PROFILE_CATBOOST_V2 else 1e3
         return {
             "iterations": int(
-                trial.suggest_int("iterations", 50, maximum_iterations, step=25)
+                trial.suggest_int(
+                    "iterations",
+                    iteration_low,
+                    maximum_iterations,
+                    step=iteration_step,
+                )
             ),
             "learning_rate": float(
-                trial.suggest_float("learning_rate", 1e-3, 0.3, log=True)
+                trial.suggest_float(
+                    "learning_rate",
+                    learning_rate_low,
+                    learning_rate_high,
+                    log=True,
+                )
             ),
-            "depth": int(trial.suggest_int("depth", 3, 10)),
+            "depth": int(trial.suggest_int("depth", 3, depth_high)),
             "l2_leaf_reg": float(
-                trial.suggest_float("l2_leaf_reg", 1e-4, 1e3, log=True)
+                trial.suggest_float(
+                    "l2_leaf_reg",
+                    l2_leaf_reg_low,
+                    l2_leaf_reg_high,
+                    log=True,
+                )
             ),
         }
 

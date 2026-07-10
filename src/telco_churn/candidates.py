@@ -64,6 +64,12 @@ from telco_churn.models import (
 
 
 ScoreKind = Literal["probability", "margin"]
+SEARCH_PROFILE_SMOKE = "smoke"
+SEARCH_PROFILE_FULL = "full"
+SEARCH_PROFILE_CATBOOST_V2 = "catboost_v2"
+SUPPORTED_SEARCH_PROFILES = frozenset(
+    {SEARCH_PROFILE_SMOKE, SEARCH_PROFILE_FULL, SEARCH_PROFILE_CATBOOST_V2}
+)
 
 
 class CandidateRegistryError(ValueError):
@@ -707,13 +713,18 @@ def suggest_candidate_parameters(
 
     profile:
         ``"smoke"`` uses small, fast parameter ranges solely to validate persistent
-        nested-HPO mechanics. ``"full"`` is intentionally broader and will be
-        frozen in the later full candidate-registry protocol revision.
+        nested-HPO mechanics. ``"full"`` is intentionally broader. The
+        ``"catboost_v2"`` profile is a protocol-v2 draft runtime-limited profile
+        that is valid only for C19 CatBoost.
     """
     definition = get_candidate_definition(candidate_id)
-    if profile not in {"smoke", "full"}:
+    if profile not in SUPPORTED_SEARCH_PROFILES:
         raise CandidateRegistryError(
             f"Unknown search profile {profile!r} for {definition.candidate_id}."
+        )
+    if profile == SEARCH_PROFILE_CATBOOST_V2 and candidate_id != CANDIDATE_CATBOOST:
+        raise CandidateRegistryError(
+            f"Search profile {profile!r} is valid only for {CANDIDATE_CATBOOST}."
         )
 
     if candidate_id == CANDIDATE_LOGISTIC_REGRESSION:
