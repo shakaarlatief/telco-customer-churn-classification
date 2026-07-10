@@ -22,18 +22,31 @@ For the original C01-C28 protocol universe and methodology design, use:
 docs/knowledge_notes/methodology/final_comparison_protocol_v1.md
 ```
 
+For the current protocol-v2 base-comparison draft, use:
+
+```text
+docs/knowledge_notes/methodology/final_comparison_protocol_v2_draft.md
+```
+
 ## Latest confirmed checkpoint
 
-### Latest workflow source-provenance checkpoint
+### Latest pushed coordination and analysis checkpoint
 
-The source revision recorded by the completed admission-smoke workflow was:
+The latest pushed checkpoint is:
+
+```text
+441f331
+Add read-only final-comparison analysis scaffold
+```
+
+This commit adds read-only final-comparison artifact analysis tooling. It can summarize completed task artifacts, metrics, runtimes, warnings, selected parameters, and development-data out-of-fold predictions after a run. It does not fit models, resume workflows, select winners, freeze protocol v2, master-admit candidates, or access the held-out test set.
+
+The source revision recorded by the completed warning-clean admission-smoke workflow remains:
 
 ```text
 ffd9a3bb25a1a813d2660ab1dbd15d307157dfc4
 Restrict Linear SVM search to squared hinge
 ```
-
-This commit resolves the remaining C21 Linear SVM admission-smoke convergence warning by restricting future C21 search suggestions to the more stable `squared_hinge` LinearSVC loss. It does not freeze protocol v2, does not master-admit any candidate, and does not access the held-out test set.
 
 The latest pushed candidate-family implementation checkpoints are:
 
@@ -151,6 +164,31 @@ persisted selected-configuration and outer-task warnings: none recorded
 C13 AdaBoost Optuna step warning is resolved
 C21 Linear SVM convergence warning is resolved after restricting C21 search to squared_hinge
 C24 TabNet known warning noise is resolved
+```
+
+### Paused representative calibration runtime evidence
+
+The representative search-budget calibration run is:
+
+```text
+search_budget_calibration_v1_warning_clean
+```
+
+This run was paused cleanly during C19 CatBoost. It is runtime evidence only, not model-selection evidence, not candidate-ranking evidence, and not candidate-elimination evidence.
+
+Current interpretation:
+
+```text
+C19_CATBOOST:
+    known runtime bottleneck
+    Stage-A trials took multiple minutes each during the paused calibration run
+    requires an explicit protocol-v2 runtime and budget decision before any official
+    base comparison
+
+protocol implication:
+    CatBoost remains implemented and admission-smoke-passed
+    CatBoost must not be silently removed
+    protocol v2 should define a bounded CatBoost profile or expensive-candidate lane
 ```
 
 ## Project state
@@ -342,6 +380,19 @@ The existing final-comparison implementation provides:
 - monitoring, progress telemetry, artifact auditing, and filesystem-resilience coverage
 ```
 
+The read-only final-comparison analysis scaffold now also provides:
+
+```text
+- checksum-verified completed-task artifact loading
+- candidate-level metric summaries
+- runtime and warning summaries
+- selected-parameter stability summaries
+- development-data out-of-fold prediction export
+- safe handling of partial runs without treating pending or interrupted tasks as completed
+```
+
+This scaffold is analysis tooling only. It does not select winners, freeze protocol v2, resume workflows, fit models, or inspect the held-out test set.
+
 ### Implementation provenance and provisional master-design reference
 
 The current infrastructure was built in the following reusable phases:
@@ -491,8 +542,9 @@ The required order is now:
 1. Keep C27 TabPFN and C28 AutoGluon deferred unless their package, licence,
    resource, and dependency constraints materially change.
 
-2. Run representative search-budget calibration. This remains separate from
-   full-universe admission and is not candidate elimination.
+2. Review the protocol-v2 draft and freeze the official base-comparison protocol,
+   including candidate-specific search budgets, runtime lanes, and the explicit
+   C19 CatBoost runtime-limited treatment.
 
 3. Freeze protocol v2:
        master candidate registry,

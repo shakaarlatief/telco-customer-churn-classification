@@ -71,6 +71,8 @@ The successful `pilot_pruned_f2_v6_io_resilient` run was an operational and HPO-
 
 The successful `admission_smoke_c26_warning_clean_v2` run was a warning-clean implementation-admission smoke for the C01-C26 implemented registry. It supersedes the earlier warning-producing `admission_smoke_c26_probe` checkpoint for operational readiness, while preserving that earlier run as historical provenance. It is not model-selection evidence, does not freeze protocol v2, does not master-admit any candidate, and does not use or reference the held-out test set.
 
+The paused `search_budget_calibration_v1_warning_clean` run is runtime evidence only. It showed that C19 CatBoost is a protocol-level runtime bottleneck, but it must not be used to rank candidates, select candidates, eliminate candidates, or reinterpret admission status.
+
 ## Status definitions used below
 
 ```text
@@ -118,7 +120,7 @@ Not master-admitted:
 | C16 | HistGradientBoostingClassifier | Implemented | Warning-clean admission smoke passed; not master-admitted | Existing histogram-based gradient boosting procedure. |
 | C17 | XGBoost | Implemented | Warning-clean admission smoke passed; not master-admitted | Existing external boosting procedure. |
 | C18 | LightGBM | Implemented | Warning-clean admission smoke passed; not master-admitted | Existing external boosting procedure. |
-| C19 | CatBoost | Implemented | Warning-clean admission smoke passed; not master-admitted | Existing native-categorical boosting procedure. |
+| C19 | CatBoost | Implemented | Warning-clean admission smoke passed; not master-admitted | Existing native-categorical boosting procedure; known runtime bottleneck requiring an explicit protocol-v2 budget/runtime decision, not silent exclusion. |
 | C20 | Explainable Boosting Machine | Implemented | Warning-clean admission smoke passed; not master-admitted | Uses interpret-core, native categorical strings, F0/F1, S0 only, and weighted-only I0/I1 routing. |
 | C21 | Linear SVM | Implemented | Warning-clean admission smoke passed; not master-admitted | Existing margin-based linear procedure; convergence warning resolved by restricting future search suggestions to squared_hinge loss. |
 | C22 | RBF-kernel SVM | Implemented | Warning-clean admission smoke passed; not master-admitted | Existing nonlinear kernel procedure. |
@@ -240,6 +242,8 @@ linear-SVM smoke mean:
 
 C01-C26 are implemented and have passed bounded warning-clean pre-master admission smoke. This confirms implementation-admission mechanics only. It does not select a model, exclude a candidate, freeze protocol v2, or master-admit any candidate.
 
+Implementation admission is complete for C01-C26, but protocol-v2 runtime and budget freeze is still pending. The official base-comparison protocol must freeze candidate-specific search budgets, Stage-B top-K, runtime lanes, and CatBoost's runtime-limited treatment before any official base-comparison results are inspected.
+
 The correct order is:
 
 ```text
@@ -247,10 +251,10 @@ The correct order is:
 
 2. Keep C28 AutoGluon deferred because its resolver would downgrade the numerical stack.
 
-3. Run representative search-budget calibration. Treat it as separate, not full-universe
-   admission and not candidate elimination.
+3. Review and freeze protocol v2, including the official base-comparison registry,
+   search budgets, runtime lanes, and explicit C19 CatBoost runtime policy.
 
-4. Freeze protocol v2, including the master registry, search budgets, top-K confirmation rule,
+4. The frozen protocol v2 must include the master registry, search budgets, top-K confirmation rule,
    feature contracts, imbalance contracts, and resource policy.
 
 5. Start the repeated nested-CV master comparison only after that freeze.

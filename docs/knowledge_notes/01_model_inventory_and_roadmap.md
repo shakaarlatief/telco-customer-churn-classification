@@ -426,19 +426,18 @@ Operational result:
 
 The v6 result resolves the earlier Windows filesystem-persistence blocker observed in v4. It remains an operational and search-budget pilot only. Its AP values, runtime values, and sampled candidates are not master-selection evidence and must not be used to include or exclude candidate families.
 
-After the C03-C20 implementation work, the conventional C01-C23 core registry is implemented. The remaining candidate-completeness decision is the conditional advanced tabular group:
+The final-comparison implementation now covers C01-C26. C01-C26 have passed the warning-clean admission smoke, but no candidate is master-admitted and protocol v2 is not frozen. The remaining documented advanced candidates are deferred:
 
 ```text
 C24 TabNet:
-    package/API smoke feasible; not implemented yet
+    implemented and warning-clean admission-smoke passed
 
 C25 FT-Transformer:
-    use official rtdl_revisiting_models route;
-    PyTorch Tabular route rejected because of dependency conflict;
-    not implemented yet
+    implemented through the official rtdl_revisiting_models route and warning-clean
+    admission-smoke passed
 
 C26 TabM:
-    package/API smoke feasible; not implemented yet
+    implemented and warning-clean admission-smoke passed
 
 C27 TabPFN:
     deferred because of CPU practicality and model-weight/licence constraints
@@ -509,33 +508,36 @@ The policies are mutually exclusive. The registry records compatibility explicit
 The intended sequence is:
 
 ```text
-1. Resolve the final F2 feature-policy review and freeze all candidate contracts.
-2. Finish the realistic persistent-run pilot cycle and inspect artifacts, runtimes,
-   selected configurations, resume behavior, diagnostics, and failures.
-3. Fix operational reliability issues that the pilot exposed, especially progress-sidecar
-   writes that can fail under transient Windows file locks.
-4. Freeze the master comparison revision.
-5. Run the 5 outer-fold x 10-repeat nested-CV comparison using average precision as the
-   primary ranking metric.
-6. Analyze outer-fold stability, paired differences, practical equivalence, runtime, and
+1. Review the protocol-v2 draft and freeze the official base-comparison registry,
+   candidate contracts, feature policies, search budgets, runtime lanes, and CatBoost
+   runtime-limited treatment.
+2. Run the frozen official base comparison on development data only.
+3. Summarize completed-task artifacts with the read-only final-comparison analysis
+   scaffold.
+4. Analyze outer-fold stability, paired differences, practical equivalence, runtime, and
    selected-configuration stability.
-7. Define a defensible finalist set using training-only evidence.
-8. Compare calibration only when probability outputs are operationally relevant.
-9. Perform cross-fitted threshold, capacity, cost, and intervention-volume analysis.
-10. Consider stacking only after constituent procedures and out-of-fold evidence are frozen.
-11. Select one final procedure or justified stack.
-12. Rerun the frozen search on all 5,634 development rows and fit the complete pipeline.
-13. Evaluate once on the untouched test set and report final metrics with uncertainty where
+5. Define a defensible leading set using training-only evidence.
+6. Compare calibration only when probability outputs are operationally relevant.
+7. Perform cross-fitted threshold, capacity, cost, and intervention-volume analysis.
+8. Consider stacking, blending, or soft voting only after constituent procedures and
+   leakage-safe out-of-fold evidence are frozen.
+9. Treat any stack, blend, or vote as its own candidate procedure.
+10. Select one final procedure or justified stack.
+11. Rerun only the winner's frozen search on all 5,634 development rows and fit the
+    complete pipeline.
+12. Evaluate once on the untouched test set and report final metrics with uncertainty where
     feasible.
 ```
 
-The master comparison should use:
+The protocol-v2 draft currently recommends this practical official base-comparison route:
 
 ```text
-5 outer folds x 10 repeats
+5 outer folds x 3 repeats
 Stage A: 3-fold persistent Optuna exploration
 Stage B: 5-fold confirmation of the strongest Stage-A configurations
 primary metric: average precision
+candidate-specific search budgets rather than one universal full budget
+explicit runtime-limited treatment for C19 CatBoost
 ```
 
 ## Advanced-candidate admission rule
