@@ -29,11 +29,11 @@ docs/knowledge_notes/methodology/final_comparison_protocol_v1.md
 The source revision recorded by the completed admission-smoke workflow was:
 
 ```text
-62e52dad585eb92709ab6a5748cd8dc82f8b9755
-Add pre-master final-comparison workflows
+ffd9a3bb25a1a813d2660ab1dbd15d307157dfc4
+Restrict Linear SVM search to squared hinge
 ```
 
-This commit adds the pre-master final-comparison workflow layer used for admission smoke, representative search-budget calibration, and run auditing. It does not freeze protocol v2, does not master-admit any candidate, and does not access the held-out test set.
+This commit resolves the remaining C21 Linear SVM admission-smoke convergence warning by restricting future C21 search suggestions to the more stable `squared_hinge` LinearSVC loss. It does not freeze protocol v2, does not master-admit any candidate, and does not access the held-out test set.
 
 The latest pushed candidate-family implementation checkpoints are:
 
@@ -93,10 +93,12 @@ This v6 result resolves the earlier Windows filesystem-persistence blocker obser
 The completed implementation-admission smoke run is:
 
 ```text
-admission_smoke_c26_probe
+admission_smoke_c26_warning_clean_v2
 ```
 
 This was an implementation-admission validation only. It is not model-selection evidence, does not freeze protocol v2, does not master-admit any candidate, and does not use or reference the held-out test set.
+
+This warning-clean run supersedes the earlier warning-producing `admission_smoke_c26_probe` checkpoint for operational readiness. The earlier run remains historical provenance for the C01-C26 admission-cleanup sequence.
 
 Run configuration:
 
@@ -110,19 +112,20 @@ development data only
 Stage A: 3 valid trials per outer task
 Stage B: top 2 Stage-A configurations confirmed
 search_profile="smoke"
-max_workers=1 for the actual resumed chunks
-source revision recorded by workflow: 62e52dad585eb92709ab6a5748cd8dc82f8b9755
+max_workers=1
+source revision recorded by workflow: ffd9a3bb25a1a813d2660ab1dbd15d307157dfc4
 working_tree_clean=True
 ```
 
 Final result:
 
 ```text
-registry tasks: 52
+submitted: 52
 completed: 52
 failed: 0
 interrupted: 0
 pending: 0
+running: 0
 checksum-verified completed result artifacts: 52
 integrity and task-level budget check passed
 every registry task reached its registered Stage-A and Stage-B budget
@@ -132,31 +135,22 @@ git status was clean after completion
 Runtime notes from the audit:
 
 ```text
-total sum of per-task wall times: about 10m 17s
-C19_CATBOOST was the slowest smoke candidate: around 2m 33s mean task wall time
-C24_TABNET mean task wall time: around 19s
-C25_FT_TRANSFORMER mean task wall time: around 17s
-C26_TABM mean task wall time: around 6s
+total sum of per-task wall times: about 11m 49s
+C19_CATBOOST was the slowest smoke candidate: around 2m 49s mean task wall time
+C24_TABNET mean task wall time: around 21s
+C25_FT_TRANSFORMER mean task wall time: around 19s
+C26_TABM mean task wall time: around 14s
+C21_LINEAR_SVM mean task wall time: around 4s
 ```
 
-Warnings and cleanup items to resolve before protocol v2 freeze:
+Warning-clean result:
 
 ```text
-C21_LINEAR_SVM:
-    Liblinear convergence warning recorded 3 times.
-    Later cleanup: increase max_iter or adjust solver/search-space settings.
-
-C24_TABNET:
-    Repeated warning: "Best weights from best epoch are automatically used!"
-    Treat as harmless but noisy unless further investigation suggests otherwise.
-    One SciPy sparse deprecation warning was also recorded.
-
-C13_ADABOOST:
-    Terminal-only Optuna warning appeared earlier:
-    distribution [25, 120] with step=25 is not divisible and is internally replaced
-    by [25, 100].
-    Later cleanup: adjust the upper bound to a step-aligned value before master
-    protocol freeze.
+Stage-A trial warnings: none recorded
+persisted selected-configuration and outer-task warnings: none recorded
+C13 AdaBoost Optuna step warning is resolved
+C21 Linear SVM convergence warning is resolved after restricting C21 search to squared_hinge
+C24 TabNet known warning noise is resolved
 ```
 
 ## Project state
@@ -244,19 +238,23 @@ The C01-C26 pre-master admission smoke passed:
 
 ```text
 run id:
-    admission_smoke_c26_probe
+    admission_smoke_c26_warning_clean_v2
 
 completed registry tasks:
     52/52
 
-failed, interrupted, pending:
-    0/0/0
+failed, interrupted, pending, running:
+    0/0/0/0
 
 artifact integrity:
     52 checksum-verified completed result artifacts
 
 budget integrity:
     every registry task reached its registered Stage-A and Stage-B budget
+
+warning integrity:
+    Stage-A trial warnings: none recorded
+    persisted selected-configuration and outer-task warnings: none recorded
 ```
 
 C20's current candidate contract is:
@@ -493,14 +491,10 @@ The required order is now:
 1. Keep C27 TabPFN and C28 AutoGluon deferred unless their package, licence,
    resource, and dependency constraints materially change.
 
-2. Clean up the warning-producing search-space/settings issues recorded by the
-   admission smoke, especially C21 Linear SVM, C24 TabNet warning noise, and
-   the C13 AdaBoost step alignment.
+2. Run representative search-budget calibration. This remains separate from
+   full-universe admission and is not candidate elimination.
 
-3. Run or interpret representative search-budget calibration only after those
-   cleanup items are resolved.
-
-4. Freeze protocol v2:
+3. Freeze protocol v2:
        master candidate registry,
        candidate contracts,
        feature policies,
@@ -512,7 +506,7 @@ The required order is now:
        resource policy,
        audit and resume contract.
 
-5. Only then launch the repeated nested-CV master comparison on development data.
+4. Only then launch the repeated nested-CV master comparison on development data.
 ```
 
 ## Immediate local checks
