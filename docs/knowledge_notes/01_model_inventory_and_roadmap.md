@@ -518,17 +518,20 @@ The intended sequence is:
 2. Select a leading candidate set with a transparent development-data rule.
 3. For the fast completion path, use the selected top-three unweighted soft-voting
    ensemble from fast finalization as the development-data final procedure.
-4. Analyze outer-fold stability, paired differences, practical equivalence, runtime, and
+4. Freeze and refit the selected fast-route procedure on all development rows.
+5. Run the guarded one-time held-out evaluator only after readiness and dry-run
+   review.
+6. Analyze outer-fold stability, paired differences, practical equivalence, runtime, and
    selected-configuration stability.
-5. Compare calibration only when probability outputs are operationally relevant.
-6. Perform cross-fitted threshold, capacity, cost, and intervention-volume analysis.
-7. Consider stacking, blending, or soft voting only after constituent procedures and
+7. Compare calibration only when probability outputs are operationally relevant.
+8. Perform cross-fitted threshold, capacity, cost, and intervention-volume analysis.
+9. Consider stacking, blending, or soft voting only after constituent procedures and
    leakage-safe out-of-fold evidence are frozen.
-8. Treat any stack, blend, or vote as its own candidate procedure.
-9. Select one final procedure or justified stack.
-10. Rerun only the winner's frozen search on all 5,634 development rows and fit the
+10. Treat any stack, blend, or vote as its own candidate procedure.
+11. Select one final procedure or justified stack.
+12. Rerun only the winner's frozen search on all 5,634 development rows and fit the
     complete pipeline.
-11. Evaluate once on the untouched test set and report final metrics with uncertainty where
+13. Evaluate once on the untouched test set and report final metrics with uncertainty where
     feasible.
 ```
 

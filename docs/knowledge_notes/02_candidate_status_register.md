@@ -87,7 +87,7 @@ freeze_state = frozen
 is_frozen = true
 ```
 
-No official base comparison has run, no candidate is master-admitted, and no model-selection evidence has been generated from the scaffold. A separate fast-completion protocol has completed as `fast_completion_v1` with 52/52 tasks completed, and its summaries have been used to derive a leading candidate set under `artifacts/final_selection/fast_completion_v1/`. Fast finalization selected `top3_unweighted_soft_average` from C03, C25, and C20 for the fast completion path. The next gate is frozen final-procedure spec review and then intentional full-development refit if approved, not held-out-test evaluation.
+No official base comparison has run, no candidate is master-admitted, and no model-selection evidence has been generated from the scaffold. A separate fast-completion protocol has completed as `fast_completion_v1` with 52/52 tasks completed, and its summaries have been used to derive a leading candidate set under `artifacts/final_selection/fast_completion_v1/`. Fast finalization selected `top3_unweighted_soft_average` from C03, C25, and C20 for the fast completion path. The final procedure has been frozen and refitted on all development rows with independent prediction roundtrip validation. The next gate is the guarded one-time held-out-test evaluator, not further model selection.
 
 ## Status definitions used below
 
@@ -258,7 +258,7 @@ linear-SVM smoke mean:
 
 C01-C26 are implemented and have passed bounded warning-clean pre-master admission smoke. This confirms implementation-admission mechanics only. It does not select a model, exclude a candidate, freeze protocol v2, or master-admit any candidate.
 
-Implementation admission is complete for C01-C26, and protocol-v2 runtime and budget policy is frozen for the base comparison. The executable protocol-v2 scaffold remains unchanged as the stronger benchmark contract. The separate fast-completion protocol completed as `fast_completion_v1` with C01-C26, 2 outer folds x 1 repeat, 2 Stage-A trials, Stage-B top 1, and C19 retained on `catboost_v2`. Fast finalization selected a top-three unweighted soft-voting ensemble from C03, C25, and C20 for the fast completion path, and a guarded full-development refit scaffold now exists. No official base-comparison results have been generated or inspected yet.
+Implementation admission is complete for C01-C26, and protocol-v2 runtime and budget policy is frozen for the base comparison. The executable protocol-v2 scaffold remains unchanged as the stronger benchmark contract. The separate fast-completion protocol completed as `fast_completion_v1` with C01-C26, 2 outer folds x 1 repeat, 2 Stage-A trials, Stage-B top 1, and C19 retained on `catboost_v2`. Fast finalization selected a top-three unweighted soft-voting ensemble from C03, C25, and C20 for the fast completion path, and that frozen procedure has been refitted on all development rows. No official base-comparison results have been generated or inspected yet.
 
 The correct order is:
 
@@ -267,9 +267,8 @@ The correct order is:
 
 2. Keep C28 AutoGluon deferred because its resolver would downgrade the numerical stack.
 
-3. Use the selected top-three fast-finalization ensemble as input to the frozen
-   final-procedure specification and guarded full-development refit only if the
-   fast completion path is intentionally approved.
+3. Use the guarded one-time evaluator only when intentionally consuming the
+   held-out test set for the frozen refitted fast-route final procedure.
 
 4. The frozen protocol v2 includes the base-comparison registry, search budgets, top-K confirmation rule,
    feature contracts, imbalance contracts, and resource policy.

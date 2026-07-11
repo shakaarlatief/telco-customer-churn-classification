@@ -489,7 +489,7 @@ calibration method: none
 calibration status: deferred_fast_completion
 ```
 
-This remains fast development-data evidence. It must not be described as robust protocol-v2 evidence, official base-comparison evidence, or held-out-test evidence. The current local implementation adds a frozen final-procedure specification dry-run and a guarded full-development refit scaffold, but the full-development refit has not been run.
+This remains fast development-data evidence. It must not be described as robust protocol-v2 evidence, official base-comparison evidence, or held-out-test evidence. The final procedure has now been frozen and refitted on all 5,634 development rows, and independent loading/prediction roundtrip validation passed. The current local implementation adds a guarded one-time held-out-test readiness audit and evaluator, but the real held-out-test evaluation has not been run.
 
 ### Implementation provenance and provisional master-design reference
 
@@ -596,7 +596,7 @@ F2 has been pruned during pilot work. Its final contract, together with search b
 
 ## Current experiment gate
 
-Do not interpret admission-smoke output, fast-completion output, leading-candidate selection, fast-finalization output, or the full-development refit scaffold as robust protocol-v2 model-selection evidence. Protocol v2 base comparison is frozen but currently too slow for the immediate completion path. The completed `fast_completion_v1` run has been used for read-only leading-candidate selection and fast finalization for project completion. The next executable gate is frozen final-procedure spec review followed by intentional full-development refit execution if approved. No official base comparison has run and no candidate is master-admitted.
+Do not interpret admission-smoke output, fast-completion output, leading-candidate selection, fast-finalization output, or the full-development refit as robust protocol-v2 model-selection evidence. Protocol v2 base comparison is frozen but currently too slow for the immediate completion path. The completed `fast_completion_v1` run has been used for read-only leading-candidate selection, fast finalization, and full-development refit for project completion. The next executable gate is the guarded one-time held-out-test evaluator. No official base comparison has run and no candidate is master-admitted.
 
 ### Historical monitoring provenance and local operational inspection
 
@@ -644,9 +644,8 @@ The required order is now:
    the fast-route development-data final procedure, while preserving its
    development-data-only and non-robust-evidence label.
 
-3. Review the frozen final-procedure specification dry-run and then intentionally
-   run the full-development refit only if the project is choosing the fast
-   completion path.
+3. Review the one-time held-out-test readiness audit and evaluator dry-run before
+   intentionally consuming the held-out test set.
 
 4. Preserve the frozen protocol-v2 contract:
        master candidate registry,
