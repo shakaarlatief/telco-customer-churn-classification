@@ -473,7 +473,23 @@ The current local implementation adds a separate fast-finalization scaffold:
 - evidence_role=fast_finalization_pipeline_evidence
 ```
 
-This scaffold has not been run in non-dry-run mode. It must not be described as robust protocol-v2 evidence, official base-comparison evidence, or held-out-test evidence.
+Fast finalization has now selected the development-data final procedure for the fast completion path:
+
+```text
+selected procedure: top3_unweighted_soft_average
+procedure type: ensemble
+members:
+    C03_SPLINE_LOGISTIC_REGRESSION
+    C25_FT_TRANSFORMER
+    C20_EXPLAINABLE_BOOSTING_MACHINE
+aggregation: unweighted arithmetic mean of member probabilities
+selected OOF average precision: about 0.669605382543
+selected OOF F1 threshold: 0.39106601395524887
+calibration method: none
+calibration status: deferred_fast_completion
+```
+
+This remains fast development-data evidence. It must not be described as robust protocol-v2 evidence, official base-comparison evidence, or held-out-test evidence. The current local implementation adds a frozen final-procedure specification dry-run and a guarded full-development refit scaffold, but the full-development refit has not been run.
 
 ### Implementation provenance and provisional master-design reference
 
@@ -580,7 +596,7 @@ F2 has been pruned during pilot work. Its final contract, together with search b
 
 ## Current experiment gate
 
-Do not interpret admission-smoke output, fast-completion output, leading-candidate selection, or the fast-finalization scaffold as robust protocol-v2 model-selection evidence. Protocol v2 base comparison is frozen but currently too slow for the immediate completion path. The completed `fast_completion_v1` run has been used for read-only leading-candidate selection for project completion, and the next executable gate is dry-run review followed by intentional fast-finalization execution if approved. No official base comparison has run and no candidate is master-admitted.
+Do not interpret admission-smoke output, fast-completion output, leading-candidate selection, fast-finalization output, or the full-development refit scaffold as robust protocol-v2 model-selection evidence. Protocol v2 base comparison is frozen but currently too slow for the immediate completion path. The completed `fast_completion_v1` run has been used for read-only leading-candidate selection and fast finalization for project completion. The next executable gate is frozen final-procedure spec review followed by intentional full-development refit execution if approved. No official base comparison has run and no candidate is master-admitted.
 
 ### Historical monitoring provenance and local operational inspection
 
@@ -624,12 +640,13 @@ The required order is now:
 1. Keep C27 TabPFN and C28 AutoGluon deferred unless their package, licence,
    resource, and dependency constraints materially change.
 
-2. Treat the existing leading candidate set from `fast_completion_v1` as the input
-   to the fast-finalization scaffold, while preserving its development-data-only
-   and non-robust-evidence label.
+2. Treat the selected `top3_unweighted_soft_average` fast-finalization procedure as
+   the fast-route development-data final procedure, while preserving its
+   development-data-only and non-robust-evidence label.
 
-3. Review the fast-finalization dry-run and then intentionally run it only if the
-   project is choosing the fast completion path.
+3. Review the frozen final-procedure specification dry-run and then intentionally
+   run the full-development refit only if the project is choosing the fast
+   completion path.
 
 4. Preserve the frozen protocol-v2 contract:
        master candidate registry,

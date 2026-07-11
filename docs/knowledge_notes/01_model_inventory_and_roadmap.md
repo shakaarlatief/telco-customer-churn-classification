@@ -516,9 +516,8 @@ The intended sequence is:
 1. Summarize completed fast-completion artifacts with the read-only final-comparison analysis
    scaffold.
 2. Select a leading candidate set with a transparent development-data rule.
-3. For the fast completion path, run the fast-finalization scaffold on that leading
-   set to tune, export OOF predictions, evaluate simple soft-voting options, and
-   select one development-data final procedure.
+3. For the fast completion path, use the selected top-three unweighted soft-voting
+   ensemble from fast finalization as the development-data final procedure.
 4. Analyze outer-fold stability, paired differences, practical equivalence, runtime, and
    selected-configuration stability.
 5. Compare calibration only when probability outputs are operationally relevant.
