@@ -516,17 +516,20 @@ The intended sequence is:
 1. Summarize completed fast-completion artifacts with the read-only final-comparison analysis
    scaffold.
 2. Select a leading candidate set with a transparent development-data rule.
-3. Analyze outer-fold stability, paired differences, practical equivalence, runtime, and
+3. For the fast completion path, run the fast-finalization scaffold on that leading
+   set to tune, export OOF predictions, evaluate simple soft-voting options, and
+   select one development-data final procedure.
+4. Analyze outer-fold stability, paired differences, practical equivalence, runtime, and
    selected-configuration stability.
-4. Compare calibration only when probability outputs are operationally relevant.
-5. Perform cross-fitted threshold, capacity, cost, and intervention-volume analysis.
-6. Consider stacking, blending, or soft voting only after constituent procedures and
+5. Compare calibration only when probability outputs are operationally relevant.
+6. Perform cross-fitted threshold, capacity, cost, and intervention-volume analysis.
+7. Consider stacking, blending, or soft voting only after constituent procedures and
    leakage-safe out-of-fold evidence are frozen.
-7. Treat any stack, blend, or vote as its own candidate procedure.
-8. Select one final procedure or justified stack.
-9. Rerun only the winner's frozen search on all 5,634 development rows and fit the
+8. Treat any stack, blend, or vote as its own candidate procedure.
+9. Select one final procedure or justified stack.
+10. Rerun only the winner's frozen search on all 5,634 development rows and fit the
     complete pipeline.
-10. Evaluate once on the untouched test set and report final metrics with uncertainty where
+11. Evaluate once on the untouched test set and report final metrics with uncertainty where
     feasible.
 ```
 

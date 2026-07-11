@@ -1,0 +1,61 @@
+{
+  "protocol_id": "fast_finalization_v1",
+  "protocol_version": "fast_finalization_v1",
+  "evidence_role": "fast_finalization_pipeline_evidence",
+  "source_evidence_role": "fast_completion_pipeline_evidence",
+  "source_run_id_default": "fast_completion_v1",
+  "purpose": "Fast development-data finalization scaffold for quickly completing the portfolio pipeline after leading-candidate selection.",
+  "warning": "This is a fast completion workflow, not the robust frozen protocol-v2 benchmark and not held-out evaluation evidence.",
+  "development_data_policy": "development_data_only",
+  "held_out_test_policy": "not_loaded_or_referenced",
+  "candidate_source": "leading_candidates_json",
+  "tuning": {
+    "stage_a_trials": 2,
+    "inner_cv_folds": 2,
+    "primary_metric": "average_precision",
+    "normal_search_profile": "full",
+    "catboost_search_profile": "catboost_v2"
+  },
+  "oof_evaluation": {
+    "outer_cv_folds": 2,
+    "outer_cv_repeats": 1,
+    "shuffle": true,
+    "metric": "average_precision"
+  },
+  "ensembles": [
+    {
+      "ensemble_id": "top3_unweighted_soft_average",
+      "minimum_probability_candidates": 3,
+      "member_count": 3,
+      "weighting": "uniform"
+    },
+    {
+      "ensemble_id": "top5_unweighted_soft_average",
+      "minimum_probability_candidates": 5,
+      "member_count": 5,
+      "weighting": "uniform"
+    },
+    {
+      "ensemble_id": "top5_ap_weighted_soft_average",
+      "minimum_probability_candidates": 5,
+      "member_count": 5,
+      "weighting": "oof_average_precision"
+    }
+  ],
+  "selection_rule": {
+    "primary_metric": "average_precision",
+    "maximize": true,
+    "simplicity_tolerance": 0.002,
+    "tie_break": "If the best ensemble is within 0.002 average precision of the best individual candidate, select the simpler individual candidate."
+  },
+  "outputs": [
+    "finalization_manifest.json",
+    "tuned_candidate_configs.json",
+    "tuned_candidate_metrics.csv",
+    "tuned_candidate_oof_predictions.csv",
+    "ensemble_metrics.csv",
+    "ensemble_oof_predictions.csv",
+    "final_procedure_selection.json",
+    "final_procedure_selection.md"
+  ]
+}

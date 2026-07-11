@@ -457,7 +457,23 @@ paused: 0
 evidence role: fast_completion_pipeline_evidence
 ```
 
-Its completed summaries can support a read-only leading-candidate selection step for project completion. This is development-data evidence only and is not final model selection or held-out-test evidence.
+Its completed summaries supported a read-only leading-candidate selection step for project completion. The derived leading set lives under `artifacts/final_selection/fast_completion_v1/` and is development-data evidence only. It is not final model selection or held-out-test evidence.
+
+The current local implementation adds a separate fast-finalization scaffold:
+
+```text
+- protocol declaration at protocols/fast_finalization_v1.json
+- runner at scripts/run_fast_finalization.py
+- synthetic structural smoke at scripts/smoke_test_fast_finalization.py
+- default input: artifacts/final_selection/fast_completion_v1/leading_candidates.json
+- default output root: artifacts/final_selection/fast_completion_v1/fast_finalization_v1
+- tuning: 2 trials with 2-fold inner CV for selected leading candidates
+- OOF evaluation: 2 folds x 1 repeat on development data only
+- simple probability-level soft-voting checks where enough probability candidates exist
+- evidence_role=fast_finalization_pipeline_evidence
+```
+
+This scaffold has not been run in non-dry-run mode. It must not be described as robust protocol-v2 evidence, official base-comparison evidence, or held-out-test evidence.
 
 ### Implementation provenance and provisional master-design reference
 
@@ -564,7 +580,7 @@ F2 has been pruned during pilot work. Its final contract, together with search b
 
 ## Current experiment gate
 
-Do not interpret admission-smoke output or fast-completion output as robust protocol-v2 model-selection evidence. Protocol v2 base comparison is frozen but currently too slow for the immediate completion path. The completed `fast_completion_v1` run may be used for read-only leading-candidate selection for project completion. No official base comparison has run and no candidate is master-admitted.
+Do not interpret admission-smoke output, fast-completion output, leading-candidate selection, or the fast-finalization scaffold as robust protocol-v2 model-selection evidence. Protocol v2 base comparison is frozen but currently too slow for the immediate completion path. The completed `fast_completion_v1` run has been used for read-only leading-candidate selection for project completion, and the next executable gate is dry-run review followed by intentional fast-finalization execution if approved. No official base comparison has run and no candidate is master-admitted.
 
 ### Historical monitoring provenance and local operational inspection
 
@@ -608,10 +624,14 @@ The required order is now:
 1. Keep C27 TabPFN and C28 AutoGluon deferred unless their package, licence,
    resource, and dependency constraints materially change.
 
-2. Select a leading candidate set from the completed `fast_completion_v1`
-   development-data summaries using a transparent read-only rule.
+2. Treat the existing leading candidate set from `fast_completion_v1` as the input
+   to the fast-finalization scaffold, while preserving its development-data-only
+   and non-robust-evidence label.
 
-3. Preserve the frozen protocol-v2 contract:
+3. Review the fast-finalization dry-run and then intentionally run it only if the
+   project is choosing the fast completion path.
+
+4. Preserve the frozen protocol-v2 contract:
        master candidate registry,
        candidate contracts,
        feature policies,
@@ -623,7 +643,7 @@ The required order is now:
        resource policy,
        audit and resume contract.
 
-4. Treat any future change after official results exist as a new protocol version
+5. Treat any future change after official results exist as a new protocol version
    or supplemental analysis, not a silent mutation of protocol v2.
 ```
 
