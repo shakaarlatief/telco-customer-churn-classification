@@ -10,6 +10,7 @@ a transparent final-procedure selection under ``artifacts/final_selection``.
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 import csv
 from datetime import UTC, datetime
 import json
@@ -291,6 +292,42 @@ def _write_csv(path: Path, rows: Sequence[Mapping[str, Any]], fieldnames: Sequen
             writer.writerow({field: row.get(field, "") for field in fieldnames})
 
 
+def store_complete_trial_parameters(
+    trial: Any,
+    parameters: Mapping[str, Any],
+    complete_parameters_by_trial: dict[int, dict[str, Any]],
+) -> dict[str, Any]:
+    """Persist the complete executable configuration for one Optuna trial."""
+    complete_parameters = deepcopy(dict(parameters))
+    complete_parameters_by_trial[int(trial.number)] = complete_parameters
+    set_user_attr = getattr(trial, "set_user_attr", None)
+    if callable(set_user_attr):
+        set_user_attr("complete_parameters", deepcopy(complete_parameters))
+    return complete_parameters
+
+
+def complete_parameters_for_best_trial(
+    study: Any,
+    complete_parameters_by_trial: Mapping[int, Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Return the stored complete executable configuration for the winning trial."""
+    trial_number = int(study.best_trial.number)
+    if trial_number in complete_parameters_by_trial:
+        return deepcopy(dict(complete_parameters_by_trial[trial_number]))
+
+    user_attr_parameters = getattr(study.best_trial, "user_attrs", {}).get(
+        "complete_parameters"
+    )
+    if isinstance(user_attr_parameters, Mapping):
+        return deepcopy(dict(user_attr_parameters))
+
+    raise FastFinalizationError(
+        "Winning Optuna trial has no stored complete executable configuration. "
+        "The finalization workflow cannot reconstruct the selected candidate from "
+        "suggested-only Optuna metadata."
+    )
+
+
 def tune_candidate(
     *,
     candidate_id: str,
@@ -310,12 +347,18 @@ def tune_candidate(
     profile = search_profile_for(candidate_id)
     cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=int(random_state))
     y_array = np.asarray(y, dtype=int)
+    complete_parameters_by_trial: dict[int, dict[str, Any]] = {}
 
     def objective(trial: Any) -> float:
         parameters = suggest_candidate_parameters(
             trial,
             candidate_id=candidate_id,
             profile=profile,
+        )
+        parameters = store_complete_trial_parameters(
+            trial,
+            parameters,
+            complete_parameters_by_trial,
         )
         scores = np.empty(shape=y_array.shape[0], dtype=float)
         for train_index, validation_index in cv.split(X, y_array):
@@ -337,7 +380,10 @@ def tune_candidate(
         sampler=optuna.samplers.TPESampler(seed=int(random_state)),
     )
     study.optimize(objective, n_trials=int(n_trials), show_progress_bar=False)
-    return dict(study.best_trial.params), float(study.best_value)
+    return (
+        complete_parameters_for_best_trial(study, complete_parameters_by_trial),
+        float(study.best_value),
+    )
 
 
 def collect_oof_predictions(

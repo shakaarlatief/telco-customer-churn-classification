@@ -21,10 +21,18 @@ if str(SCRIPTS_DIR) not in sys.path:
 from run_fast_finalization import (  # noqa: E402
     SOURCE_EVIDENCE_ROLE,
     build_ensemble_outputs,
+    complete_parameters_for_best_trial,
     compute_metrics,
     load_leading_candidates,
     print_dry_run,
     select_final_procedure,
+    store_complete_trial_parameters,
+)
+from telco_churn.candidates import (  # noqa: E402
+    CANDIDATE_SPLINE_LOGISTIC_REGRESSION,
+    SEARCH_PROFILE_FULL,
+    build_candidate_pipeline,
+    suggest_candidate_parameters,
 )
 
 
@@ -193,6 +201,78 @@ def assert_ensemble_logic() -> None:
         raise AssertionError("Unweighted ensemble probability average is incorrect.")
 
 
+def assert_complete_trial_configuration_preserved() -> None:
+    """Verify Optuna suggested-only params are not used as executable configs."""
+    import optuna
+
+    complete_parameters_by_trial: dict[int, dict[str, object]] = {}
+
+    def objective(trial: object) -> float:
+        suggested = trial.suggest_float("suggested_strength", 0.0, 1.0)
+        complete = {
+            "suggested_strength": suggested,
+            "fixed_max_iter": 8000,
+        }
+        store_complete_trial_parameters(
+            trial,
+            complete,
+            complete_parameters_by_trial,
+        )
+        return float(suggested)
+
+    study = optuna.create_study(
+        direction="maximize",
+        sampler=optuna.samplers.GridSampler({"suggested_strength": [0.1, 0.9]}),
+    )
+    study.optimize(objective, n_trials=2, show_progress_bar=False)
+    selected = complete_parameters_for_best_trial(study, complete_parameters_by_trial)
+    if "fixed_max_iter" in study.best_trial.params:
+        raise AssertionError("Fixed parameters should not appear in Optuna best_trial.params.")
+    if selected.get("fixed_max_iter") != 8000:
+        raise AssertionError("Complete selected config must preserve fixed parameters.")
+    selected["fixed_max_iter"] = 1
+    if complete_parameters_by_trial[study.best_trial.number]["fixed_max_iter"] != 8000:
+        raise AssertionError("Returned complete config must be protected by copying.")
+
+
+def assert_c03_complete_configuration_reconstructs() -> None:
+    """Verify the real C03 full-profile mapping includes fixed executable fields."""
+    import optuna
+
+    fixed_trial = optuna.trial.FixedTrial(
+        {
+            "n_knots": 3,
+            "degree": 2,
+            "penalty": "l2",
+            "C": 1.0,
+            "feature_policy": "F0_RAW",
+            "feature_selection_policy": "S0_NONE",
+            "imbalance_policy__f0_raw": "I0_NONE",
+        }
+    )
+    parameters = suggest_candidate_parameters(
+        fixed_trial,
+        candidate_id=CANDIDATE_SPLINE_LOGISTIC_REGRESSION,
+        profile=SEARCH_PROFILE_FULL,
+    )
+    if "max_iter" in fixed_trial.params:
+        raise AssertionError("C03 max_iter should be fixed, not an Optuna suggested param.")
+    if "class_weight" in fixed_trial.params:
+        raise AssertionError("C03 class_weight should be fixed, not an Optuna suggested param.")
+    if parameters.get("max_iter") != 8000:
+        raise AssertionError("C03 full-profile config must include max_iter=8000.")
+    if parameters.get("class_weight") != "none":
+        raise AssertionError("C03 config must include class_weight='none'.")
+
+    pipeline = build_candidate_pipeline(
+        CANDIDATE_SPLINE_LOGISTIC_REGRESSION,
+        parameters,
+        random_state=42,
+    )
+    if pipeline is None:
+        raise AssertionError("C03 complete config should reconstruct a pipeline.")
+
+
 def assert_no_loader_tokens() -> None:
     """Static guard that new scripts do not import known final-evaluation helpers."""
     for script_name in ("run_fast_finalization.py", "smoke_test_fast_finalization.py"):
@@ -207,6 +287,8 @@ def main() -> None:
     assert_leading_parsing_and_dry_run()
     assert_metric_and_selection_logic()
     assert_ensemble_logic()
+    assert_complete_trial_configuration_preserved()
+    assert_c03_complete_configuration_reconstructs()
     assert_no_loader_tokens()
     print("Fast-finalization smoke test passed.")
 
