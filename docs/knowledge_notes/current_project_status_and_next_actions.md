@@ -445,6 +445,20 @@ The separate fast-completion protocol scaffold provides:
 
 This fast-completion protocol is for finishing the portfolio project pipeline quickly. It must not be described as the robust frozen protocol-v2 benchmark.
 
+The fast-completion run has completed:
+
+```text
+run id: fast_completion_v1
+submitted: 52
+completed: 52
+failed: 0
+interrupted: 0
+paused: 0
+evidence role: fast_completion_pipeline_evidence
+```
+
+Its completed summaries can support a read-only leading-candidate selection step for project completion. This is development-data evidence only and is not final model selection or held-out-test evidence.
+
 ### Implementation provenance and provisional master-design reference
 
 The current infrastructure was built in the following reusable phases:
@@ -550,7 +564,7 @@ F2 has been pruned during pilot work. Its final contract, together with search b
 
 ## Current experiment gate
 
-Do not interpret admission-smoke output or fast-completion output as robust protocol-v2 model-selection evidence. Protocol v2 base comparison is frozen but currently too slow for the immediate completion path. No official base comparison has run and no candidate is master-admitted.
+Do not interpret admission-smoke output or fast-completion output as robust protocol-v2 model-selection evidence. Protocol v2 base comparison is frozen but currently too slow for the immediate completion path. The completed `fast_completion_v1` run may be used for read-only leading-candidate selection for project completion. No official base comparison has run and no candidate is master-admitted.
 
 ### Historical monitoring provenance and local operational inspection
 
@@ -594,8 +608,8 @@ The required order is now:
 1. Keep C27 TabPFN and C28 AutoGluon deferred unless their package, licence,
    resource, and dependency constraints materially change.
 
-2. Run the fast-completion protocol dry-run, then intentionally execute the
-   fast-completion development-only workflow if the dry-run plan is acceptable.
+2. Select a leading candidate set from the completed `fast_completion_v1`
+   development-data summaries using a transparent read-only rule.
 
 3. Preserve the frozen protocol-v2 contract:
        master candidate registry,

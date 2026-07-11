@@ -87,7 +87,7 @@ freeze_state = frozen
 is_frozen = true
 ```
 
-No official base comparison has run, no candidate is master-admitted, and no model-selection evidence has been generated from the scaffold. The current local implementation adds a separate fast-completion protocol scaffold so the project pipeline can be finished quickly without mutating frozen protocol v2. The next gate is the fast-completion dry-run and then intentional fast-completion execution, not further protocol design.
+No official base comparison has run, no candidate is master-admitted, and no model-selection evidence has been generated from the scaffold. A separate fast-completion protocol has now completed as `fast_completion_v1` with 52/52 tasks completed. The next gate is read-only leading-candidate selection from fast-completion development-data summaries, not final model selection and not held-out-test evaluation.
 
 ## Status definitions used below
 
@@ -258,7 +258,7 @@ linear-SVM smoke mean:
 
 C01-C26 are implemented and have passed bounded warning-clean pre-master admission smoke. This confirms implementation-admission mechanics only. It does not select a model, exclude a candidate, freeze protocol v2, or master-admit any candidate.
 
-Implementation admission is complete for C01-C26, and protocol-v2 runtime and budget policy is frozen for the base comparison. The executable protocol-v2 scaffold remains unchanged as the stronger benchmark contract. A separate fast-completion protocol now exists with C01-C26, 2 outer folds x 1 repeat, 2 Stage-A trials, Stage-B top 1, and C19 retained on `catboost_v2`. No official base-comparison results have been generated or inspected yet.
+Implementation admission is complete for C01-C26, and protocol-v2 runtime and budget policy is frozen for the base comparison. The executable protocol-v2 scaffold remains unchanged as the stronger benchmark contract. The separate fast-completion protocol completed as `fast_completion_v1` with C01-C26, 2 outer folds x 1 repeat, 2 Stage-A trials, Stage-B top 1, and C19 retained on `catboost_v2`. No official base-comparison results have been generated or inspected yet.
 
 The correct order is:
 
@@ -267,8 +267,8 @@ The correct order is:
 
 2. Keep C28 AutoGluon deferred because its resolver would downgrade the numerical stack.
 
-3. Run the fast-completion protocol dry-run, then intentionally execute the
-   fast-completion development-only workflow if the dry-run plan is acceptable.
+3. Select a leading candidate set from the completed `fast_completion_v1`
+   development-data summaries using a transparent read-only rule.
 
 4. The frozen protocol v2 includes the base-comparison registry, search budgets, top-K confirmation rule,
    feature contracts, imbalance contracts, and resource policy.

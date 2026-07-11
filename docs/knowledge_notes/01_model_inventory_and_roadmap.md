@@ -380,7 +380,7 @@ The latest pushed executable scaffold checkpoint is:
 
 The executable protocol-v2 scaffold now exists, and its protocol declaration has been intentionally frozen with `freeze_state=frozen` and `is_frozen=true`. It can dry-run the C01-C26 official base-comparison task plan and encodes the CatBoost runtime-limited policy, but no official base comparison has run and no candidate is master-admitted.
 
-A separate fast-completion protocol scaffold now exists for finishing the complete portfolio pipeline quickly. It keeps all C01-C26 families, keeps C19 CatBoost on `catboost_v2`, uses 2 outer folds x 1 repeat, 2 Stage-A trials, and Stage-B top 1. Its evidence role is fast-completion pipeline evidence, not the robust protocol-v2 benchmark.
+A separate fast-completion protocol has completed for quickly finishing the complete portfolio pipeline. It kept all C01-C26 families, kept C19 CatBoost on `catboost_v2`, used 2 outer folds x 1 repeat, 2 Stage-A trials, and Stage-B top 1. Its evidence role is fast-completion pipeline evidence, not the robust protocol-v2 benchmark.
 
 The registry compares complete procedures, not bare estimator names. A procedure includes its feature policy, preprocessing representation, feature-selection policy where compatible, imbalance treatment, model hyperparameters, and random-state contract.
 
@@ -451,7 +451,7 @@ C28 AutoGluon:
     deferred because the resolver would downgrade the numerical stack
 ```
 
-No model is master-admitted yet. The frozen protocol-v2 base comparison has not run. The fast-completion protocol is a separate practical completion path. The held-out test set remains untouched.
+No model is master-admitted yet. The frozen protocol-v2 base comparison has not run. The completed fast-completion protocol is a separate practical completion path. The held-out test set remains untouched.
 
 ## Cross-cutting modelling policies before final evaluation
 
@@ -513,22 +513,20 @@ The policies are mutually exclusive. The registry records compatibility explicit
 The intended sequence is:
 
 ```text
-1. Run the fast-completion protocol dry-run and inspect the 52-task plan.
-2. Intentionally execute the fast-completion development-only workflow if the dry-run is acceptable.
-3. Summarize completed-task artifacts with the read-only final-comparison analysis
+1. Summarize completed fast-completion artifacts with the read-only final-comparison analysis
    scaffold.
-4. Analyze outer-fold stability, paired differences, practical equivalence, runtime, and
+2. Select a leading candidate set with a transparent development-data rule.
+3. Analyze outer-fold stability, paired differences, practical equivalence, runtime, and
    selected-configuration stability.
-5. Define a defensible leading set using training-only evidence.
-6. Compare calibration only when probability outputs are operationally relevant.
-7. Perform cross-fitted threshold, capacity, cost, and intervention-volume analysis.
-8. Consider stacking, blending, or soft voting only after constituent procedures and
+4. Compare calibration only when probability outputs are operationally relevant.
+5. Perform cross-fitted threshold, capacity, cost, and intervention-volume analysis.
+6. Consider stacking, blending, or soft voting only after constituent procedures and
    leakage-safe out-of-fold evidence are frozen.
-9. Treat any stack, blend, or vote as its own candidate procedure.
-10. Select one final procedure or justified stack.
-11. Rerun only the winner's frozen search on all 5,634 development rows and fit the
+7. Treat any stack, blend, or vote as its own candidate procedure.
+8. Select one final procedure or justified stack.
+9. Rerun only the winner's frozen search on all 5,634 development rows and fit the
     complete pipeline.
-12. Evaluate once on the untouched test set and report final metrics with uncertainty where
+10. Evaluate once on the untouched test set and report final metrics with uncertainty where
     feasible.
 ```
 
