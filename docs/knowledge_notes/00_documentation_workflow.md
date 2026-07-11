@@ -81,6 +81,8 @@ Approval for one write action does not imply standing permission for later repos
 
 Remote Git state and the user's local working tree must be treated as potentially different. Before proposing a replacement for a locally changed file, inspect the available current version or ask the user to provide it.
 
+In shared Codex workspace sessions, the user may explicitly ask the assistant to edit repository files directly. In that mode, direct edits are allowed only within the approved scope, and the assistant must still avoid staging, committing, pushing, deleting unrelated work, or modifying artifacts unless the user explicitly requests those actions. Always inspect `git status --short` before and after substantial repository edits, and preserve untracked local artifact trees unless a deliberate artifact-publication policy says otherwise.
+
 ## 1. Roadmap and inventory documents
 
 Roadmap files describe the strategic modelling plan.

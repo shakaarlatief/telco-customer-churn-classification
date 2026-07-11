@@ -73,21 +73,32 @@ The successful `admission_smoke_c26_warning_clean_v2` run was a warning-clean im
 
 The paused `search_budget_calibration_v1_warning_clean` run is runtime evidence only. It showed that C19 CatBoost is a protocol-level runtime bottleneck, but it must not be used to rank candidates, select candidates, eliminate candidates, or reinterpret admission status.
 
-The latest pushed checkpoint records the frozen protocol-v2 base-comparison scaffold status:
+The latest pushed checkpoint records the guarded final-evaluation workflow and current project-completion status:
 
 ```text
-05c6bdd
-Update status after protocol v2 scaffold
+6104dcf
+Add guarded final held-out evaluation workflow
 ```
 
-Its protocol declaration has now been intentionally frozen:
+Current repository state at handoff:
+
+```text
+HEAD:        6104dcf05495edbed76ea99318c5d9053f644929
+origin/main: 6104dcf05495edbed76ea99318c5d9053f644929
+branch:      main
+working tree: artifacts/ is local and untracked
+```
+
+The robust protocol-v2 declaration remains intentionally frozen and untouched:
 
 ```text
 freeze_state = frozen
 is_frozen = true
 ```
 
-No official base comparison has run, no candidate is master-admitted, and no model-selection evidence has been generated from the scaffold. A separate fast-completion protocol has completed as `fast_completion_v1` with 52/52 tasks completed, and its summaries have been used to derive a leading candidate set under `artifacts/final_selection/fast_completion_v1/`. Fast finalization selected `top3_unweighted_soft_average` from C03, C25, and C20 for the fast completion path. The final procedure has been frozen and refitted on all development rows with independent prediction roundtrip validation. The next gate is the guarded one-time held-out-test evaluator, not further model selection.
+No official robust protocol-v2 base comparison has run, no candidate is master-admitted, and no held-out test metrics exist. A separate fast-completion protocol completed as `fast_completion_v1` with 52/52 tasks completed, and its summaries were used to derive a leading candidate set under `artifacts/final_selection/fast_completion_v1/`.
+
+Fast finalization selected `top3_unweighted_soft_average` from C03, C25, and C20 for the fast completion path. The final procedure has been frozen and refitted on all 5,634 development rows with independent prediction roundtrip validation. The guarded held-out evaluator is implemented and readiness-checked, but the user explicitly deferred running it. The current phase is documentation/reporting; the held-out test remains untouched until the user intentionally requests the one-time final evaluation.
 
 ## Status definitions used below
 
@@ -260,6 +271,36 @@ C01-C26 are implemented and have passed bounded warning-clean pre-master admissi
 
 Implementation admission is complete for C01-C26, and protocol-v2 runtime and budget policy is frozen for the base comparison. The executable protocol-v2 scaffold remains unchanged as the stronger benchmark contract. The separate fast-completion protocol completed as `fast_completion_v1` with C01-C26, 2 outer folds x 1 repeat, 2 Stage-A trials, Stage-B top 1, and C19 retained on `catboost_v2`. Fast finalization selected a top-three unweighted soft-voting ensemble from C03, C25, and C20 for the fast completion path, and that frozen procedure has been refitted on all development rows. No official base-comparison results have been generated or inspected yet.
 
+The fast-route frozen procedure is:
+
+```text
+procedure ID:
+    top3_unweighted_soft_average
+
+member order:
+    C03_SPLINE_LOGISTIC_REGRESSION
+    C25_FT_TRANSFORMER
+    C20_EXPLAINABLE_BOOSTING_MACHINE
+
+weights:
+    one third each
+
+aggregation:
+    arithmetic mean of positive-class probabilities
+
+frozen decision threshold:
+    0.39106601395524887
+
+threshold origin:
+    development-data OOF F1
+
+calibration:
+    method = none
+    status = deferred_fast_completion
+```
+
+This is fast development-data evidence. It must not be described as the robust protocol-v2 winner or as held-out test evidence.
+
 The correct order is:
 
 ```text
@@ -267,8 +308,8 @@ The correct order is:
 
 2. Keep C28 AutoGluon deferred because its resolver would downgrade the numerical stack.
 
-3. Use the guarded one-time evaluator only when intentionally consuming the
-   held-out test set for the frozen refitted fast-route final procedure.
+3. Continue documentation/reporting unless the user explicitly requests the guarded
+   one-time held-out evaluation and provides the required confirmation phrase.
 
 4. The frozen protocol v2 includes the base-comparison registry, search budgets, top-K confirmation rule,
    feature contracts, imbalance contracts, and resource policy.

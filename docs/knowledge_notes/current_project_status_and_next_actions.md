@@ -30,25 +30,43 @@ docs/knowledge_notes/methodology/final_comparison_protocol_v2_draft.md
 
 ## Latest confirmed checkpoint
 
-### Latest pushed coordination and scaffold checkpoint
+### New-chat handoff checkpoint
 
-The latest pushed checkpoint is:
+Repository:
 
 ```text
-05c6bdd
-Update status after protocol v2 scaffold
+shakaarlatief/telco-customer-churn-classification
+branch: main
 ```
 
-This commit records the frozen protocol-v2 base-comparison scaffold status. The frozen protocol-v2 declaration remains:
+The current local Git state at the time of this handoff was:
 
 ```text
+HEAD:        6104dcf05495edbed76ea99318c5d9053f644929
+origin/main: 6104dcf05495edbed76ea99318c5d9053f644929
+short log:   6104dcf Add guarded final held-out evaluation workflow
+status:      only artifacts/ is untracked
+```
+
+The guarded final held-out evaluation workflow is therefore not an uncommitted code change in this local state; it is present at `HEAD` and at the local `origin/main` tracking ref. The local `artifacts/` tree is intentionally untracked and must not be added to Git wholesale. Future work should decide deliberately which compact summaries, reports, tables, metadata, or selected manifests belong in version control; large run outputs, OOF prediction files, joblib files, and row-level outputs should remain excluded unless a deliberate artifact-publication policy is defined.
+
+The latest chat-handoff snapshot is:
+
+```text
+docs/knowledge_notes/context_history/telco_churn_chat_handoff_context_9.md
+```
+
+It supersedes context 8 for current chat-continuation state while preserving contexts 1 through 8 as historical background.
+
+The frozen protocol-v2 declaration remains:
+
+```text
+protocols/final_comparison_protocol_v2_base.json
 freeze_state = frozen
 is_frozen = true
 ```
 
-The frozen protocol-v2 scaffold can dry-run the official base-comparison task plan, candidate budgets, and CatBoost runtime policy. Non-dry-run execution still requires an explicit confirmation flag. This freeze does not mean that the official base comparison has run, does not master-admit any candidate, and does not access the held-out test set.
-
-The current local implementation adds a separate fast-completion protocol scaffold for quickly finishing the complete project pipeline. It is not a mutation of frozen protocol v2 and is not intended as strong model-comparison evidence.
+The frozen robust protocol-v2 scaffold can dry-run the official base-comparison task plan, candidate budgets, and CatBoost runtime policy. It remains untouched and optional future work. It was prepared but not completed; it is not required before documentation/reporting can continue.
 
 The prior read-only final-comparison analysis checkpoint remains:
 
@@ -243,7 +261,7 @@ Positive class:          Churn_binary = 1
 Development churn rate:  approximately 26.54%
 ```
 
-The held-out test set remains untouched for model-family selection, preprocessing selection, feature-policy selection, hyperparameter search, calibration selection, threshold selection, stacking, and final candidate comparison. It is used exactly once after one complete final procedure is frozen.
+The held-out test set remains untouched. It has not been loaded, inspected, counted, fingerprinted, summarized, or scored. No final test metrics exist. The user explicitly chose not to run the final held-out evaluation yet. No model, threshold, weights, members, calibration decision, or feature definition may be changed using future test results.
 
 ## Candidate-universe state
 
@@ -449,17 +467,28 @@ The fast-completion run has completed:
 
 ```text
 run id: fast_completion_v1
+evidence role: fast_completion_pipeline_evidence
 submitted: 52
 completed: 52
 failed: 0
 interrupted: 0
 paused: 0
-evidence role: fast_completion_pipeline_evidence
+held-out test: not loaded or referenced
 ```
 
-Its completed summaries supported a read-only leading-candidate selection step for project completion. The derived leading set lives under `artifacts/final_selection/fast_completion_v1/` and is development-data evidence only. It is not final model selection or held-out-test evidence.
+This was deliberately small and fast: 2 outer folds x 1 repeat, 2 tuning trials per candidate, 2-fold inner CV, primary metric average precision. It is sufficient for pipeline completion and development decisions, but it is not robust protocol-v2 benchmark evidence.
 
-The current local implementation adds a separate fast-finalization scaffold:
+Its completed summaries supported an automatic top-five development-data leading-candidate selection stored under `artifacts/final_selection/fast_completion_v1/`:
+
+```text
+1. C03_SPLINE_LOGISTIC_REGRESSION
+2. C20_EXPLAINABLE_BOOSTING_MACHINE
+3. C25_FT_TRANSFORMER
+4. C01_RIDGE_CLASSIFIER
+5. C18_LIGHTGBM
+```
+
+The repository contains a separate fast-finalization scaffold:
 
 ```text
 - protocol declaration at protocols/fast_finalization_v1.json
@@ -489,7 +518,129 @@ calibration method: none
 calibration status: deferred_fast_completion
 ```
 
-This remains fast development-data evidence. It must not be described as robust protocol-v2 evidence, official base-comparison evidence, or held-out-test evidence. The final procedure has now been frozen and refitted on all 5,634 development rows, and independent loading/prediction roundtrip validation passed. The current local implementation adds a guarded one-time held-out-test readiness audit and evaluator, but the real held-out-test evaluation has not been run.
+Individual fast-finalization OOF average precision values were:
+
+```text
+C03_SPLINE_LOGISTIC_REGRESSION: approximately 0.666354114311
+C25_FT_TRANSFORMER:            approximately 0.665475534103
+C20_EXPLAINABLE_BOOSTING_MACHINE: approximately 0.664879135290
+C01_RIDGE_CLASSIFIER:          approximately 0.649499243122
+C18_LIGHTGBM:                  approximately 0.616658334430
+```
+
+The selected ensemble exceeded the best individual by approximately 0.003251 AP, which exceeded the frozen 0.002 simplicity tolerance. Therefore the ensemble remained selected.
+
+This remains fast development-data evidence. It must not be described as robust protocol-v2 evidence, official base-comparison evidence, or held-out-test evidence. The final procedure has now been frozen and refitted on all 5,634 development rows, and independent loading/prediction roundtrip validation passed. The repository contains a guarded one-time held-out-test readiness audit and evaluator, but the real held-out-test evaluation has not been run.
+
+The final frozen procedure is:
+
+```text
+procedure: top3_unweighted_soft_average
+member order:
+    1. C03_SPLINE_LOGISTIC_REGRESSION
+    2. C25_FT_TRANSFORMER
+    3. C20_EXPLAINABLE_BOOSTING_MACHINE
+weights:
+    0.3333333333333333
+    0.3333333333333333
+    0.3333333333333333
+aggregation: arithmetic mean of positive-class probabilities
+threshold origin: development-data OOF F1 maximization
+calibration method: none
+calibration status: deferred_fast_completion
+```
+
+The final development refit is stored at:
+
+```text
+artifacts/final_selection/fast_completion_v1/final_development_refit_v1
+```
+
+Important files:
+
+```text
+fitted_final_pipeline.joblib
+final_refit_manifest.json
+model_environment.json
+feature_schema.json
+artifact_checksums.json
+roundtrip_validation.json
+```
+
+Validation status:
+
+```text
+serialization completed
+joblib reload completed
+pre-save and post-load probabilities matched
+pre-save and post-load predictions matched
+independent manual loading succeeded with PYTHONPATH=src
+model type: FrozenProbabilityVotingEnsemble
+held-out data accessed: no
+```
+
+Standalone commands that load the serialized model must make `src` importable, for example:
+
+```bash
+PYTHONPATH=src ./.venv/Scripts/python.exe ...
+```
+
+The serialized object exposes:
+
+```text
+member_ids
+member_weights
+decision_threshold
+calibration_method
+calibration_status
+```
+
+The guarded final held-out evaluator scaffold exists:
+
+```text
+src/telco_churn/final_evaluation.py
+scripts/audit_final_test_readiness.py
+scripts/evaluate_final_held_out_test.py
+scripts/smoke_test_final_held_out_evaluation.py
+```
+
+Status:
+
+```text
+py_compile passed
+smoke test passed
+readiness audit reported READY
+evaluator dry-run passed
+dry-run did not load the held-out test set
+real evaluator was not run
+final evaluation output directory does not exist
+no evaluation receipt exists
+no final test metrics exist
+```
+
+The real evaluator requires the exact confirmation phrase:
+
+```text
+I_UNDERSTAND_THIS_CONSUMES_THE_FINAL_TEST_SET
+```
+
+Do not present running that command as the immediate next action. The user explicitly deferred held-out evaluation. The eventual output directory would be:
+
+```text
+artifacts/final_evaluation/fast_completion_v1/held_out_test_v1
+```
+
+That directory must remain absent until the user intentionally chooses to consume the final test set.
+
+Resolved implementation bug to remember:
+
+```text
+Optuna best_trial.params contained only trial.suggest_* values.
+Fixed executable fields such as C03 max_iter and class_weight were omitted.
+Fast finalization now stores and retrieves the complete parameter mapping for each trial.
+The fix was implemented generically rather than as candidate-specific repair logic.
+Regression coverage was added.
+```
 
 ### Implementation provenance and provisional master-design reference
 
@@ -514,7 +665,7 @@ Phases 7 to 8B:
     and candidate-specific imbalance routing
 ```
 
-Until protocol v2 is frozen, the following is inherited from protocol v1 as a planning reference, not an already-approved master configuration:
+For historical context, the original protocol-v1 planning reference was:
 
 ```text
 Outer evaluation:
@@ -596,7 +747,7 @@ F2 has been pruned during pilot work. Its final contract, together with search b
 
 ## Current experiment gate
 
-Do not interpret admission-smoke output, fast-completion output, leading-candidate selection, fast-finalization output, or the full-development refit as robust protocol-v2 model-selection evidence. Protocol v2 base comparison is frozen but currently too slow for the immediate completion path. The completed `fast_completion_v1` run has been used for read-only leading-candidate selection, fast finalization, and full-development refit for project completion. The next executable gate is the guarded one-time held-out-test evaluator. No official base comparison has run and no candidate is master-admitted.
+Do not interpret admission-smoke output, fast-completion output, leading-candidate selection, fast-finalization output, or the full-development refit as robust protocol-v2 model-selection evidence. Protocol v2 base comparison is frozen but currently too slow for the immediate completion path. The completed `fast_completion_v1` run has been used for read-only leading-candidate selection, fast finalization, and full-development refit for project completion. The held-out evaluator exists and is ready, but the user explicitly deferred running it. The current priority is documentation/reporting, not test evaluation. No official base comparison has run and no candidate is master-admitted.
 
 ### Historical monitoring provenance and local operational inspection
 
@@ -634,7 +785,34 @@ src/telco_churn/pre_master_workflows.py
 
 Those files produced the completed C01-C26 admission-smoke run described above. Search-budget calibration remains separate and representative; it is not full-universe admission and must not be treated as candidate elimination.
 
-The required order is now:
+The project should now be described as:
+
+```text
+model-development pipeline: complete
+frozen final model: fitted and serialized
+held-out evaluation: intentionally deferred
+current phase: documentation/reporting
+```
+
+Recommended next work:
+
+```text
+1. Inspect and organize existing project documentation.
+2. Build the final technical report from completed development evidence.
+3. Write the mathematical and methodological explanations for preprocessing,
+   model families, tuning, nested CV, class imbalance, feature selection,
+   thresholds, calibration decisions, and ensembling.
+4. Create development-result tables and figures.
+5. Improve README and repository navigation.
+6. Document limitations of the fast-completion evidence.
+7. Decide which compact generated artifacts should be version-controlled.
+8. Leave the held-out test untouched unless the user explicitly requests final evaluation.
+9. Optionally return to robust protocol v2 later.
+```
+
+Do not describe held-out test evaluation as required before documentation work can continue.
+
+The required guardrails are:
 
 ```text
 1. Keep C27 TabPFN and C28 AutoGluon deferred unless their package, licence,
@@ -644,8 +822,8 @@ The required order is now:
    the fast-route development-data final procedure, while preserving its
    development-data-only and non-robust-evidence label.
 
-3. Review the one-time held-out-test readiness audit and evaluator dry-run before
-   intentionally consuming the held-out test set.
+3. Do not run the one-time held-out-test evaluator unless the user explicitly
+   requests it and provides the required confirmation phrase.
 
 4. Preserve the frozen protocol-v2 contract:
        master candidate registry,
@@ -676,9 +854,38 @@ git log --oneline HEAD..origin/main
 
 The exact local working tree is user-controlled. Preserve any uncommitted files, inspect `git status`, and do not infer that a reviewed local change set is already tracked merely because it is described in this status file.
 
-## Subsequent selection sequence
+## New-Chat Startup Checklist
 
-After protocol v2 is frozen and the master comparison is complete:
+For a new assistant session:
+
+```text
+1. Read:
+       docs/knowledge_notes/current_project_status_and_next_actions.md
+       docs/knowledge_notes/02_candidate_status_register.md
+       docs/knowledge_notes/01_model_inventory_and_roadmap.md
+2. Run git status --short.
+3. Run git log --oneline -8.
+4. Confirm whether guarded final-evaluation files remain committed and pushed.
+5. Confirm artifacts/ remains untracked.
+6. Do not run the held-out test evaluator.
+7. Continue with documentation/reporting unless the user explicitly changes priorities.
+```
+
+Documentation wording rules:
+
+```text
+- distinguish implementation-admission evidence, runtime evidence, fast-completion
+  development evidence, robust protocol-v2 evidence, and held-out test evidence;
+- do not claim final test performance;
+- do not claim the entire portfolio project is finished;
+- do state that the modelling and final-refit pipeline is complete;
+- do not call the fast-completion procedure a robust benchmark winner;
+- keep descriptions technically precise and self-contained.
+```
+
+## Optional Robust-Protocol Sequence
+
+If the project later returns to the frozen robust protocol-v2 base comparison instead of the fast-completion route:
 
 ```text
 1. Analyse repeated outer-fold average precision, secondary metrics, runtime,

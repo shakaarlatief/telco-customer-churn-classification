@@ -36,7 +36,7 @@ Positive class:          Churn_binary = 1
 Development churn rate:  approximately 26.54%
 ```
 
-The held-out test set remains untouched until one final end-to-end procedure is frozen. All current model-family and candidate-comparison evidence is development-stage evidence. It supports understanding, tuning, shortlisting, and procedure design. It does not establish final test performance or prove that small metric differences represent genuine population-level superiority.
+The held-out test set remains untouched. One fast-route final procedure has now been frozen and refitted on all 5,634 development rows, but the one-time held-out evaluation has been explicitly deferred. All current model-family and candidate-comparison evidence is development-stage evidence. It supports understanding, tuning, shortlisting, and procedure design. It does not establish final test performance or prove that small metric differences represent genuine population-level superiority.
 
 ## Completed project foundations
 
@@ -372,15 +372,46 @@ C25  FT-Transformer
 C26  TabM
 ```
 
-The latest pushed executable scaffold checkpoint is:
+The latest pushed executable/project-completion checkpoint is:
 
 ```text
-05c6bdd Update status after protocol v2 scaffold
+6104dcf Add guarded final held-out evaluation workflow
 ```
 
 The executable protocol-v2 scaffold now exists, and its protocol declaration has been intentionally frozen with `freeze_state=frozen` and `is_frozen=true`. It can dry-run the C01-C26 official base-comparison task plan and encodes the CatBoost runtime-limited policy, but no official base comparison has run and no candidate is master-admitted.
 
 A separate fast-completion protocol has completed for quickly finishing the complete portfolio pipeline. It kept all C01-C26 families, kept C19 CatBoost on `catboost_v2`, used 2 outer folds x 1 repeat, 2 Stage-A trials, and Stage-B top 1. Its evidence role is fast-completion pipeline evidence, not the robust protocol-v2 benchmark.
+
+The fast-completion path selected a top-five leading set:
+
+```text
+1. C03_SPLINE_LOGISTIC_REGRESSION
+2. C20_EXPLAINABLE_BOOSTING_MACHINE
+3. C25_FT_TRANSFORMER
+4. C01_RIDGE_CLASSIFIER
+5. C18_LIGHTGBM
+```
+
+Fast finalization selected a top-three unweighted soft-voting ensemble as the fast-route development-data final procedure:
+
+```text
+procedure ID: top3_unweighted_soft_average
+members:
+    C03_SPLINE_LOGISTIC_REGRESSION
+    C25_FT_TRANSFORMER
+    C20_EXPLAINABLE_BOOSTING_MACHINE
+weights:
+    one third each
+aggregation:
+    arithmetic mean of positive-class probabilities
+frozen threshold:
+    0.39106601395524887, selected on development-data OOF predictions for F1
+calibration:
+    method = none
+    status = deferred_fast_completion
+```
+
+That procedure has been frozen, refitted on all 5,634 development rows, serialized, reloaded, and independently roundtrip-validated. This remains fast development-data evidence rather than robust protocol-v2 benchmark evidence. No final test metrics exist.
 
 The registry compares complete procedures, not bare estimator names. A procedure includes its feature policy, preprocessing representation, feature-selection policy where compatible, imbalance treatment, model hyperparameters, and random-state contract.
 
@@ -451,7 +482,7 @@ C28 AutoGluon:
     deferred because the resolver would downgrade the numerical stack
 ```
 
-No model is master-admitted yet. The frozen protocol-v2 base comparison has not run. The completed fast-completion protocol is a separate practical completion path. The held-out test set remains untouched.
+No model is master-admitted to the robust protocol-v2 base comparison. The frozen protocol-v2 base comparison has not run. The completed fast-completion protocol is a separate practical completion path. The held-out test set remains untouched.
 
 ## Cross-cutting modelling policies before final evaluation
 
@@ -514,25 +545,19 @@ The intended sequence is:
 
 ```text
 1. Summarize completed fast-completion artifacts with the read-only final-comparison analysis
-   scaffold.
+   scaffold. (Completed.)
 2. Select a leading candidate set with a transparent development-data rule.
+   (Completed.)
 3. For the fast completion path, use the selected top-three unweighted soft-voting
    ensemble from fast finalization as the development-data final procedure.
+   (Completed.)
 4. Freeze and refit the selected fast-route procedure on all development rows.
-5. Run the guarded one-time held-out evaluator only after readiness and dry-run
-   review.
-6. Analyze outer-fold stability, paired differences, practical equivalence, runtime, and
-   selected-configuration stability.
-7. Compare calibration only when probability outputs are operationally relevant.
-8. Perform cross-fitted threshold, capacity, cost, and intervention-volume analysis.
-9. Consider stacking, blending, or soft voting only after constituent procedures and
-   leakage-safe out-of-fold evidence are frozen.
-10. Treat any stack, blend, or vote as its own candidate procedure.
-11. Select one final procedure or justified stack.
-12. Rerun only the winner's frozen search on all 5,634 development rows and fit the
-    complete pipeline.
-13. Evaluate once on the untouched test set and report final metrics with uncertainty where
-    feasible.
+   (Completed.)
+5. Prepare guarded one-time held-out evaluator with readiness audit and dry-run.
+   (Completed.)
+6. Continue documentation/reporting from development evidence. (Current priority.)
+7. Evaluate once on the untouched test set only if the user explicitly requests the
+   guarded final evaluation.
 ```
 
 The frozen protocol-v2 benchmark remains available for a later stronger rerun:
@@ -549,6 +574,8 @@ explicit runtime-limited treatment for C19 CatBoost
 The executable scaffold encodes that CatBoost remains included through a draft
 `catboost_v2` runtime-limited profile with Stage-A 8 trials and Stage-B top 2. This
 policy is a protocol-design constraint, not model-selection evidence.
+
+The current practical project phase is documentation/reporting. Held-out evaluation is intentionally deferred and is not required before writing the report, README, methodological explanations, or development-result figures.
 
 ## Advanced-candidate admission rule
 
