@@ -25,7 +25,7 @@
 \setlength{\cftsubsecnumwidth}{3.5em}
 
 \title{\textbf{Telco Customer Churn Classification}\\[0.25em]
-\large A Training-Only Workflow from Data Audit to Supervised Classification}
+\large A Training-Only Workflow from Data Audit to Final-Comparison Design}
 \author{Shakaar Latief}
 \date{\today}
 
@@ -34,7 +34,7 @@
 \maketitle
 
 \begin{abstract}
-This document reports a supervised classification project for the Telco Customer Churn dataset. The workflow audits the raw file, validates the target definition, handles deterministic data-quality issues, constructs a held-out train-test split, performs training-set exploratory analysis, defines a statistical evaluation methodology, establishes simple baselines, and then develops multiple model families. A central principle is that all modelling decisions are made using the training data and cross-validation only. The held-out test set remains reserved for final evaluation after model family, preprocessing, hyperparameters, threshold rule, and any calibration decisions are fixed. Section-level cross-validated results are therefore interpreted as development-stage estimates rather than final performance claims.
+This document reports a supervised classification project for the Telco Customer Churn dataset. The workflow audits the raw file, validates the target definition, handles deterministic data-quality issues, constructs a held-out train-test split, performs training-set exploratory analysis, defines a statistical evaluation methodology, establishes simple baselines, develops a broad library of model families, and specifies an end-to-end final-comparison and selection design. The intended robust comparison uses repeated nested cross-validation with a two-stage tuning and confirmation protocol over complete candidate procedures. A separate reduced-cost execution profile was used only to verify that the complete pipeline operates correctly; its numerical rankings are not treated as definitive model-comparison evidence. All modelling decisions remain development-only, and the held-out test set remains reserved for one future evaluation after the final procedure is selected and frozen.
 \end{abstract}
 
 \newpage
@@ -78,6 +78,9 @@ This document reports a supervised classification project for the Telco Customer
 
 \newpage
 \input{sections/12_multilayer_perceptrons_and_neural_networks}
+
+\newpage
+\input{sections/13_final_comparison_and_selection_methodology}
 
 \newpage
 \begin{thebibliography}{9}
