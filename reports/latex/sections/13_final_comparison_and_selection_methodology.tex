@@ -1,0 +1,197 @@
+\section{Final comparison and selection methodology}
+\label{sec:final-comparison-methodology}
+
+The preceding sections study individual model families and use development-stage cross-validation to understand their behaviour. Those workflows are intentionally educational and family-specific. They do not by themselves form a fair final comparison because the candidate families differ in their preprocessing requirements, search spaces, computational cost, score semantics, imbalance treatments, and earlier experimental scope.
+
+The final-comparison stage therefore treats each entry as a complete \emph{candidate procedure} rather than as a bare estimator. This section records the methodology that has been implemented for that stage, distinguishes the intended robust comparison from a reduced-cost end-to-end verification run, and defines how future results should be interpreted. The held-out test set remains outside both routes.
+
+\subsection{Candidate procedures rather than estimator names}
+
+For candidate $j$, write the complete procedure as
+\[
+\mathcal{P}_j
+=
+\left(
+F_j,
+S_j,
+I_j,
+M_j,
+\Lambda_j,
+\mathcal{A}_j,
+R_j
+\right),
+\]
+where $F_j$ is the feature policy, $S_j$ is the feature-selection policy, $I_j$ is the imbalance-treatment policy, $M_j$ is the model family, $\Lambda_j$ is the hyperparameter domain, $\mathcal{A}_j$ is the search and confirmation algorithm, and $R_j$ is the reproducibility and resource contract.
+
+This definition prevents an incomplete comparison such as ``logistic regression versus XGBoost'' from hiding consequential differences. For example, one procedure may use a scaled one-hot representation, another may use native categorical variables, and a third may include fold-internal resampling. Those choices are part of the procedure being evaluated.
+
+The implemented registry contains 26 procedures covering linear, probabilistic, neighbour-based, tree-based, boosting, kernel, neural-network, and advanced tabular model families. The registry includes ridge classification, regularized and spline logistic regression, shrinkage LDA, regularized QDA, k-nearest neighbours, hybrid Naive Bayes, decision trees, Extra Trees, bagging, random forests, balanced random forests, AdaBoost, RUSBoost, standard and histogram-based gradient boosting, XGBoost, LightGBM, CatBoost, Explainable Boosting Machines, linear and RBF support vector machines, multilayer perceptrons, TabNet, FT-Transformer, and TabM.
+
+TabPFN and AutoGluon are not part of the frozen comparison. Their deferral reflects practical package, dependency, model-weight, and computational constraints. It is not a conclusion about their predictive quality.
+
+\subsection{Development and held-out roles}
+
+The clean dataset contains 7,043 observations. A fixed split assigns 5,634 observations to development and 1,409 observations to the held-out test set. All candidate comparison, tuning, threshold analysis, calibration decisions, complementarity analysis, and ensemble construction are development-only activities.
+
+The held-out test set is reserved for one eventual evaluation after one complete procedure has been selected and frozen. Until then, the project makes no final test-performance claim. In particular, the test set is not used to compare individual ensemble members, to revise the threshold, to recalibrate probabilities, or to choose between the robust and reduced-cost routes.
+
+\subsection{Intended robust protocol}
+
+The intended robust comparison is a frozen repeated nested cross-validation protocol over all 5,634 development observations. It uses five stratified outer folds and three repeats. Each of the 26 candidates therefore has 15 outer evaluation tasks, giving 390 candidate-by-outer-split tasks in total.
+
+For outer task $t$ and candidate procedure $\mathcal{P}_j$, the development data are partitioned into an outer-training set $\mathcal{D}^{\mathrm{train}}_{jt}$ and an outer-validation set $\mathcal{D}^{\mathrm{val}}_{jt}$. All search activity occurs inside $\mathcal{D}^{\mathrm{train}}_{jt}$. The outer-validation fold is used exactly once after the internal selection process has finished.
+
+The outer score can be written as
+\[
+\widehat{M}_{jt}
+=
+M\left(
+\widehat{f}_{jt},
+\mathcal{D}^{\mathrm{val}}_{jt}
+\right),
+\]
+where $\widehat{f}_{jt}$ is obtained by tuning and refitting the complete procedure using only $\mathcal{D}^{\mathrm{train}}_{jt}$.
+
+The resulting distribution of outer scores estimates the performance of the complete tuning-and-refit procedure. It does not estimate one globally fixed hyperparameter vector. Different outer tasks may select different feature policies, imbalance treatments, or model hyperparameters, and that variation is itself useful stability evidence.
+
+\subsection{Two-stage internal search}
+
+Each outer-training partition uses a two-stage internal search.
+
+\subsubsection{Stage A: bounded Optuna exploration}
+
+Stage A uses three-fold stratified inner cross-validation. Optuna samples valid combinations from the candidate-specific search space. The sampled configuration may include feature policy, compatible feature selection, compatible imbalance treatment, and model hyperparameters.
+
+The routing layer prevents incoherent combinations before fitting. For example, feature policies and synthetic resampling procedures are not combined when the derived features would no longer be internally consistent with their raw inputs.
+
+Stage A is exploratory. Its purpose is to identify a small set of strong configurations under a bounded and reproducible search budget.
+
+\subsubsection{Stage B: independent confirmation}
+
+Stage B re-evaluates the strongest Stage-A configurations using a separate five-fold stratified confirmation design inside the outer-training partition. This stage reduces dependence on one exploratory split and one noisy Stage-A estimate.
+
+Only after Stage B is complete is one configuration selected. That configuration is refitted on all outer-training observations and evaluated once on the untouched outer-validation fold.
+
+\subsection{Search-budget governance}
+
+Literal equality in the number of trials would not make the comparison fair. A simple linear procedure and a modern tabular neural network have different search dimensionality and runtime. The protocol therefore uses candidate-specific budget lanes that were frozen before robust comparison results were inspected.
+
+\begin{table}[H]
+\centering
+\caption{Frozen search-budget lanes for the intended robust comparison.}
+\label{tab:final-comparison-budget-lanes}
+\begin{tabular}{p{3.1cm}p{6.0cm}rrp{2.1cm}}
+\toprule
+Budget lane & Candidate group & Stage-A trials & Stage-B top $K$ & Profile \\
+\midrule
+Cheap & C01--C08 and C21 & 36 & 5 & Full \\
+Medium & C09--C18 except C19, plus C20, C22, and C23 & 24 & 4 & Full \\
+Expensive & C24--C26 & 8 & 2 & Full \\
+Runtime-limited & C19 CatBoost & 8 & 2 & CatBoost v2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+CatBoost remains included. Runtime calibration showed that unrestricted CatBoost trials were a practical bottleneck, so its frozen profile bounds the number of iterations, depth, learning rate, and L2 leaf regularization. That calibration evidence was used to design a feasible protocol, not to rank or exclude CatBoost.
+
+Changing search budgets after inspecting robust comparison results would create a new protocol version. The same rule applies to candidate inclusion, feature-policy compatibility, imbalance routing, and failure handling.
+
+\subsection{Primary and secondary evidence}
+
+Average precision is the primary ranking metric. It summarizes the precision-recall curve as
+\[
+\operatorname{AP}
+=
+\sum_n
+\left(R_n-R_{n-1}\right)P_n,
+\]
+where $P_n$ and $R_n$ are precision and recall at successive score thresholds. Average precision is appropriate for this problem because churn is the minority class and the project is concerned with retrieving likely churners without allowing the majority class to dominate the evaluation.
+
+Secondary evidence includes ROC-AUC, log loss and Brier score when probability outputs are valid, threshold-dependent diagnostics, runtime, warnings, failure states, and selected-parameter stability. The final interpretation should not reduce the comparison to the largest displayed mean AP. Practical equivalence, paired uncertainty, reproducibility, score semantics, computational burden, and implementation complexity also matter.
+
+\subsection{Evidence roles}
+
+Several bounded runs were needed while constructing the comparison infrastructure. Their evidential roles are deliberately separated.
+
+\begin{table}[H]
+\centering
+\caption{Evidence categories used in the final-comparison workflow.}
+\label{tab:final-comparison-evidence-roles}
+\begin{tabular}{p{4.2cm}p{9.0cm}}
+\toprule
+Evidence category & Interpretation \\
+\midrule
+Implementation admission & Confirms that a candidate can be constructed, fitted, scored, persisted, and resumed under bounded development-only conditions. It does not rank candidates. \\
+Runtime evidence & Measures feasibility and informs bounded resource policies. It does not rank or eliminate candidates. \\
+Fast-completion development evidence & Exercises the complete end-to-end pipeline with reduced settings. It is useful for procedural verification but weak for substantive comparison. \\
+Robust protocol-v2 evidence & Intended repeated nested-CV comparison evidence. It does not yet exist because the full frozen protocol has not been completed. \\
+Held-out test evidence & Final evidence for one frozen procedure. It does not yet exist because the test set remains untouched. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This terminology prevents a successful smoke test or runtime calibration from being misreported as model-selection evidence.
+
+\subsection{Reduced-cost end-to-end verification}
+
+A separate fast-completion profile was executed to verify that the entire workflow could run successfully before spending the much larger computational budget required by the robust protocol. It retained the complete C01--C26 registry and the same general runner architecture, but deliberately reduced the number of folds, repeats, trials, and confirmations.
+
+\begin{table}[H]
+\centering
+\caption{Intended robust settings and the reduced-cost verification settings.}
+\label{tab:robust-versus-fast-completion}
+\begin{tabular}{p{5.6cm}rr}
+\toprule
+Component & Robust protocol & Verification profile \\
+\midrule
+Outer folds & 5 & 2 \\
+Outer repeats & 3 & 1 \\
+Stage-A inner folds & 3 & 2 \\
+Stage-B confirmation folds & 5 & 2 \\
+Stage-A trials, cheap lane & 36 & 2 \\
+Stage-A trials, medium lane & 24 & 2 \\
+Stage-A trials, expensive lane & 8 & 2 \\
+Stage-B top $K$, cheap lane & 5 & 1 \\
+Stage-B top $K$, medium lane & 4 & 1 \\
+Stage-B top $K$, expensive lane & 2 & 1 \\
+Total outer candidate tasks & 390 & 52 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The verification profile answers engineering questions. It tests whether all candidates can pass through one runner, whether artifacts and checksums are correct, whether results can be summarized automatically, whether complete configurations can be reconstructed, whether an ensemble can be refitted and serialized, and whether a guarded one-time test evaluator can be prepared without accessing the test data.
+
+It was not designed to establish which candidate has the strongest and most stable generalization performance. Two outer folds, one repeat, two Optuna trials, and one confirmed configuration per candidate provide only minimal search and uncertainty information. The numerical rankings from this route are therefore provisional fast-completion development evidence, not definitive final-comparison results.
+
+\subsection{Selection after the robust comparison}
+
+Nested cross-validation evaluates a tuning procedure. It does not directly produce one universal final hyperparameter vector. After the robust comparison, the intended downstream sequence is:
+
+\begin{enumerate}
+    \item summarize outer-fold metrics, runtime, warnings, failure states, and selected-parameter stability;
+    \item identify a leading set using average precision, paired differences, uncertainty, practical equivalence, and operational considerations;
+    \item tune leading procedures on all development data using a frozen post-comparison tuning design to obtain concrete executable configurations;
+    \item study calibration only for probability-producing leading procedures and only through leakage-safe development predictions;
+    \item select a decision threshold from development-only out-of-fold or cross-fitted scores;
+    \item evaluate complementarity using leakage-safe out-of-fold predictions;
+    \item treat any soft vote, blend, or stack as a separate candidate procedure;
+    \item choose one complete procedure, freeze all of its components, and refit it on all 5,634 development observations;
+    \item serialize and integrity-check the fitted procedure;
+    \item evaluate it once on the untouched held-out test set only after explicit authorization.
+\end{enumerate}
+
+The threshold, calibration method, ensemble composition, weights, feature schema, and preprocessing recipe are all part of the final procedure. None may be changed in response to held-out test results.
+
+\subsection{Current execution status}
+
+The reduced-cost route has successfully exercised the complete pipeline through development-data refitting, serialization, reload validation, and preparation of a guarded final-test evaluator. This demonstrates that the implementation is operational.
+
+It does not convert the reduced-cost ranking into robust scientific evidence. The robust repeated nested-CV protocol remains the intended methodology for strong candidate-comparison claims and may be run later without touching the held-out test set.
+
+A procedure frozen inside the fast-completion route should therefore be interpreted as frozen within that verification route. Because the held-out test remains untouched, the future robust development-only comparison can still provide the stronger evidence used to choose the procedure that eventually receives the single final test evaluation.
+
+\subsection{Reporting implications}
+
+Until the robust comparison is completed, appropriate descriptions include ``implemented candidate procedure,'' ``runtime evidence,'' ``reduced-cost end-to-end verification,'' ``provisional fast-route selection,'' and ``held-out test not yet evaluated.''
+
+Descriptions such as ``final winner,'' ``statistically superior,'' ``robust benchmark result,'' or ``final unbiased performance'' would overstate the available evidence. The project can document the completed engineering workflow now, while reserving strong comparative and final performance claims for the appropriate future evidence.
